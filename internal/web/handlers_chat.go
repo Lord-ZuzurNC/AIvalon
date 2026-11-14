@@ -227,7 +227,7 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		content := strings.TrimSpace(stripSpeakerEcho(full.String(), speakerName))
+		content := strings.TrimSpace(stripSpeakerEcho(full.String(), characters))
 		msg := db.ChatMessage{SessionID: session.ID, Role: "character", CharacterCardID: speaking.ID, Content: content}
 		msgID, err := db.CreateMessage(h.DB, msg)
 		if err != nil {
@@ -299,7 +299,14 @@ func buildSystemPrompt(persona db.Persona, characters []db.CharacterCard, speaki
 	if len(characters) == 1 {
 		fmt.Fprintf(&b, "You are roleplaying as %s, talking to %s.\n", speakingAs.Name, persona.Name)
 	} else {
-		fmt.Fprintf(&b, "This is a group roleplay with %s and the following characters. You are now voicing %s only — write %s's reply alone, not the others'.\n", persona.Name, speakingAs.Name, speakingAs.Name)
+		var others []string
+		for _, c := range characters {
+			if c.ID != speakingAs.ID {
+				others = append(others, c.Name)
+			}
+		}
+		fmt.Fprintf(&b, "This is a group roleplay with %s and the following characters. You are now voicing %s, and %s ONLY — you are not %s.\n", persona.Name, speakingAs.Name, speakingAs.Name, strings.Join(others, " and "))
+		fmt.Fprintf(&b, "Even if %s is addressed by name instead of %s, stay in character as %s — %s will get an answer in their own turn, not from you.\n", strings.Join(others, " or "), speakingAs.Name, speakingAs.Name, strings.Join(others, " and "))
 	}
 	fmt.Fprintf(&b, "Write only %s's reply itself. Do not prefix it with \"%s:\" or any other speaker label — the interface already shows who's speaking.\n", speakingAs.Name, speakingAs.Name)
 	for _, c := range characters {
@@ -328,20 +335,33 @@ func characterName(characters []db.CharacterCard, id int64) string {
 
 // stripSpeakerEcho defends against a known LLM habit: having seen "Name:"
 // prefixes in the history we feed it (see buildChatMessages), a model will
-// often echo its own name back at the start of its reply even when told
-// not to. The interface already labels the speaker, so a leading
-// "Name:" (after any stray leading whitespace/asterisks, e.g. a "***"
+// sometimes echo a "Name:" label back at the start of its reply even when
+// told not to — and in a group chat with similarly-named characters, it
+// can pick the WRONG name (e.g. voicing "Merlinette" during "Merlin"'s
+// slot because the user addressed Merlinette directly). Either way the
+// interface already shows the actual speaker from the stored
+// character_card_id, so any leading "Name:" matching ANY attached
+// character (after stray leading whitespace/asterisks, e.g. a "***"
 // scene-break the model also likes to add) is stripped before persisting.
-func stripSpeakerEcho(content, name string) string {
-	if name == "" {
-		return content
-	}
+//
+// This only removes the stray label — it does not and cannot fix the
+// model actually having written the wrong character's voice under this
+// slot. That's a model/prompt-quality limitation (worse with near-
+// identical names), not something a string trim can repair; see
+// buildSystemPrompt's per-turn identity instructions for the mitigation
+// that targets the root cause instead of the symptom.
+func stripSpeakerEcho(content string, characters []db.CharacterCard) string {
 	trimmed := strings.TrimLeft(content, " 	\r\n*")
-	prefix := name + ":"
-	if len(trimmed) < len(prefix) || !strings.EqualFold(trimmed[:len(prefix)], prefix) {
-		return content
+	for _, c := range characters {
+		if c.Name == "" {
+			continue
+		}
+		prefix := c.Name + ":"
+		if len(trimmed) >= len(prefix) && strings.EqualFold(trimmed[:len(prefix)], prefix) {
+			return strings.TrimLeft(trimmed[len(prefix):], " 	")
+		}
 	}
-	return strings.TrimLeft(trimmed[len(prefix):], " 	")
+	return content
 }
 
 // displayMessages resolves each stored message into its view-model: the
