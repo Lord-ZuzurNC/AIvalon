@@ -1,0 +1,65 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
+
+templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile) {
+	@Layout("Chat", "Chat") {
+		<h1>Chat</h1>
+		<ul>
+			for _, s := range sessions {
+				<li><a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a></li>
+			}
+		</ul>
+		<h2>New session</h2>
+		if len(profiles) == 0 {
+			<p>
+				No backend profile yet —
+				<a href="/settings">add one in Settings</a>
+				first.
+			</p>
+		} else {
+			<form method="post" action="/chat">
+				<label>
+					Title
+					<input type="text" name="title" placeholder="Untitled chat" value=""/>
+				</label>
+				<label>
+					Backend profile
+					<select name="backend_profile_id">
+						for _, p := range profiles {
+							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+						}
+					</select>
+				</label>
+				<button type="submit">Start chat</button>
+			</form>
+		}
+	}
+}
+
+templ ChatPage(session db.Session, messages []db.ChatMessage, needsReply bool) {
+	@Layout(session.Title, "Chat") {
+		<h1>{ session.Title }</h1>
+		<div id="messages">
+			for _, m := range messages {
+				<p><strong>{ m.Role }:</strong> { m.Content }</p>
+			}
+		</div>
+		if needsReply {
+			<div
+				hx-ext="sse"
+				sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
+				sse-swap="message"
+				hx-swap="beforeend"
+			></div>
+		}
+		<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) }>
+			<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
+			<button type="submit">Send</button>
+		</form>
+	}
+}
