@@ -6,18 +6,28 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 	"github.com/Lord-ZuzurNC/AIvalon/internal/web"
 )
 
-// dbPath is a placeholder for now: a file next to the binary's working
-// directory. It is already covered by .gitignore. A proper XDG data dir
-// (and a --db flag) is a follow-up, not needed to prove the stack boots.
-const dbPath = "aivalon.db"
+// dbPath is a file next to the binary's working directory by default,
+// already covered by .gitignore. AIVALON_DB overrides it — mainly so two
+// instances (e.g. yours and a throwaway test one) don't fight over the
+// same file.
+var dbPath = envOr("AIVALON_DB", "aivalon.db")
 
 // addr is 127.0.0.1-only by design — see docs/DESIGN.md ("Default bind").
-const addr = "127.0.0.1:4140"
+// AIVALON_ADDR overrides it for the same reason as dbPath above.
+var addr = envOr("AIVALON_ADDR", "127.0.0.1:4140")
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
 
 func main() {
 	sqlDB, err := db.Open(dbPath)
@@ -43,10 +53,9 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	// Chat/World/Character are still an empty shell — the point this first
-	// pass proves is the nav, static assets, and DB wiring, not the
-	// features behind each tab yet.
-	mux.HandleFunc("GET /chat", renderPlaceholder("Chat"))
+	// World/Character are still an empty shell — Chat now has a real,
+	// working slice (see internal/web/handlers_chat.go); those two get
+	// the same treatment once their CRUDs exist.
 	mux.HandleFunc("GET /world", renderPlaceholder("World"))
 	mux.HandleFunc("GET /characters", renderPlaceholder("Character"))
 
@@ -56,6 +65,13 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /settings/backend-profiles/{id}/edit", settings.EditForm)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}", settings.Update)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}/delete", settings.Delete)
+
+	chat := web.ChatHandlers{DB: sqlDB}
+	mux.HandleFunc("GET /chat", chat.List)
+	mux.HandleFunc("POST /chat", chat.Create)
+	mux.HandleFunc("GET /chat/{id}", chat.Show)
+	mux.HandleFunc("POST /chat/{id}/messages", chat.PostMessage)
+	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 
 	return mux
 }
