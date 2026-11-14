@@ -1,0 +1,8 @@
+.action {
+	color: var(--pico-muted-color);
+	font-style: italic;
+}
+
+.dialogue {
+	font-weight: bold;
+}

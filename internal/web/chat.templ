@@ -58,16 +58,17 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 	}
 }
 
-templ ChatPage(session db.Session, messages []db.ChatMessage, needsReply bool) {
+templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) {
 	@Layout(session.Title, "Chat") {
 		<h1>{ session.Title }</h1>
 		<div id="messages">
 			for _, m := range messages {
-				<p><strong>{ m.Role }:</strong> { m.Content }</p>
+				<p><strong>{ m.Speaker }:</strong> @templ.Raw(m.ContentHTML)</p>
 			}
 		</div>
 		if needsReply {
 			<div
+				id="live"
 				hx-ext="sse"
 				sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
 				sse-swap="message"
