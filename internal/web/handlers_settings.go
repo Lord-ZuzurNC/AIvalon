@@ -18,12 +18,7 @@ type SettingsHandlers struct {
 }
 
 func (h SettingsHandlers) List(w http.ResponseWriter, r *http.Request) {
-	profiles, err := db.ListBackendProfiles(h.DB)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	render(w, r, SettingsPage(profiles, nil))
+	h.render(w, r, nil, nil)
 }
 
 func (h SettingsHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
@@ -37,12 +32,7 @@ func (h SettingsHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	profiles, err := db.ListBackendProfiles(h.DB)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	render(w, r, SettingsPage(profiles, &profile))
+	h.render(w, r, &profile, nil)
 }
 
 func (h SettingsHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +69,75 @@ func (h SettingsHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+func (h SettingsHandlers) PersonaEditForm(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	persona, err := db.GetPersona(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	h.render(w, r, nil, &persona)
+}
+
+func (h SettingsHandlers) PersonaCreate(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	p := db.Persona{Name: r.FormValue("name"), Description: r.FormValue("description")}
+	if _, err := db.CreatePersona(h.DB, p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+func (h SettingsHandlers) PersonaUpdate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	r.ParseForm()
+	p := db.Persona{ID: id, Name: r.FormValue("name"), Description: r.FormValue("description")}
+	if err := db.UpdatePersona(h.DB, p); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if err := db.DeletePersona(h.DB, id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// render loads both lists (profiles are cheap, there's never many) and
+// renders the one Settings page with whichever form (if any) is being
+// edited — same page, two independent edit states.
+func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editingProfile *db.BackendProfile, editingPersona *db.Persona) {
+	profiles, err := db.ListBackendProfiles(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	personas, err := db.ListPersonas(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona))
 }
 
 // profileFromForm reads the plain POST form fields shared by Create and

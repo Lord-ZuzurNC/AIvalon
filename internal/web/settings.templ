@@ -7,13 +7,13 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile) {
+templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona) {
 	@Layout("Settings", "Settings") {
-		@SettingsPageBody(profiles, editing)
+		@SettingsPageBody(profiles, editing, personas, editingPersona)
 	}
 }
 
-templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile) {
+templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona) {
 	<h1>Settings</h1>
 	<h2>Backend profiles</h2>
 	<table>
@@ -52,6 +52,41 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile)
 		}
 	</h2>
 	@backendProfileForm(editing)
+
+	<h2>Your persona</h2>
+	<p>How you're represented to the AI. A session with none picked uses a built-in default ("User").</p>
+	<table>
+		<thead>
+			<tr>
+				<th>Name</th>
+				<th>Description</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, p := range personas {
+				<tr>
+					<td>{ p.Name }</td>
+					<td>{ p.Description }</td>
+					<td>
+						<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>Edit</a>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/settings/personas/%d/delete", p.ID)) } style="display:inline">
+							<button type="submit">Delete</button>
+						</form>
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+
+	<h2>
+		if editingPersona != nil {
+			Edit persona
+		} else {
+			Add a persona
+		}
+	</h2>
+	@personaForm(editingPersona)
 }
 
 templ backendProfileForm(editing *db.BackendProfile) {
@@ -100,6 +135,34 @@ templ backendProfileForm(editing *db.BackendProfile) {
 				Save
 			} else {
 				Add profile
+			}
+		</button>
+	</form>
+}
+
+templ personaForm(editing *db.Persona) {
+	{{
+	action := "/settings/personas"
+	name, description := "", ""
+	if editing != nil {
+		action = fmt.Sprintf("/settings/personas/%d", editing.ID)
+		name, description = editing.Name, editing.Description
+	}
+	}}
+	<form method="post" action={ templ.URL(action) }>
+		<label>
+			Name
+			<input type="text" name="name" value={ name } required="required"/>
+		</label>
+		<label>
+			Description
+			<textarea name="description">{ description }</textarea>
+		</label>
+		<button type="submit">
+			if editing != nil {
+				Save
+			} else {
+				Add persona
 			}
 		</button>
 	</form>

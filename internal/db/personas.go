@@ -1,0 +1,73 @@
+package db
+
+import (
+	"database/sql"
+	"fmt"
+)
+
+// Persona is the human player's own self-profile — see docs/DESIGN.md's
+// vocabulary note (Character = AI-played, Persona = the user). A session
+// with no Persona falls back to DefaultPersona below rather than requiring
+// one to exist.
+type Persona struct {
+	ID          int64
+	Name        string
+	Description string
+}
+
+// DefaultPersona is used when a session has no persona_id set.
+var DefaultPersona = Persona{Name: "User", Description: ""}
+
+func ListPersonas(db *sql.DB) ([]Persona, error) {
+	rows, err := db.Query(`SELECT id, name, description FROM personas ORDER BY name`)
+	if err != nil {
+		return nil, fmt.Errorf("listing personas: %w", err)
+	}
+	defer rows.Close()
+
+	var personas []Persona
+	for rows.Next() {
+		var p Persona
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description); err != nil {
+			return nil, fmt.Errorf("scanning persona: %w", err)
+		}
+		personas = append(personas, p)
+	}
+	return personas, rows.Err()
+}
+
+func GetPersona(db *sql.DB, id int64) (Persona, error) {
+	var p Persona
+	err := db.QueryRow(`SELECT id, name, description FROM personas WHERE id = ?`, id).Scan(&p.ID, &p.Name, &p.Description)
+	if err != nil {
+		return Persona{}, fmt.Errorf("getting persona %d: %w", id, err)
+	}
+	return p, nil
+}
+
+func CreatePersona(db *sql.DB, p Persona) (int64, error) {
+	res, err := db.Exec(`INSERT INTO personas (name, description) VALUES (?, ?)`, p.Name, p.Description)
+	if err != nil {
+		return 0, fmt.Errorf("creating persona: %w", err)
+	}
+	return res.LastInsertId()
+}
+
+func UpdatePersona(db *sql.DB, p Persona) error {
+	_, err := db.Exec(
+		`UPDATE personas SET name = ?, description = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+		p.Name, p.Description, p.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("updating persona %d: %w", p.ID, err)
+	}
+	return nil
+}
+
+func DeletePersona(db *sql.DB, id int64) error {
+	_, err := db.Exec(`DELETE FROM personas WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting persona %d: %w", id, err)
+	}
+	return nil
+}
