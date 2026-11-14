@@ -16,12 +16,13 @@ type BackendProfile struct {
 	Name        string
 	Kind        string // "llm" in v1; "image" from v2
 	BaseURL     string
+	Model       string             // sent as "model" in the request body; some backends require it, others ignore it
 	APIKey      string             // may be empty; stored plain, see docs/DESIGN.md
 	ModelParams map[string]float64 // e.g. {"temperature": 0.8, "top_p": 0.9, "top_k": 40, "max_tokens": 512}
 }
 
 func ListBackendProfiles(db *sql.DB) ([]BackendProfile, error) {
-	rows, err := db.Query(`SELECT id, name, kind, base_url, api_key, model_params FROM backend_profiles ORDER BY name`)
+	rows, err := db.Query(`SELECT id, name, kind, base_url, model, api_key, model_params FROM backend_profiles ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing backend profiles: %w", err)
 	}
@@ -39,7 +40,7 @@ func ListBackendProfiles(db *sql.DB) ([]BackendProfile, error) {
 }
 
 func GetBackendProfile(db *sql.DB, id int64) (BackendProfile, error) {
-	row := db.QueryRow(`SELECT id, name, kind, base_url, api_key, model_params FROM backend_profiles WHERE id = ?`, id)
+	row := db.QueryRow(`SELECT id, name, kind, base_url, model, api_key, model_params FROM backend_profiles WHERE id = ?`, id)
 	return scanBackendProfile(row)
 }
 
@@ -49,8 +50,8 @@ func CreateBackendProfile(db *sql.DB, p BackendProfile) (int64, error) {
 		return 0, fmt.Errorf("encoding model params: %w", err)
 	}
 	res, err := db.Exec(
-		`INSERT INTO backend_profiles (name, kind, base_url, api_key, model_params) VALUES (?, ?, ?, ?, ?)`,
-		p.Name, p.Kind, p.BaseURL, p.APIKey, string(params),
+		`INSERT INTO backend_profiles (name, kind, base_url, model, api_key, model_params) VALUES (?, ?, ?, ?, ?, ?)`,
+		p.Name, p.Kind, p.BaseURL, p.Model, p.APIKey, string(params),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating backend profile: %w", err)
@@ -64,8 +65,8 @@ func UpdateBackendProfile(db *sql.DB, p BackendProfile) error {
 		return fmt.Errorf("encoding model params: %w", err)
 	}
 	_, err = db.Exec(
-		`UPDATE backend_profiles SET name = ?, kind = ?, base_url = ?, api_key = ?, model_params = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
-		p.Name, p.Kind, p.BaseURL, p.APIKey, string(params), p.ID,
+		`UPDATE backend_profiles SET name = ?, kind = ?, base_url = ?, model = ?, api_key = ?, model_params = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+		p.Name, p.Kind, p.BaseURL, p.Model, p.APIKey, string(params), p.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating backend profile %d: %w", p.ID, err)
@@ -90,7 +91,7 @@ func scanBackendProfile(row rowScanner) (BackendProfile, error) {
 	var p BackendProfile
 	var apiKey sql.NullString
 	var paramsJSON string
-	if err := row.Scan(&p.ID, &p.Name, &p.Kind, &p.BaseURL, &apiKey, &paramsJSON); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &p.Kind, &p.BaseURL, &p.Model, &apiKey, &paramsJSON); err != nil {
 		return BackendProfile{}, fmt.Errorf("scanning backend profile: %w", err)
 	}
 	p.APIKey = apiKey.String

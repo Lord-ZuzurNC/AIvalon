@@ -89,6 +89,7 @@ func profileFromForm(r *http.Request, base db.BackendProfile) db.BackendProfile 
 	r.ParseForm()
 	base.Name = r.FormValue("name")
 	base.BaseURL = r.FormValue("base_url")
+	base.Model = r.FormValue("model")
 	base.APIKey = r.FormValue("api_key")
 	base.ModelParams = map[string]float64{}
 	if v, err := strconv.ParseFloat(r.FormValue("temperature"), 64); err == nil {

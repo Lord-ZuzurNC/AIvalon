@@ -16,6 +16,7 @@ func TestBackendProfileCRUD(t *testing.T) {
 		Name:        "local ollama",
 		Kind:        "llm",
 		BaseURL:     "http://127.0.0.1:11434/v1",
+		Model:       "llama3.1",
 		ModelParams: map[string]float64{"temperature": 0.8, "top_p": 0.9},
 	})
 	if err != nil {
@@ -26,7 +27,7 @@ func TestBackendProfileCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if got.Name != "local ollama" || got.ModelParams["temperature"] != 0.8 {
+	if got.Name != "local ollama" || got.Model != "llama3.1" || got.ModelParams["temperature"] != 0.8 {
 		t.Fatalf("Get returned %+v", got)
 	}
 
