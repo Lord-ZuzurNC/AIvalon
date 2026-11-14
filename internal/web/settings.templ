@@ -1,0 +1,100 @@
+package web
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
+
+templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile) {
+	@Layout("Settings", "Settings") {
+		@SettingsPageBody(profiles, editing)
+	}
+}
+
+templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile) {
+	<h1>Settings</h1>
+	<h2>Backend profiles</h2>
+	<table>
+		<thead>
+			<tr>
+				<th>Name</th>
+				<th>Kind</th>
+				<th>Base URL</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, p := range profiles {
+				<tr>
+					<td>{ p.Name }</td>
+					<td>{ p.Kind }</td>
+					<td>{ p.BaseURL }</td>
+					<td>
+						<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
+							<button type="submit">Delete</button>
+						</form>
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+
+	<h2>
+		if editing != nil {
+			Edit profile
+		} else {
+			Add a profile
+		}
+	</h2>
+	@backendProfileForm(editing)
+}
+
+templ backendProfileForm(editing *db.BackendProfile) {
+	{{
+	action := "/settings/backend-profiles"
+	name, baseURL, apiKey := "", "", ""
+	temperature, topP := "", ""
+	if editing != nil {
+		action = fmt.Sprintf("/settings/backend-profiles/%d", editing.ID)
+		name, baseURL, apiKey = editing.Name, editing.BaseURL, editing.APIKey
+		if v, ok := editing.ModelParams["temperature"]; ok {
+			temperature = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		if v, ok := editing.ModelParams["top_p"]; ok {
+			topP = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+	}
+	}}
+	<form method="post" action={ templ.URL(action) }>
+		<label>
+			Name
+			<input type="text" name="name" value={ name } required="required"/>
+		</label>
+		<label>
+			Base URL
+			<input type="url" name="base_url" value={ baseURL } placeholder="http://127.0.0.1:11434/v1" required="required"/>
+		</label>
+		<label>
+			API key (optional)
+			<input type="password" name="api_key" value={ apiKey }/>
+		</label>
+		<label>
+			Temperature
+			<input type="number" name="temperature" value={ temperature } step="0.01" min="0" max="2"/>
+		</label>
+		<label>
+			Top P
+			<input type="number" name="top_p" value={ topP } step="0.01" min="0" max="1"/>
+		</label>
+		<button type="submit">
+			if editing != nil {
+				Save
+			} else {
+				Add profile
+			}
+		</button>
+	</form>
+}
