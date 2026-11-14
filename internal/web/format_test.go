@@ -3,20 +3,28 @@ package web
 import (
 	"strings"
 	"testing"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
 func TestStripSpeakerEcho(t *testing.T) {
-	cases := []struct{ name, content, speaker, want string }{
-		{"plain echo", "Merlin: *He closes the book.*", "Merlin", "*He closes the book.*"},
-		{"scene-break noise before the echo", "\n\n***\n\nGorak: *He shifts his weight.*", "Gorak", "*He shifts his weight.*"},
-		{"case-insensitive", "merlin: hello", "Merlin", "hello"},
-		{"no echo, left untouched", "*He waves.* \"Hello.\"", "Merlin", "*He waves.* \"Hello.\""},
-		{"different name isn't stripped", "Gorak: hi", "Merlin", "Gorak: hi"},
+	characters := []db.CharacterCard{{Name: "Merlin"}, {Name: "Merlinette"}, {Name: "Gorak"}}
+	cases := []struct{ name, content, want string }{
+		{"plain self-echo", "Merlin: *He closes the book.*", "*He closes the book.*"},
+		{"scene-break noise before the echo", "\n\n***\n\nGorak: *He shifts his weight.*", "*He shifts his weight.*"},
+		{"case-insensitive", "merlin: hello", "hello"},
+		{"no echo, left untouched", "*He waves.* \"Hello.\"", "*He waves.* \"Hello.\""},
+		{"name not in the session isn't stripped", "Someone: hi", "Someone: hi"},
+		{
+			"cross-character echo: model voiced a DIFFERENT attached character, strip that label too",
+			`Merlinette: *She steps forward.*`,
+			`*She steps forward.*`,
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := stripSpeakerEcho(c.content, c.speaker); got != c.want {
-				t.Errorf("stripSpeakerEcho(%q, %q) = %q, want %q", c.content, c.speaker, got, c.want)
+			if got := stripSpeakerEcho(c.content, characters); got != c.want {
+				t.Errorf("stripSpeakerEcho(%q, ...) = %q, want %q", c.content, got, c.want)
 			}
 		})
 	}
