@@ -131,7 +131,8 @@ CREATE TABLE backend_profiles (
     name          TEXT NOT NULL,
     kind          TEXT NOT NULL,              -- 'llm' | 'image'
     base_url      TEXT NOT NULL,
-    api_key       TEXT,                       -- stored as given; see open question below
+    model         TEXT NOT NULL DEFAULT '',  -- model name/path sent to the backend; some backends (Ollama) require an exact match, others (llama.cpp, single model loaded) ignore it
+    api_key       TEXT,                       -- plain text; protected by the 0600 db file perms, see docs/DESIGN.md
     model_params  TEXT NOT NULL DEFAULT '{}', -- JSON: temperature, top_p, top_k, max_tokens, ...
     created_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at    TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))

@@ -22,6 +22,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile)
 				<th>Name</th>
 				<th>Kind</th>
 				<th>Base URL</th>
+				<th>Model</th>
 				<th></th>
 			</tr>
 		</thead>
@@ -31,6 +32,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile)
 					<td>{ p.Name }</td>
 					<td>{ p.Kind }</td>
 					<td>{ p.BaseURL }</td>
+					<td>{ p.Model }</td>
 					<td>
 						<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
 						<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
@@ -55,11 +57,11 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile)
 templ backendProfileForm(editing *db.BackendProfile) {
 	{{
 	action := "/settings/backend-profiles"
-	name, baseURL, apiKey := "", "", ""
+	name, baseURL, model, apiKey := "", "", "", ""
 	temperature, topP := "", ""
 	if editing != nil {
 		action = fmt.Sprintf("/settings/backend-profiles/%d", editing.ID)
-		name, baseURL, apiKey = editing.Name, editing.BaseURL, editing.APIKey
+		name, baseURL, model, apiKey = editing.Name, editing.BaseURL, editing.Model, editing.APIKey
 		if v, ok := editing.ModelParams["temperature"]; ok {
 			temperature = strconv.FormatFloat(v, 'f', -1, 64)
 		}
@@ -76,6 +78,10 @@ templ backendProfileForm(editing *db.BackendProfile) {
 		<label>
 			Base URL
 			<input type="url" name="base_url" value={ baseURL } placeholder="http://127.0.0.1:11434/v1" required="required"/>
+		</label>
+		<label>
+			Model
+			<input type="text" name="model" value={ model } placeholder="llama3.1 (some backends ignore this)"/>
 		</label>
 		<label>
 			API key (optional)
