@@ -5,20 +5,23 @@ import (
 	"fmt"
 )
 
-// Session is deliberately minimal for now: a backend profile and a message
-// log. Persona/lorebook/character attachment (docs/DESIGN.md's full
-// Session shape) lands once those CRUDs exist — a session with none of
-// them attached is a valid, useful state on its own (plain chat against a
-// backend), not a half-built feature.
+// Session.PersonaID/LorebookID are 0 (unset) until the user picks one;
+// CharacterCards are attached separately via session_characters (a
+// many-to-many join, since a session can be a group chat) — see
+// ListCharacterCardsForSession / AttachCharacterToSession in
+// character_cards.go. Lorebook attachment isn't wired up yet: no Lorebook
+// CRUD exists, same reasoning as everything else here — build it when it
+// exists, not a placeholder for it.
 type Session struct {
 	ID               int64
 	Title            string
 	BackendProfileID int64
+	PersonaID        int64
 }
 
 // ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "system".
-// CharacterCardID is 0 (unset) until a session actually has a character
-// attached; a "character" message with no card is a generic AI reply.
+// CharacterCardID is 0 (unset) for "user"/"system" messages, and for a
+// "character" reply before any character is attached to the session.
 type ChatMessage struct {
 	ID              int64
 	SessionID       int64
@@ -28,7 +31,7 @@ type ChatMessage struct {
 }
 
 func ListSessions(db *sql.DB) ([]Session, error) {
-	rows, err := db.Query(`SELECT id, title, backend_profile_id FROM sessions ORDER BY created_at DESC`)
+	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0) FROM sessions ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
@@ -37,7 +40,7 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 	var sessions []Session
 	for rows.Next() {
 		var s Session
-		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID); err != nil {
 			return nil, fmt.Errorf("scanning session: %w", err)
 		}
 		sessions = append(sessions, s)
@@ -47,8 +50,8 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 
 func GetSession(db *sql.DB, id int64) (Session, error) {
 	var s Session
-	err := db.QueryRow(`SELECT id, title, backend_profile_id FROM sessions WHERE id = ?`, id).
-		Scan(&s.ID, &s.Title, &s.BackendProfileID)
+	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0) FROM sessions WHERE id = ?`, id).
+		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID)
 	if err != nil {
 		return Session{}, fmt.Errorf("getting session %d: %w", id, err)
 	}
@@ -56,7 +59,14 @@ func GetSession(db *sql.DB, id int64) (Session, error) {
 }
 
 func CreateSession(db *sql.DB, s Session) (int64, error) {
-	res, err := db.Exec(`INSERT INTO sessions (title, backend_profile_id) VALUES (?, ?)`, s.Title, s.BackendProfileID)
+	var personaID any
+	if s.PersonaID != 0 {
+		personaID = s.PersonaID
+	}
+	res, err := db.Exec(
+		`INSERT INTO sessions (title, backend_profile_id, persona_id) VALUES (?, ?, ?)`,
+		s.Title, s.BackendProfileID, personaID,
+	)
 	if err != nil {
 		return 0, fmt.Errorf("creating session: %w", err)
 	}

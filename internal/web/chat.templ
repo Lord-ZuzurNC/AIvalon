@@ -6,7 +6,7 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile) {
+templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard) {
 	@Layout("Chat", "Chat") {
 		<h1>Chat</h1>
 		<ul>
@@ -32,6 +32,23 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile) {
 					<select name="backend_profile_id">
 						for _, p := range profiles {
 							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Persona (optional — defaults to "User")
+					<select name="persona_id">
+						<option value="">(default)</option>
+						for _, p := range personas {
+							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Characters (optional, select multiple for a group chat)
+					<select name="character_ids" multiple="multiple">
+						for _, c := range characters {
+							<option value={ fmt.Sprintf("%d", c.ID) }>{ c.Name }</option>
 						}
 					</select>
 				</label>

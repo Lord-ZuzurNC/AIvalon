@@ -27,7 +27,17 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatListPage(sessions, profiles))
+	personas, err := db.ListPersonas(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	characters, err := db.ListCharacterCards(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatListPage(sessions, profiles, personas, characters))
 }
 
 func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -41,11 +51,46 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "Untitled chat"
 	}
-	id, err := db.CreateSession(h.DB, db.Session{Title: title, BackendProfileID: profileID})
+	session := db.Session{Title: title, BackendProfileID: profileID}
+	if personaID, err := strconv.ParseInt(r.FormValue("persona_id"), 10, 64); err == nil {
+		session.PersonaID = personaID
+	}
+
+	id, err := db.CreateSession(h.DB, session)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// Attach the selected characters and, if the first one has a
+	// first_message, seed it as the session's opening line — the usual
+	// roleplay convention of the character speaking first.
+	var firstMessage string
+	var firstCharacterID int64
+	for i, idStr := range r.Form["character_ids"] {
+		cardID, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			continue
+		}
+		if err := db.AttachCharacterToSession(h.DB, id, cardID, i); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if i == 0 {
+			if card, err := db.GetCharacterCard(h.DB, cardID); err == nil {
+				firstMessage = card.FirstMessage
+				firstCharacterID = cardID
+			}
+		}
+	}
+	if firstMessage != "" {
+		msg := db.ChatMessage{SessionID: id, Role: "character", CharacterCardID: firstCharacterID, Content: firstMessage}
+		if _, err := db.CreateMessage(h.DB, msg); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
@@ -99,13 +144,26 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	chatMessages := make([]llmclient.Message, 0, len(messages))
-	for _, m := range messages {
-		role := "assistant"
-		if m.Role == "user" {
-			role = "user"
+	characters, err := db.ListCharacterCardsForSession(h.DB, session.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	persona := db.DefaultPersona
+	if session.PersonaID != 0 {
+		if p, err := db.GetPersona(h.DB, session.PersonaID); err == nil {
+			persona = p
 		}
-		chatMessages = append(chatMessages, llmclient.Message{Role: role, Content: m.Content})
+	}
+
+	chatMessages := buildChatMessages(persona, characters, messages)
+
+	// ponytail: a group chat always replies as the first attached
+	// character; turn-taking between multiple characters is a real design
+	// question, not a bug, and it's deferred until it's actually needed.
+	var replyAsCharacterID int64
+	if len(characters) > 0 {
+		replyAsCharacterID = characters[0].ID
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -136,10 +194,50 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if full.Len() > 0 {
-		if _, err := db.CreateMessage(h.DB, db.ChatMessage{SessionID: session.ID, Role: "character", Content: full.String()}); err != nil {
+		msg := db.ChatMessage{SessionID: session.ID, Role: "character", CharacterCardID: replyAsCharacterID, Content: full.String()}
+		if _, err := db.CreateMessage(h.DB, msg); err != nil {
 			fmt.Fprintf(w, "event: error\ndata: %s\n\n", html.EscapeString(err.Error()))
 		}
 	}
+}
+
+// buildChatMessages turns the session's characters/persona into a system
+// message (skipped entirely for a "naked" session with none attached) and
+// maps the stored history onto the roles the backend API expects.
+func buildChatMessages(persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
+	var messages []llmclient.Message
+	if system := buildSystemPrompt(persona, characters); system != "" {
+		messages = append(messages, llmclient.Message{Role: "system", Content: system})
+	}
+	for _, m := range history {
+		role := "assistant"
+		if m.Role == "user" {
+			role = "user"
+		}
+		messages = append(messages, llmclient.Message{Role: role, Content: m.Content})
+	}
+	return messages
+}
+
+func buildSystemPrompt(persona db.Persona, characters []db.CharacterCard) string {
+	if len(characters) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "You are roleplaying as %s, talking to %s.\n", characters[0].Name, persona.Name)
+	for _, c := range characters {
+		fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
+		if c.Personality != "" {
+			fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
+		}
+		if c.Scenario != "" {
+			fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
+		}
+	}
+	if persona.Description != "" {
+		fmt.Fprintf(&b, "\n\n%s is: %s", persona.Name, persona.Description)
+	}
+	return b.String()
 }
 
 func (h ChatHandlers) loadSession(r *http.Request) (db.Session, []db.ChatMessage, error) {

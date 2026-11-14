@@ -53,11 +53,10 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	// World/Character are still an empty shell — Chat now has a real,
-	// working slice (see internal/web/handlers_chat.go); those two get
-	// the same treatment once their CRUDs exist.
+	// World is still an empty shell — Chat and Character now have real,
+	// working slices; World gets the same treatment once Lorebook CRUD
+	// exists.
 	mux.HandleFunc("GET /world", renderPlaceholder("World"))
-	mux.HandleFunc("GET /characters", renderPlaceholder("Character"))
 
 	settings := web.SettingsHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /settings", settings.List)
@@ -65,6 +64,17 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /settings/backend-profiles/{id}/edit", settings.EditForm)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}", settings.Update)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}/delete", settings.Delete)
+	mux.HandleFunc("POST /settings/personas", settings.PersonaCreate)
+	mux.HandleFunc("GET /settings/personas/{id}/edit", settings.PersonaEditForm)
+	mux.HandleFunc("POST /settings/personas/{id}", settings.PersonaUpdate)
+	mux.HandleFunc("POST /settings/personas/{id}/delete", settings.PersonaDelete)
+
+	character := web.CharacterHandlers{DB: sqlDB}
+	mux.HandleFunc("GET /characters", character.List)
+	mux.HandleFunc("POST /characters", character.Create)
+	mux.HandleFunc("GET /characters/{id}/edit", character.EditForm)
+	mux.HandleFunc("POST /characters/{id}", character.Update)
+	mux.HandleFunc("POST /characters/{id}/delete", character.Delete)
 
 	chat := web.ChatHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /chat", chat.List)

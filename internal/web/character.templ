@@ -1,0 +1,89 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
+
+templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
+	@Layout("Character", "Character") {
+		<h1>Character</h1>
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Scenario</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, c := range cards {
+					<tr>
+						<td>{ c.Name }</td>
+						<td>{ c.Scenario }</td>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>Edit</a>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID)) } style="display:inline">
+								<button type="submit">Delete</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+
+		<h2>
+			if editing != nil {
+				Edit character
+			} else {
+				Add a character
+			}
+		</h2>
+		@characterCardForm(editing)
+	}
+}
+
+templ characterCardForm(editing *db.CharacterCard) {
+	{{
+	action := "/characters"
+	c := db.CharacterCard{}
+	if editing != nil {
+		action = fmt.Sprintf("/characters/%d", editing.ID)
+		c = *editing
+	}
+	}}
+	<form method="post" action={ templ.URL(action) }>
+		<label>
+			Name
+			<input type="text" name="name" value={ c.Name } required="required"/>
+		</label>
+		<label>
+			Description
+			<textarea name="description">{ c.Description }</textarea>
+		</label>
+		<label>
+			Personality
+			<textarea name="personality">{ c.Personality }</textarea>
+		</label>
+		<label>
+			Scenario
+			<textarea name="scenario">{ c.Scenario }</textarea>
+		</label>
+		<label>
+			First message
+			<textarea name="first_message">{ c.FirstMessage }</textarea>
+		</label>
+		<label>
+			Example messages
+			<textarea name="example_messages">{ c.ExampleMessages }</textarea>
+		</label>
+		<button type="submit">
+			if editing != nil {
+				Save
+			} else {
+				Add character
+			}
+		</button>
+	</form>
+}
