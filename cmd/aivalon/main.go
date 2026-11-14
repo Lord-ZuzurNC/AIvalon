@@ -34,7 +34,7 @@ func main() {
 	}
 }
 
-func newMux(_ *sql.DB) *http.ServeMux {
+func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
@@ -43,19 +43,24 @@ func newMux(_ *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	// Placeholder bodies for now: the shell (nav, four sections, static
-	// assets, DB wired up) is what this first pass proves, not the
-	// features behind each tab. Each gets its own real page once that
-	// section's feature lands.
-	mux.HandleFunc("GET /chat", renderPage("Chat"))
-	mux.HandleFunc("GET /world", renderPage("World"))
-	mux.HandleFunc("GET /characters", renderPage("Character"))
-	mux.HandleFunc("GET /settings", renderPage("Settings"))
+	// Chat/World/Character are still an empty shell — the point this first
+	// pass proves is the nav, static assets, and DB wiring, not the
+	// features behind each tab yet.
+	mux.HandleFunc("GET /chat", renderPlaceholder("Chat"))
+	mux.HandleFunc("GET /world", renderPlaceholder("World"))
+	mux.HandleFunc("GET /characters", renderPlaceholder("Character"))
+
+	settings := web.SettingsHandlers{DB: sqlDB}
+	mux.HandleFunc("GET /settings", settings.List)
+	mux.HandleFunc("POST /settings/backend-profiles", settings.Create)
+	mux.HandleFunc("GET /settings/backend-profiles/{id}/edit", settings.EditForm)
+	mux.HandleFunc("POST /settings/backend-profiles/{id}", settings.Update)
+	mux.HandleFunc("POST /settings/backend-profiles/{id}/delete", settings.Delete)
 
 	return mux
 }
 
-func renderPage(section string) http.HandlerFunc {
+func renderPlaceholder(section string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := web.Page(section, section).Render(r.Context(), w); err != nil {
