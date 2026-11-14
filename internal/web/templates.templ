@@ -1,0 +1,55 @@
+package web
+
+templ Layout(title string, active string) {
+	<!DOCTYPE html>
+	<html lang="en" data-theme="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · AIvalon</title>
+			<link rel="stylesheet" href="/static/pico.classless.min.css"/>
+			<script src="/static/htmx.min.js"></script>
+			<script src="/static/htmx-sse.js"></script>
+		</head>
+		<body>
+			<header>
+				<nav>
+					<ul>
+						<li><strong>AIvalon</strong></li>
+					</ul>
+					<ul>
+						@navLink("/chat", "Chat", active)
+						@navLink("/world", "World", active)
+						@navLink("/characters", "Character", active)
+						@navLink("/settings", "Settings", active)
+					</ul>
+				</nav>
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ navLink(href, label, active string) {
+	if active == label {
+		<li><a href={ templ.URL(href) } aria-current="page">{ label }</a></li>
+	} else {
+		<li><a href={ templ.URL(href) }>{ label }</a></li>
+	}
+}
+
+templ Placeholder(section string) {
+	<h1>{ section }</h1>
+	<p>Not built yet — scaffold only.</p>
+}
+
+// Page composes the layout with a placeholder body for a given section.
+// Each section gets its own real component once its feature lands; this is
+// what the four routes render today.
+templ Page(title string, active string) {
+	@Layout(title, active) {
+		@Placeholder(active)
+	}
+}
