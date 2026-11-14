@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -193,7 +194,7 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	turns := characters
+	turns := selectRespondingCharacters(characters, messages)
 	if len(turns) == 0 {
 		turns = []db.CharacterCard{{}} // one generic, character-less reply
 	}
@@ -331,6 +332,67 @@ func characterName(characters []db.CharacterCard, id int64) string {
 		}
 	}
 	return ""
+}
+
+// selectRespondingCharacters decides who replies to the latest user
+// message, instead of forcing every attached character to reply every
+// round — that forced round-robin is what caused the Merlin/Merlinette
+// identity crossover: the user addresses one character while it's
+// mechanically the other's turn, and the model writes the addressed
+// character's voice under the wrong slot.
+//
+// Priority: whoever the user explicitly named in their message; failing
+// that, whoever spoke last (continuing a natural back-and-forth); failing
+// that (nobody's spoken yet), the first attached character. A naked
+// session or one with a single character is unaffected — there's no
+// turn-order ambiguity to resolve.
+func selectRespondingCharacters(characters []db.CharacterCard, history []db.ChatMessage) []db.CharacterCard {
+	if len(characters) <= 1 {
+		return characters
+	}
+
+	var lastUserContent string
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role == "user" {
+			lastUserContent = history[i].Content
+			break
+		}
+	}
+	if addressed := addressedCharacters(lastUserContent, characters); len(addressed) > 0 {
+		return addressed
+	}
+
+	for i := len(history) - 1; i >= 0; i-- {
+		if history[i].Role != "character" {
+			continue
+		}
+		for _, c := range characters {
+			if c.ID == history[i].CharacterCardID {
+				return []db.CharacterCard{c}
+			}
+		}
+	}
+
+	return characters[:1]
+}
+
+// addressedCharacters returns every attached character whose name appears
+// as a whole word in message (case-insensitive). Word-boundary matching
+// matters here specifically because of names like "Merlin"/"Merlinette":
+// a plain substring check would make "Merlinette" falsely address Merlin
+// too, since "Merlin" is a literal substring of "Merlinette".
+func addressedCharacters(message string, characters []db.CharacterCard) []db.CharacterCard {
+	var addressed []db.CharacterCard
+	for _, c := range characters {
+		if c.Name == "" {
+			continue
+		}
+		pattern := `(?i)\b` + regexp.QuoteMeta(c.Name) + `\b`
+		if matched, err := regexp.MatchString(pattern, message); err == nil && matched {
+			addressed = append(addressed, c)
+		}
+	}
+	return addressed
 }
 
 // stripSpeakerEcho defends against a known LLM habit: having seen "Name:"

@@ -45,14 +45,24 @@ func TestFormatMessageContent(t *testing.T) {
 			`<span class="action">waves</span>`,
 		},
 		{
-			"quote kept and bolded (escaped, as it must be)",
+			"a message that's ENTIRELY one quoted block (the default model habit) loses its quotes and its bold",
 			`"hello there"`,
-			`<strong class="dialogue">&#34;hello there&#34;</strong>`,
+			`hello there`,
 		},
 		{
-			"mixed, matches Lord's actual roleplay style",
+			"same default habit, matches Lord's long-paragraph screenshot: whole line quoted, no bold",
+			`"A wise strategy! I shall stand as the shield."`,
+			`A wise strategy! I shall stand as the shield.`,
+		},
+		{
+			"a genuinely nested quote inside otherwise unquoted narration stays bold",
+			`He said "hello" and walked away.`,
+			`He said <strong class="dialogue">&#34;hello&#34;</strong> and walked away.`,
+		},
+		{
+			"mixed action + fully-quoted dialogue: action greyed, dialogue unquoted/unbolded",
 			`*leans back* "I am Merlin." *smiles*`,
-			`<span class="action">leans back</span> <strong class="dialogue">&#34;I am Merlin.&#34;</strong> <span class="action">smiles</span>`,
+			`<span class="action">leans back</span> I am Merlin. <span class="action">smiles</span>`,
 		},
 		{
 			"escapes HTML and never lets a raw tag through",
