@@ -16,33 +16,37 @@ templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, per
 templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, systemPromptTemplate string) {
 	<h1>Settings</h1>
 	<h2>Backend profiles</h2>
-	<table>
-		<thead>
-			<tr>
-				<th>Name</th>
-				<th>Kind</th>
-				<th>Base URL</th>
-				<th>Model</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			for _, p := range profiles {
+	if len(profiles) == 0 {
+		<p><em>No backend profile yet — add one below to start chatting.</em></p>
+	} else {
+		<table>
+			<thead>
 				<tr>
-					<td>{ p.Name }</td>
-					<td>{ p.Kind }</td>
-					<td>{ p.BaseURL }</td>
-					<td>{ p.Model }</td>
-					<td>
-						<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
-						<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
-							<button type="submit">Delete</button>
-						</form>
-					</td>
+					<th>Name</th>
+					<th>Kind</th>
+					<th>Base URL</th>
+					<th>Model</th>
+					<th></th>
 				</tr>
-			}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				for _, p := range profiles {
+					<tr>
+						<td>{ p.Name }</td>
+						<td>{ p.Kind }</td>
+						<td>{ p.BaseURL }</td>
+						<td>{ p.Model }</td>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
+								<button type="submit" class="secondary">Delete</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
 
 	<h2>
 		if editing != nil {
@@ -55,29 +59,33 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 
 	<h2>Your persona</h2>
 	<p>How you're represented to the AI. A session with none picked uses a built-in default ("User").</p>
-	<table>
-		<thead>
-			<tr>
-				<th>Name</th>
-				<th>Description</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			for _, p := range personas {
+	if len(personas) == 0 {
+		<p><em>No persona yet — add one below, or skip it and sessions use the "User" default.</em></p>
+	} else {
+		<table>
+			<thead>
 				<tr>
-					<td>{ p.Name }</td>
-					<td>{ p.Description }</td>
-					<td>
-						<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>Edit</a>
-						<form method="post" action={ templ.URL(fmt.Sprintf("/settings/personas/%d/delete", p.ID)) } style="display:inline">
-							<button type="submit">Delete</button>
-						</form>
-					</td>
+					<th>Name</th>
+					<th>Description</th>
+					<th></th>
 				</tr>
-			}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				for _, p := range personas {
+					<tr>
+						<td>{ p.Name }</td>
+						<td>{ p.Description }</td>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>Edit</a>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/settings/personas/%d/delete", p.ID)) } style="display:inline">
+								<button type="submit" class="secondary">Delete</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	}
 
 	<h2>
 		if editingPersona != nil {
@@ -94,7 +102,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		<code>{ "{{persona_name}}" }</code>, <code>{ "{{persona_description}}" }</code>,
 		<code>{ "{{characters}}" }</code> (the attached character cards, or a fallback
 		instruction to improvise when there are none), and <code>{ "{{lorebook}}" }</code>
-		(reserved — always empty for now, there's no Lorebook feature yet).
+		(the session's attached Lorebook's entries that are active this turn — see World).
 	</p>
 	@systemPromptForm(systemPromptTemplate)
 }

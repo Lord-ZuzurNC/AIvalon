@@ -7,3 +7,28 @@
 	font-weight: bold;
 	color: #e0c341;
 }
+
+/* Pico's classless breakpoints top out at max-width:1200px/1450px on wide
+   screens — fine for a dashboard, too wide for a read-heavy chat/RP app
+   where long lines get hard to track. Same selector, loaded after Pico,
+   wins the cascade at equal specificity without needing !important. */
+body > main {
+	max-width: 860px;
+}
+
+/* Pico's classless build only wires its "secondary" (muted) palette to
+   native tag/attribute selectors like [type=reset] — a class="secondary"
+   on an ordinary <button> does nothing there. Reusing the custom
+   properties Pico's own stylesheet already defines in :root (confirmed
+   via grep, not assumed) so Delete buttons read as less prominent than
+   Save/Add, without touching Pico's vendored file. */
+button.secondary {
+	background-color: var(--pico-secondary-background, #525f7a);
+	border-color: var(--pico-secondary-border, #525f7a);
+	color: #fff;
+}
+button.secondary:hover,
+button.secondary:focus {
+	background-color: var(--pico-secondary-hover-background, #48536b);
+	border-color: var(--pico-secondary-hover-background, #48536b);
+}
