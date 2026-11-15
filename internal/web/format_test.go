@@ -3,28 +3,26 @@ package web
 import (
 	"strings"
 	"testing"
-
-	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-func TestStripSpeakerEcho(t *testing.T) {
-	characters := []db.CharacterCard{{Name: "Merlin"}, {Name: "Merlinette"}, {Name: "Gorak"}}
+func TestStripLeadingLabel(t *testing.T) {
+	labels := []string{"Merlin", "Merlinette", "Gorak"}
 	cases := []struct{ name, content, want string }{
 		{"plain self-echo", "Merlin: *He closes the book.*", "*He closes the book.*"},
 		{"scene-break noise before the echo", "\n\n***\n\nGorak: *He shifts his weight.*", "*He shifts his weight.*"},
 		{"case-insensitive", "merlin: hello", "hello"},
 		{"no echo, left untouched", "*He waves.* \"Hello.\"", "*He waves.* \"Hello.\""},
-		{"name not in the session isn't stripped", "Someone: hi", "Someone: hi"},
+		{"name not in the list isn't stripped", "Someone: hi", "Someone: hi"},
 		{
-			"cross-character echo: model voiced a DIFFERENT attached character, strip that label too",
+			"any matching label is stripped, not just the first one",
 			`Merlinette: *She steps forward.*`,
 			`*She steps forward.*`,
 		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := stripSpeakerEcho(c.content, characters); got != c.want {
-				t.Errorf("stripSpeakerEcho(%q, ...) = %q, want %q", c.content, got, c.want)
+			if got := stripLeadingLabel(c.content, labels); got != c.want {
+				t.Errorf("stripLeadingLabel(%q, ...) = %q, want %q", c.content, got, c.want)
 			}
 		})
 	}
