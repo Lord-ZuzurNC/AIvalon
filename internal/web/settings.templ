@@ -7,13 +7,13 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona) {
+templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, systemPromptTemplate string) {
 	@Layout("Settings", "Settings") {
-		@SettingsPageBody(profiles, editing, personas, editingPersona)
+		@SettingsPageBody(profiles, editing, personas, editingPersona, systemPromptTemplate)
 	}
 }
 
-templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona) {
+templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, systemPromptTemplate string) {
 	<h1>Settings</h1>
 	<h2>Backend profiles</h2>
 	<table>
@@ -87,6 +87,26 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		}
 	</h2>
 	@personaForm(editingPersona)
+
+	<h2>System prompt</h2>
+	<p>
+		How the world/narrator is instructed. Placeholders:
+		<code>{ "{{persona_name}}" }</code>, <code>{ "{{persona_description}}" }</code>,
+		<code>{ "{{characters}}" }</code> (the attached character cards, or a fallback
+		instruction to improvise when there are none), and <code>{ "{{lorebook}}" }</code>
+		(reserved — always empty for now, there's no Lorebook feature yet).
+	</p>
+	@systemPromptForm(systemPromptTemplate)
+}
+
+templ systemPromptForm(template string) {
+	<form method="post" action="/settings/system-prompt">
+		<textarea name="system_prompt_template" rows="16">{ template }</textarea>
+		<button type="submit">Save</button>
+	</form>
+	<form method="post" action="/settings/system-prompt/reset" style="display:inline">
+		<button type="submit">Reset to default</button>
+	</form>
 }
 
 templ backendProfileForm(editing *db.BackendProfile) {

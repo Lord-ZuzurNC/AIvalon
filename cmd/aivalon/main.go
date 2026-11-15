@@ -68,6 +68,8 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /settings/personas/{id}/edit", settings.PersonaEditForm)
 	mux.HandleFunc("POST /settings/personas/{id}", settings.PersonaUpdate)
 	mux.HandleFunc("POST /settings/personas/{id}/delete", settings.PersonaDelete)
+	mux.HandleFunc("POST /settings/system-prompt", settings.SystemPromptUpdate)
+	mux.HandleFunc("POST /settings/system-prompt/reset", settings.SystemPromptReset)
 
 	character := web.CharacterHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /characters", character.List)

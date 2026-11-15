@@ -238,9 +238,14 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, session db.Session, profile db.BackendProfile, persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage, emit func(string), emitError func(error)) (db.ChatMessage, bool) {
 	emit("World: ")
 
-	chatMessages := buildNarratorMessages(persona, characters, history)
+	settings, err := db.GetAppSettings(h.DB)
+	if err != nil {
+		emitError(err)
+		return db.ChatMessage{}, false
+	}
+	chatMessages := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, history)
 	var full strings.Builder
-	err := llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
+	err = llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
 		full.WriteString(token)
 		emit(token)
 	})
@@ -264,49 +269,65 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 }
 
 // buildNarratorMessages maps the session into the backend API shape: a
-// system prompt casting the model as the world (see buildNarratorPrompt),
-// then history with past "character" lines re-prefixed by their speaker's
-// name (characters may be nil for a session with none attached — no
-// prefix is added then, there's nothing to resolve against) and past
-// "narrator" lines passed through as-is, since each already reads as one
-// coherent passage with names naturally in the prose.
-func buildNarratorMessages(persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
-	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(persona, characters)}}
+// system prompt built from the user-editable template (Settings → System
+// prompt; see buildNarratorPrompt) plus history with past "character"
+// lines re-prefixed by their speaker's name (characters may be nil for a
+// session with none attached — no prefix is added then, there's nothing
+// to resolve against) and past "narrator" lines passed through as-is,
+// since each already reads as one coherent passage with names naturally
+// in the prose.
+func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
+	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(template, persona, characters)}}
 	for _, m := range history {
 		messages = append(messages, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
 	}
 	return messages
 }
 
-func buildNarratorPrompt(persona db.Persona, characters []db.CharacterCard) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "You are the narrator of this world — not any single character in it. "+
-		"%s is the player, speaking as themselves; never write %s's actions, words, or decisions, only react to what they actually said.\n",
-		persona.Name, persona.Name)
-	if len(characters) > 0 {
-		b.WriteString("These characters live in this world:\n")
-		for _, c := range characters {
-			fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
-			if c.Personality != "" {
-				fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
-			}
-			if c.Scenario != "" {
-				fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
-			}
-		}
-	} else {
-		b.WriteString("No characters are predefined for this session. Act as the game master: " +
+// buildNarratorPrompt fills in the user-editable system prompt template
+// (Settings → System prompt, stored as AppSettings.SystemPromptTemplate)
+// with the live session state. Plain named placeholders, not Go's
+// text/template — Lord edits this by hand and isn't a programmer (see
+// USER.md), so there's no loop/conditional syntax to get wrong; an
+// unrecognized or deleted placeholder just stays literal or disappears,
+// it can never fail to render.
+//
+// {{lorebook}} always resolves to "" today: there's no Lorebook CRUD yet
+// (see docs/DESIGN.md's "World" section — still an empty shell), so
+// there's nothing to inject. The placeholder is wired up now so that
+// landing Lorebook later is a pure content change here, not a prompt
+// rewrite.
+func buildNarratorPrompt(template string, persona db.Persona, characters []db.CharacterCard) string {
+	prompt := template
+	prompt = strings.ReplaceAll(prompt, "{{persona_name}}", persona.Name)
+	prompt = strings.ReplaceAll(prompt, "{{persona_description}}", persona.Description)
+	prompt = strings.ReplaceAll(prompt, "{{characters}}", renderCharactersBlock(characters))
+	prompt = strings.ReplaceAll(prompt, "{{lorebook}}", "")
+	return prompt
+}
+
+// renderCharactersBlock is the only part of the prompt still built in Go
+// rather than the editable template — the per-character loop needs real
+// code, not a placeholder, and the empty case (act as GM, invent
+// characters) only makes sense as a substitute for an actual character
+// list, not something to leave as a template edit.
+func renderCharactersBlock(characters []db.CharacterCard) string {
+	if len(characters) == 0 {
+		return "No characters are predefined for this session. Act as the game master: " +
 			"introduce and voice whichever characters the scene naturally calls for, inventing " +
 			"names and personalities as you go, and keep each one consistent once introduced " +
-			"rather than reinventing them from one reply to the next.")
+			"rather than reinventing them from one reply to the next."
 	}
-	b.WriteString("\n\nNarrate what happens next: describe the scene and write whichever " +
-		"characters' actions or dialogue the moment calls for. You are not limited to one of " +
-		"them — if the player asks one character to relay something to another and report " +
-		"back, narrate the whole exchange, including the other character's actual reply, not " +
-		"just the first character's side of it.")
-	if persona.Description != "" {
-		fmt.Fprintf(&b, "\n\n%s is: %s", persona.Name, persona.Description)
+	var b strings.Builder
+	b.WriteString("These are the fixed characters who live in this world, as described by their character cards:")
+	for _, c := range characters {
+		fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
+		if c.Personality != "" {
+			fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
+		}
+		if c.Scenario != "" {
+			fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
+		}
 	}
 	return b.String()
 }
