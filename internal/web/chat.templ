@@ -79,5 +79,21 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) {
 			<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
 			<button type="submit">Send</button>
 		</form>
+		<script>
+			// Land on the bottom of the conversation on load, and keep
+			// following it as tokens stream in / the final styled swap
+			// lands — otherwise every full-page POST-then-redirect from
+			// hitting Enter resets scroll to the top of a (possibly
+			// long) session, and typed replies grow past the fold
+			// without the view following them.
+			(function () {
+				function scrollChatToBottom() {
+					window.scrollTo(0, document.body.scrollHeight);
+				}
+				document.addEventListener("DOMContentLoaded", scrollChatToBottom);
+				document.body.addEventListener("htmx:afterSwap", scrollChatToBottom);
+				document.body.addEventListener("htmx:oobAfterSwap", scrollChatToBottom);
+			})();
+		</script>
 	}
 }

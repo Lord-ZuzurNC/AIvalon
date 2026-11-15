@@ -60,3 +60,19 @@ func TestBuildNarratorPrompt(t *testing.T) {
 		}
 	}
 }
+
+func TestBuildNarratorPromptWithNoCharacters(t *testing.T) {
+	// Lord's explicit ask: a naked session (no cards) still goes through
+	// the world/narrator, acting as a free-form GM that invents whoever
+	// the scene needs instead of being told about fixed cards.
+	persona := db.Persona{Name: "Asteroid Destroyer"}
+	prompt := buildNarratorPrompt(persona, nil)
+	for _, want := range []string{"game master", "inventing names", "consistent"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("narrator prompt (no characters) missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "These characters live in this world") {
+		t.Errorf("narrator prompt (no characters) shouldn't claim there are predefined characters:\n%s", prompt)
+	}
+}

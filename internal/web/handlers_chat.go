@@ -17,9 +17,9 @@ type ChatHandlers struct {
 }
 
 // DisplayMessage is the view-model for one rendered chat line: who's
-// speaking (persona name for "user", the resolved character name for
-// "character", "World" for a narrator line) and the message already run
-// through formatMessageContent into safe, styled HTML.
+// speaking (persona name for "user", "World" for the narrator) and the
+// message already run through formatMessageContent into safe, styled
+// HTML.
 type DisplayMessage struct {
 	Speaker     string
 	ContentHTML string
@@ -73,7 +73,10 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Attach the selected characters and, if the first one has a
 	// first_message, seed it as the session's opening line — the usual
-	// roleplay convention of the character speaking first.
+	// roleplay convention of the character speaking first. This is a
+	// specific line the user wrote on the card, so it keeps its own
+	// character_card_id even though every reply from here on is narrated
+	// by the world instead.
 	var firstMessage string
 	var firstCharacterID int64
 	for i, idStr := range r.Form["character_ids"] {
@@ -137,19 +140,23 @@ func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
-// Stream is the SSE endpoint. A session with 0 or 1 characters attached
-// gets the simple treatment: that character (or nobody, for a naked
-// session) answers directly, in their own voice. A session with 2+
-// characters switches to "world" narration instead of picking one
-// character to answer (see buildNarratorMessages) — because no fixed
-// per-character turn allocation can express "ask Merlin, have him relay
-// to Merlinette, and report back what she said" in one exchange; that
-// needs something that can see and narrate the whole scene, not a single
-// character's voice. This replaced an earlier addressee-classification
-// scheme (deleted, not left lying around unused) that picked one
-// character per round by LLM classification — it fixed identity
-// crossover but structurally couldn't do multi-character relays, which is
-// exactly what surfaced next.
+// Stream is the SSE endpoint. Every session is answered by the world, not
+// by one fixed character's voice — Lord's call, after hitting the natural
+// limit of the previous "one character replies" designs: no fixed
+// per-character slot can express "ask Merlin, have him relay to
+// Merlinette, and report back what she said" in one exchange, and that
+// turned out to be a common, not rare, request. The world sees every
+// attached character card and is free to narrate whichever of them (or,
+// with none attached, characters it invents on the spot, GM-style) the
+// moment calls for — see buildNarratorPrompt. The world is explicitly
+// forbidden from speaking or acting for the player.
+//
+// This replaced two earlier designs in the same build: forced
+// round-robin (every character replies every round — caused identity
+// crossover) and addressee classification (one LLM call decides who's
+// being spoken to, then only they reply — fixed crossover but couldn't
+// do relays). Both, and their tests, were deleted rather than left lying
+// around unused.
 //
 // Live tokens are streamed as plain escaped text for immediate feedback;
 // once the reply is complete and persisted, a final SSE event carries an
@@ -199,17 +206,7 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var reply db.ChatMessage
-	var ok bool
-	if len(characters) >= 2 {
-		reply, ok = h.streamNarratorReply(r, w, session, profile, persona, characters, messages, emit, emitError)
-	} else {
-		speaking := db.CharacterCard{} // naked session: a generic, character-less reply
-		if len(characters) == 1 {
-			speaking = characters[0]
-		}
-		reply, ok = h.streamCharacterReply(r, w, session, profile, persona, characters, speaking, messages, emit, emitError)
-	}
+	reply, ok := h.streamWorldReply(r, w, session, profile, persona, characters, messages, emit, emitError)
 	if !ok {
 		return
 	}
@@ -235,44 +232,10 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// streamCharacterReply handles the 0-or-1-character case: speaking answers
-// directly in their own voice (or a generic reply, for a naked session).
-func (h ChatHandlers) streamCharacterReply(r *http.Request, w http.ResponseWriter, session db.Session, profile db.BackendProfile, persona db.Persona, characters []db.CharacterCard, speaking db.CharacterCard, history []db.ChatMessage, emit func(string), emitError func(error)) (db.ChatMessage, bool) {
-	speakerName := speaking.Name
-	if speakerName == "" {
-		speakerName = "AI"
-	}
-	emit(speakerName + ": ")
-
-	chatMessages := buildChatMessages(persona, speaking, history)
-	var full strings.Builder
-	err := llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
-		full.WriteString(token)
-		emit(token)
-	})
-	if err != nil {
-		emitError(err)
-		return db.ChatMessage{}, false
-	}
-	if full.Len() == 0 {
-		return db.ChatMessage{}, false
-	}
-
-	content := strings.TrimSpace(stripLeadingLabel(full.String(), []string{speakerName}))
-	msg := db.ChatMessage{SessionID: session.ID, Role: "character", CharacterCardID: speaking.ID, Content: content}
-	msgID, err := db.CreateMessage(h.DB, msg)
-	if err != nil {
-		emitError(err)
-		return db.ChatMessage{}, false
-	}
-	msg.ID = msgID
-	return msg, true
-}
-
-// streamNarratorReply handles the 2+-character case: one completion,
-// voiced as the world rather than any single character, free to narrate
-// whichever of the attached characters the moment calls for.
-func (h ChatHandlers) streamNarratorReply(r *http.Request, w http.ResponseWriter, session db.Session, profile db.BackendProfile, persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage, emit func(string), emitError func(error)) (db.ChatMessage, bool) {
+// streamWorldReply is the one and only reply path: a single completion,
+// voiced as the world rather than any character, free to narrate whoever
+// the moment calls for.
+func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, session db.Session, profile db.BackendProfile, persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage, emit func(string), emitError func(error)) (db.ChatMessage, bool) {
 	emit("World: ")
 
 	chatMessages := buildNarratorMessages(persona, characters, history)
@@ -300,47 +263,13 @@ func (h ChatHandlers) streamNarratorReply(r *http.Request, w http.ResponseWriter
 	return msg, true
 }
 
-// buildChatMessages is the 0-or-1-character case: a plain system prompt
-// ("you are X, talking to persona") plus history mapped onto the roles
-// the backend API expects. Past "narrator" messages (from when this
-// session, or an older build of AIvalon, used group narration) pass
-// through as-is; past "character" messages get their speaker's name
-// prefixed back in, same reasoning as buildNarratorMessages below.
-func buildChatMessages(persona db.Persona, speaking db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
-	var messages []llmclient.Message
-	if system := buildSoloPrompt(persona, speaking); system != "" {
-		messages = append(messages, llmclient.Message{Role: "system", Content: system})
-	}
-	for _, m := range history {
-		messages = append(messages, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, nil)})
-	}
-	return messages
-}
-
-func buildSoloPrompt(persona db.Persona, speaking db.CharacterCard) string {
-	if speaking.Name == "" {
-		return ""
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "You are roleplaying as %s, talking to %s.\n", speaking.Name, persona.Name)
-	fmt.Fprintf(&b, "Write only %s's reply itself. Do not prefix it with \"%s:\" or any other speaker label — the interface already shows who's speaking.\n", speaking.Name, speaking.Name)
-	fmt.Fprintf(&b, "\n%s: %s", speaking.Name, speaking.Description)
-	if speaking.Personality != "" {
-		fmt.Fprintf(&b, "\nPersonality: %s", speaking.Personality)
-	}
-	if speaking.Scenario != "" {
-		fmt.Fprintf(&b, "\nScenario: %s", speaking.Scenario)
-	}
-	if persona.Description != "" {
-		fmt.Fprintf(&b, "\n\n%s is: %s", persona.Name, persona.Description)
-	}
-	return b.String()
-}
-
-// buildNarratorMessages is the 2+-character case: the system prompt casts
-// the model as the world itself, with every attached character's sheet
-// for context, explicitly free to narrate any of them — the thing a
-// single fixed "you are only X" turn could never do.
+// buildNarratorMessages maps the session into the backend API shape: a
+// system prompt casting the model as the world (see buildNarratorPrompt),
+// then history with past "character" lines re-prefixed by their speaker's
+// name (characters may be nil for a session with none attached — no
+// prefix is added then, there's nothing to resolve against) and past
+// "narrator" lines passed through as-is, since each already reads as one
+// coherent passage with names naturally in the prose.
 func buildNarratorMessages(persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
 	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(persona, characters)}}
 	for _, m := range history {
@@ -354,17 +283,24 @@ func buildNarratorPrompt(persona db.Persona, characters []db.CharacterCard) stri
 	fmt.Fprintf(&b, "You are the narrator of this world — not any single character in it. "+
 		"%s is the player, speaking as themselves; never write %s's actions, words, or decisions, only react to what they actually said.\n",
 		persona.Name, persona.Name)
-	b.WriteString("These characters live in this world:\n")
-	for _, c := range characters {
-		fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
-		if c.Personality != "" {
-			fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
+	if len(characters) > 0 {
+		b.WriteString("These characters live in this world:\n")
+		for _, c := range characters {
+			fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
+			if c.Personality != "" {
+				fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
+			}
+			if c.Scenario != "" {
+				fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
+			}
 		}
-		if c.Scenario != "" {
-			fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
-		}
+	} else {
+		b.WriteString("No characters are predefined for this session. Act as the game master: " +
+			"introduce and voice whichever characters the scene naturally calls for, inventing " +
+			"names and personalities as you go, and keep each one consistent once introduced " +
+			"rather than reinventing them from one reply to the next.")
 	}
-	b.WriteString("\n\nNarrate what happens next: describe the scene and write whichever of these " +
+	b.WriteString("\n\nNarrate what happens next: describe the scene and write whichever " +
 		"characters' actions or dialogue the moment calls for. You are not limited to one of " +
 		"them — if the player asks one character to relay something to another and report " +
 		"back, narrate the whole exchange, including the other character's actual reply, not " +
@@ -385,8 +321,7 @@ func historyRole(m db.ChatMessage) string {
 // namePrefixed prefixes a past "character" message with its speaker's
 // name (characters may be nil when there's no group context to resolve
 // against) so the model can tell whose line was whose; "narrator" and
-// other roles pass through unchanged — a narrator message already reads
-// as one coherent passage with names naturally in the prose.
+// other roles pass through unchanged.
 func namePrefixed(m db.ChatMessage, characters []db.CharacterCard) string {
 	if m.Role != "character" {
 		return m.Content
@@ -429,8 +364,8 @@ func stripLeadingLabel(content string, labels []string) string {
 
 // displayMessages resolves each stored message into its view-model: the
 // speaker's actual name (persona for "user", the matching character for
-// "character", "World" for "narrator") and the message content formatted
-// into safe styled HTML.
+// an old "character"-role row kept for history, "World" for "narrator")
+// and the message content formatted into safe styled HTML.
 func (h ChatHandlers) displayMessages(session db.Session, messages []db.ChatMessage) ([]DisplayMessage, error) {
 	characters, err := db.ListCharacterCardsForSession(h.DB, session.ID)
 	if err != nil {
