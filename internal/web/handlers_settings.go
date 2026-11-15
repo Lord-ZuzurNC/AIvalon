@@ -123,6 +123,25 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
+func (h SettingsHandlers) SystemPromptUpdate(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	err := db.UpdateAppSettings(h.DB, db.AppSettings{SystemPromptTemplate: r.FormValue("system_prompt_template")})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+func (h SettingsHandlers) SystemPromptReset(w http.ResponseWriter, r *http.Request) {
+	err := db.UpdateAppSettings(h.DB, db.AppSettings{SystemPromptTemplate: db.DefaultSystemPromptTemplate})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
 // render loads both lists (profiles are cheap, there's never many) and
 // renders the one Settings page with whichever form (if any) is being
 // edited — same page, two independent edit states.
@@ -137,7 +156,12 @@ func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editing
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona))
+	appSettings, err := db.GetAppSettings(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona, appSettings.SystemPromptTemplate))
 }
 
 // profileFromForm reads the plain POST form fields shared by Create and

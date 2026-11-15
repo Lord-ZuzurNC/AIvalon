@@ -48,7 +48,7 @@ func TestBuildNarratorPrompt(t *testing.T) {
 	persona := db.Persona{Name: "Asteroid Destroyer", Description: "a curious engineer"}
 	merlin := db.CharacterCard{Name: "Merlin", Description: "An ancient wizard."}
 	merlinette := db.CharacterCard{Name: "Merlinette", Description: "His apprentice."}
-	prompt := buildNarratorPrompt(persona, []db.CharacterCard{merlin, merlinette})
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, []db.CharacterCard{merlin, merlinette})
 
 	// This is the whole point of the narrator redesign: the prompt must
 	// explicitly allow narrating MULTIPLE characters and MUST forbid
@@ -59,6 +59,9 @@ func TestBuildNarratorPrompt(t *testing.T) {
 			t.Errorf("narrator prompt missing %q:\n%s", want, prompt)
 		}
 	}
+	if strings.Contains(prompt, "{{") {
+		t.Errorf("a placeholder was left unsubstituted:\n%s", prompt)
+	}
 }
 
 func TestBuildNarratorPromptWithNoCharacters(t *testing.T) {
@@ -66,13 +69,27 @@ func TestBuildNarratorPromptWithNoCharacters(t *testing.T) {
 	// the world/narrator, acting as a free-form GM that invents whoever
 	// the scene needs instead of being told about fixed cards.
 	persona := db.Persona{Name: "Asteroid Destroyer"}
-	prompt := buildNarratorPrompt(persona, nil)
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, nil)
 	for _, want := range []string{"game master", "inventing names", "consistent"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("narrator prompt (no characters) missing %q:\n%s", want, prompt)
 		}
 	}
-	if strings.Contains(prompt, "These characters live in this world") {
+	if strings.Contains(prompt, "These are the fixed characters") {
 		t.Errorf("narrator prompt (no characters) shouldn't claim there are predefined characters:\n%s", prompt)
+	}
+}
+
+func TestBuildNarratorPromptWithCustomTemplate(t *testing.T) {
+	// The whole point of this feature: Lord can rewrite the template
+	// freely in Settings. A trivial custom template must still get its
+	// placeholders substituted exactly like the default one.
+	custom := "Narrator mode. Player: {{persona_name}}. Cast: {{characters}}. Lore: {{lorebook}}."
+	persona := db.Persona{Name: "Z"}
+	merlin := db.CharacterCard{Name: "Merlin", Description: "A wizard."}
+	got := buildNarratorPrompt(custom, persona, []db.CharacterCard{merlin})
+	want := "Narrator mode. Player: Z. Cast: These are the fixed characters who live in this world, as described by their character cards:\nMerlin: A wizard.. Lore: ."
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
 	}
 }
