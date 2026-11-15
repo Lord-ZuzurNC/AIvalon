@@ -1,0 +1,156 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
+
+templ WorldPage(books []db.Lorebook) {
+	@Layout("World", "World") {
+		<h1>World</h1>
+		<p>Lorebooks: world info the narrator can draw on. Attach one to a session in Chat.</p>
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, b := range books {
+					<tr>
+						<td>{ b.Name }</td>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>Open</a>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/delete", b.ID)) } style="display:inline">
+								<button type="submit">Delete</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<h2>Add a lorebook</h2>
+		<form method="post" action="/world">
+			<label>
+				Name
+				<input type="text" name="name" required="required"/>
+			</label>
+			<button type="submit">Add lorebook</button>
+		</form>
+	}
+}
+
+templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry) {
+	@Layout(book.Name, "World") {
+		<h1>{ book.Name }</h1>
+		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) }>
+			<label>
+				Name
+				<input type="text" name="name" value={ book.Name } required="required"/>
+			</label>
+			<button type="submit">Rename</button>
+		</form>
+
+		<h2>Entries</h2>
+		<table>
+			<thead>
+				<tr>
+					<th>Keys</th>
+					<th>Trigger</th>
+					<th>Order</th>
+					<th>Probability</th>
+					<th>Enabled</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, e := range entries {
+					<tr>
+						<td>{ joinKeys(e.Keys) }</td>
+						<td>{ e.TriggerStrategy }</td>
+						<td>{ fmt.Sprintf("%d", e.InsertionOrder) }</td>
+						<td>{ fmt.Sprintf("%d", e.Probability) }</td>
+						<td>
+							if e.Enabled {
+								yes
+							} else {
+								no
+							}
+						</td>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)) }>Edit</a>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID)) } style="display:inline">
+								<button type="submit">Delete</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+
+		<h3>
+			if editingEntry != nil {
+				Edit entry
+			} else {
+				Add an entry
+			}
+		</h3>
+		@lorebookEntryForm(book, editingEntry)
+	}
+}
+
+templ lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) {
+	{{
+	action := fmt.Sprintf("/world/%d/entries", book.ID)
+	keys, content, triggerStrategy := "", "", "selective"
+	insertionOrder, probability := "0", "100"
+	enabled := true
+	if editing != nil {
+		action = fmt.Sprintf("/world/%d/entries/%d", book.ID, editing.ID)
+		keys = joinKeys(editing.Keys)
+		content = editing.Content
+		triggerStrategy = editing.TriggerStrategy
+		insertionOrder = fmt.Sprintf("%d", editing.InsertionOrder)
+		probability = fmt.Sprintf("%d", editing.Probability)
+		enabled = editing.Enabled
+	}
+	}}
+	<form method="post" action={ templ.URL(action) }>
+		<label>
+			Keys (comma-separated — ignored if trigger is "constant")
+			<input type="text" name="keys" value={ keys } placeholder="tower, arcane tomes"/>
+		</label>
+		<label>
+			Content
+			<textarea name="content" required="required">{ content }</textarea>
+		</label>
+		<label>
+			Trigger
+			<select name="trigger_strategy">
+				<option value="selective" selected?={ triggerStrategy == "selective" }>selective (matches a key)</option>
+				<option value="constant" selected?={ triggerStrategy == "constant" }>constant (always active)</option>
+			</select>
+		</label>
+		<label>
+			Insertion order
+			<input type="number" name="insertion_order" value={ insertionOrder }/>
+		</label>
+		<label>
+			Probability (0-100)
+			<input type="number" name="probability" value={ probability } min="0" max="100"/>
+		</label>
+		<label>
+			<input type="checkbox" name="enabled" checked?={ enabled }/>
+			Enabled
+		</label>
+		<button type="submit">
+			if editing != nil {
+				Save
+			} else {
+				Add entry
+			}
+		</button>
+	</form>
+}

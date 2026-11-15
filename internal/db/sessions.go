@@ -9,14 +9,13 @@ import (
 // CharacterCards are attached separately via session_characters (a
 // many-to-many join, since a session can be a group chat) — see
 // ListCharacterCardsForSession / AttachCharacterToSession in
-// character_cards.go. Lorebook attachment isn't wired up yet: no Lorebook
-// CRUD exists, same reasoning as everything else here — build it when it
-// exists, not a placeholder for it.
+// character_cards.go.
 type Session struct {
 	ID               int64
 	Title            string
 	BackendProfileID int64
 	PersonaID        int64
+	LorebookID       int64
 }
 
 // ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "system".
@@ -31,7 +30,7 @@ type ChatMessage struct {
 }
 
 func ListSessions(db *sql.DB) ([]Session, error) {
-	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0) FROM sessions ORDER BY created_at DESC`)
+	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0) FROM sessions ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
@@ -40,7 +39,7 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 	var sessions []Session
 	for rows.Next() {
 		var s Session
-		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID); err != nil {
 			return nil, fmt.Errorf("scanning session: %w", err)
 		}
 		sessions = append(sessions, s)
@@ -50,8 +49,8 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 
 func GetSession(db *sql.DB, id int64) (Session, error) {
 	var s Session
-	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0) FROM sessions WHERE id = ?`, id).
-		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID)
+	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0) FROM sessions WHERE id = ?`, id).
+		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID)
 	if err != nil {
 		return Session{}, fmt.Errorf("getting session %d: %w", id, err)
 	}
@@ -59,13 +58,16 @@ func GetSession(db *sql.DB, id int64) (Session, error) {
 }
 
 func CreateSession(db *sql.DB, s Session) (int64, error) {
-	var personaID any
+	var personaID, lorebookID any
 	if s.PersonaID != 0 {
 		personaID = s.PersonaID
 	}
+	if s.LorebookID != 0 {
+		lorebookID = s.LorebookID
+	}
 	res, err := db.Exec(
-		`INSERT INTO sessions (title, backend_profile_id, persona_id) VALUES (?, ?, ?)`,
-		s.Title, s.BackendProfileID, personaID,
+		`INSERT INTO sessions (title, backend_profile_id, persona_id, lorebook_id) VALUES (?, ?, ?, ?)`,
+		s.Title, s.BackendProfileID, personaID, lorebookID,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating session: %w", err)

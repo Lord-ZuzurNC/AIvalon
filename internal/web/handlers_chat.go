@@ -46,7 +46,12 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatListPage(sessions, profiles, personas, characters))
+	lorebooks, err := db.ListLorebooks(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatListPage(sessions, profiles, personas, characters, lorebooks))
 }
 
 func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +68,9 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	session := db.Session{Title: title, BackendProfileID: profileID}
 	if personaID, err := strconv.ParseInt(r.FormValue("persona_id"), 10, 64); err == nil {
 		session.PersonaID = personaID
+	}
+	if lorebookID, err := strconv.ParseInt(r.FormValue("lorebook_id"), 10, 64); err == nil {
+		session.LorebookID = lorebookID
 	}
 
 	id, err := db.CreateSession(h.DB, session)
@@ -243,7 +251,16 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 		emitError(err)
 		return db.ChatMessage{}, false
 	}
-	chatMessages := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, history)
+	var lorebookContent string
+	if session.LorebookID != 0 {
+		entries, err := db.ListLorebookEntries(h.DB, session.LorebookID)
+		if err != nil {
+			emitError(err)
+			return db.ChatMessage{}, false
+		}
+		lorebookContent = resolveLorebookContent(entries, lastUserMessageContent(history), defaultProbabilityRoll)
+	}
+	chatMessages := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history)
 	var full strings.Builder
 	err = llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
 		full.WriteString(token)
@@ -276,8 +293,8 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 // to resolve against) and past "narrator" lines passed through as-is,
 // since each already reads as one coherent passage with names naturally
 // in the prose.
-func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, history []db.ChatMessage) []llmclient.Message {
-	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(template, persona, characters)}}
+func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage) []llmclient.Message {
+	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}}
 	for _, m := range history {
 		messages = append(messages, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
 	}
@@ -292,17 +309,15 @@ func buildNarratorMessages(template string, persona db.Persona, characters []db.
 // unrecognized or deleted placeholder just stays literal or disappears,
 // it can never fail to render.
 //
-// {{lorebook}} always resolves to "" today: there's no Lorebook CRUD yet
-// (see docs/DESIGN.md's "World" section — still an empty shell), so
-// there's nothing to inject. The placeholder is wired up now so that
-// landing Lorebook later is a pure content change here, not a prompt
-// rewrite.
-func buildNarratorPrompt(template string, persona db.Persona, characters []db.CharacterCard) string {
+// {{lorebook}} resolves to whichever of the session's attached
+// Lorebook's entries are active this turn (see resolveLorebookContent),
+// or "" for a session with none attached.
+func buildNarratorPrompt(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string) string {
 	prompt := template
 	prompt = strings.ReplaceAll(prompt, "{{persona_name}}", persona.Name)
 	prompt = strings.ReplaceAll(prompt, "{{persona_description}}", persona.Description)
 	prompt = strings.ReplaceAll(prompt, "{{characters}}", renderCharactersBlock(characters))
-	prompt = strings.ReplaceAll(prompt, "{{lorebook}}", "")
+	prompt = strings.ReplaceAll(prompt, "{{lorebook}}", lorebookContent)
 	return prompt
 }
 
