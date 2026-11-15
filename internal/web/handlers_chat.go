@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"html"
@@ -194,7 +195,9 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	turns := selectRespondingCharacters(characters, messages)
+	turns := selectRespondingCharacters(characters, messages, func(message string, candidates []db.CharacterCard) (db.CharacterCard, bool) {
+		return classifyAddressee(r.Context(), profile, message, candidates)
+	})
 	if len(turns) == 0 {
 		turns = []db.CharacterCard{{}} // one generic, character-less reply
 	}
@@ -341,12 +344,18 @@ func characterName(characters []db.CharacterCard, id int64) string {
 // mechanically the other's turn, and the model writes the addressed
 // character's voice under the wrong slot.
 //
-// Priority: whoever the user explicitly named in their message; failing
-// that, whoever spoke last (continuing a natural back-and-forth); failing
-// that (nobody's spoken yet), the first attached character. A naked
-// session or one with a single character is unaffected — there's no
-// turn-order ambiguity to resolve.
-func selectRespondingCharacters(characters []db.CharacterCard, history []db.ChatMessage) []db.CharacterCard {
+// Priority: classify first (an LLM call that actually understands who's
+// being spoken TO vs. merely mentioned — see classifyAddressee; this is
+// the part a plain name search structurally cannot do, e.g. "tell Merlin
+// that Merlinette should calm down" is addressed to Merlin even though
+// Merlinette's name also appears). If that's unavailable or declines to
+// answer, fall back to a plain name match; failing that, whoever spoke
+// last (continuing a natural back-and-forth); failing that (nobody's
+// spoken yet), the first attached character. A naked session or one with
+// a single character is unaffected — there's no turn-order ambiguity to
+// resolve, and classify is never called for those (saves the extra
+// round-trip when there's nothing to disambiguate).
+func selectRespondingCharacters(characters []db.CharacterCard, history []db.ChatMessage, classify addresseeClassifier) []db.CharacterCard {
 	if len(characters) <= 1 {
 		return characters
 	}
@@ -358,6 +367,13 @@ func selectRespondingCharacters(characters []db.CharacterCard, history []db.Chat
 			break
 		}
 	}
+
+	if classify != nil {
+		if addressee, ok := classify(lastUserContent, characters); ok {
+			return []db.CharacterCard{addressee}
+		}
+	}
+
 	if addressed := addressedCharacters(lastUserContent, characters); len(addressed) > 0 {
 		return addressed
 	}
@@ -374,6 +390,58 @@ func selectRespondingCharacters(characters []db.CharacterCard, history []db.Chat
 	}
 
 	return characters[:1]
+}
+
+// addresseeClassifier resolves who a message is addressed to among
+// candidates, or (zero value, false) if it can't tell. Taking this as a
+// plain function (rather than calling classifyAddressee directly) is what
+// lets selectRespondingCharacters stay unit-testable without a live
+// backend — tests inject a stub, Stream injects the real
+// classifyAddressee bound to its request context and profile.
+type addresseeClassifier func(message string, candidates []db.CharacterCard) (db.CharacterCard, bool)
+
+// classifyAddressee asks the backend, in one short, separate, non-
+// roleplay completion, who a message is addressed to. This is NOT the
+// model's "thinking"/reasoning mode (Lord disabled that — see the
+// "thinking" fix a few entries up in docs/DESIGN.md's log — reasoning
+// tokens leaking through was the original problem). It's a small
+// dedicated classification call with its own minimal prompt and no
+// roleplay context, so there's nothing for a reasoning mode to leak: one
+// short answer in, one word expected out.
+func classifyAddressee(ctx context.Context, profile db.BackendProfile, message string, candidates []db.CharacterCard) (db.CharacterCard, bool) {
+	names := make([]string, len(candidates))
+	for i, c := range candidates {
+		names[i] = c.Name
+	}
+	prompt := fmt.Sprintf(
+		"Characters present: %s.\n"+
+			"Message: %s\n"+
+			"Which ONE character is this message addressed TO? If it just mentions another "+
+			"character's name without speaking to them (e.g. \"tell Merlin that Merlinette "+
+			"should calm down\" is addressed to Merlin, not Merlinette), pick the one actually "+
+			"being spoken to.\n"+
+			"Reply with exactly one name from the list, or NONE if it truly isn't clear. "+
+			"Nothing else — no punctuation, no explanation.",
+		strings.Join(names, ", "), message,
+	)
+	var answer strings.Builder
+	err := llmclient.StreamChat(ctx, profile, []llmclient.Message{{Role: "system", Content: prompt}}, func(token string) {
+		answer.WriteString(token)
+	})
+	if err != nil {
+		return db.CharacterCard{}, false
+	}
+	return parseAddresseeReply(answer.String(), candidates)
+}
+
+func parseAddresseeReply(reply string, candidates []db.CharacterCard) (db.CharacterCard, bool) {
+	reply = strings.Trim(strings.TrimSpace(reply), `."'`+"`")
+	for _, c := range candidates {
+		if c.Name != "" && strings.EqualFold(reply, c.Name) {
+			return c, true
+		}
+	}
+	return db.CharacterCard{}, false
 }
 
 // addressedCharacters returns every attached character whose name appears
