@@ -53,10 +53,16 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	// World is still an empty shell — Chat and Character now have real,
-	// working slices; World gets the same treatment once Lorebook CRUD
-	// exists.
-	mux.HandleFunc("GET /world", renderPlaceholder("World"))
+	world := web.WorldHandlers{DB: sqlDB}
+	mux.HandleFunc("GET /world", world.List)
+	mux.HandleFunc("POST /world", world.Create)
+	mux.HandleFunc("GET /world/{id}", world.Show)
+	mux.HandleFunc("POST /world/{id}", world.Update)
+	mux.HandleFunc("POST /world/{id}/delete", world.Delete)
+	mux.HandleFunc("POST /world/{id}/entries", world.EntryCreate)
+	mux.HandleFunc("GET /world/{id}/entries/{entryID}/edit", world.EntryEditForm)
+	mux.HandleFunc("POST /world/{id}/entries/{entryID}", world.EntryUpdate)
+	mux.HandleFunc("POST /world/{id}/entries/{entryID}/delete", world.EntryDelete)
 
 	settings := web.SettingsHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /settings", settings.List)
@@ -86,13 +92,4 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 
 	return mux
-}
-
-func renderPlaceholder(section string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := web.Page(section, section).Render(r.Context(), w); err != nil {
-			log.Printf("render %s: %v", section, err)
-		}
-	}
 }

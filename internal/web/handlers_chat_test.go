@@ -48,13 +48,13 @@ func TestBuildNarratorPrompt(t *testing.T) {
 	persona := db.Persona{Name: "Asteroid Destroyer", Description: "a curious engineer"}
 	merlin := db.CharacterCard{Name: "Merlin", Description: "An ancient wizard."}
 	merlinette := db.CharacterCard{Name: "Merlinette", Description: "His apprentice."}
-	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, []db.CharacterCard{merlin, merlinette})
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, []db.CharacterCard{merlin, merlinette}, "")
 
 	// This is the whole point of the narrator redesign: the prompt must
 	// explicitly allow narrating MULTIPLE characters and MUST forbid
 	// speaking for the persona — unlike the old per-character prompt,
 	// there's no "voice only X" restriction to assert here.
-	for _, want := range []string{"not any single character", persona.Name, merlin.Name, merlinette.Name, "not limited to one"} {
+	for _, want := range []string{"not any single character", persona.Name, merlin.Name, merlinette.Name, "Never write"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("narrator prompt missing %q:\n%s", want, prompt)
 		}
@@ -69,7 +69,7 @@ func TestBuildNarratorPromptWithNoCharacters(t *testing.T) {
 	// the world/narrator, acting as a free-form GM that invents whoever
 	// the scene needs instead of being told about fixed cards.
 	persona := db.Persona{Name: "Asteroid Destroyer"}
-	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, nil)
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, nil, "")
 	for _, want := range []string{"game master", "inventing names", "consistent"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("narrator prompt (no characters) missing %q:\n%s", want, prompt)
@@ -87,8 +87,8 @@ func TestBuildNarratorPromptWithCustomTemplate(t *testing.T) {
 	custom := "Narrator mode. Player: {{persona_name}}. Cast: {{characters}}. Lore: {{lorebook}}."
 	persona := db.Persona{Name: "Z"}
 	merlin := db.CharacterCard{Name: "Merlin", Description: "A wizard."}
-	got := buildNarratorPrompt(custom, persona, []db.CharacterCard{merlin})
-	want := "Narrator mode. Player: Z. Cast: These are the fixed characters who live in this world, as described by their character cards:\nMerlin: A wizard.. Lore: ."
+	got := buildNarratorPrompt(custom, persona, []db.CharacterCard{merlin}, "The tower is warded")
+	want := "Narrator mode. Player: Z. Cast: These are the fixed characters who live in this world, as described by their character cards:\nMerlin: A wizard.. Lore: The tower is warded."
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
