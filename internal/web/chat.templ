@@ -9,11 +9,15 @@ import (
 templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
 	@Layout("Chat", "Chat") {
 		<h1>Chat</h1>
-		<ul>
-			for _, s := range sessions {
-				<li><a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a></li>
-			}
-		</ul>
+		if len(sessions) == 0 {
+			<p><em>No sessions yet — start one below.</em></p>
+		} else {
+			<ul>
+				for _, s := range sessions {
+					<li><a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a></li>
+				}
+			</ul>
+		}
 		<h2>New session</h2>
 		if len(profiles) == 0 {
 			<p>
@@ -71,6 +75,9 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) {
 	@Layout(session.Title, "Chat") {
 		<h1>{ session.Title }</h1>
 		<div id="messages">
+			if len(messages) == 0 {
+				<p><em>No messages yet — say something below to start.</em></p>
+			}
 			for _, m := range messages {
 				<p><strong>{ m.Speaker }:</strong> @templ.Raw(m.ContentHTML)</p>
 			}

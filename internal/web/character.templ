@@ -9,29 +9,33 @@ import (
 templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 	@Layout("Character", "Character") {
 		<h1>Character</h1>
-		<table>
-			<thead>
-				<tr>
-					<th>Name</th>
-					<th>Scenario</th>
-					<th></th>
-				</tr>
-			</thead>
-			<tbody>
-				for _, c := range cards {
+		if len(cards) == 0 {
+			<p><em>No characters yet — add one below. A session with none picked runs as a free-form world/GM instead.</em></p>
+		} else {
+			<table>
+				<thead>
 					<tr>
-						<td>{ c.Name }</td>
-						<td>{ c.Scenario }</td>
-						<td>
-							<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>Edit</a>
-							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID)) } style="display:inline">
-								<button type="submit">Delete</button>
-							</form>
-						</td>
+						<th>Name</th>
+						<th>Scenario</th>
+						<th></th>
 					</tr>
-				}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					for _, c := range cards {
+						<tr>
+							<td>{ c.Name }</td>
+							<td>{ c.Scenario }</td>
+							<td>
+								<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>Edit</a>
+								<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID)) } style="display:inline">
+									<button type="submit" class="secondary">Delete</button>
+								</form>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
 
 		<h2>
 			if editing != nil {
