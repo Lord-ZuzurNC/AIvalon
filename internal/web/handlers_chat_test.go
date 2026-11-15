@@ -93,3 +93,22 @@ func TestBuildNarratorPromptWithCustomTemplate(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestRenderCharactersBlockIncludesAuthorNote(t *testing.T) {
+	// Lord's clarification: "Author's Note" in his classic prompt isn't
+	// a separate per-session feature — it's a note some card authors put
+	// IN the character card's own JSON (the V2/V3 spec's creator_notes).
+	merlin := db.CharacterCard{Name: "Merlin", Description: "A wizard.", AuthorNote: "Best run with a verbose model."}
+	got := renderCharactersBlock([]db.CharacterCard{merlin})
+	if !strings.Contains(got, "Best run with a verbose model.") {
+		t.Errorf("author note missing from characters block:\n%s", got)
+	}
+
+	t.Run("omitted entirely when a card has none, no empty label left behind", func(t *testing.T) {
+		gorak := db.CharacterCard{Name: "Gorak", Description: "A guard."}
+		got := renderCharactersBlock([]db.CharacterCard{gorak})
+		if strings.Contains(got, "Author's note") {
+			t.Errorf("shouldn't mention an author's note when the card has none:\n%s", got)
+		}
+	})
+}

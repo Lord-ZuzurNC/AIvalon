@@ -78,6 +78,10 @@ templ characterCardForm(editing *db.CharacterCard) {
 			Example messages
 			<textarea name="example_messages">{ c.ExampleMessages }</textarea>
 		</label>
+		<label>
+			Author's note (optional — tips from whoever wrote this character: intended model, how to run them, etc.)
+			<textarea name="author_note">{ c.AuthorNote }</textarea>
+		</label>
 		<button type="submit">
 			if editing != nil {
 				Save

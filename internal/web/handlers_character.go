@@ -84,5 +84,6 @@ func characterCardFromForm(r *http.Request, base db.CharacterCard) db.CharacterC
 	base.Scenario = r.FormValue("scenario")
 	base.FirstMessage = r.FormValue("first_message")
 	base.ExampleMessages = r.FormValue("example_messages")
+	base.AuthorNote = r.FormValue("author_note")
 	return base
 }

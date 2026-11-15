@@ -12,6 +12,11 @@ import (
 // just mirrors these fields; a real V2/V3 import later overwrites RawJSON
 // with whatever the source card actually carried, including fields not
 // listed here — that's what the column exists for.
+//
+// AuthorNote mirrors the spec's "creator_notes" — a note from whoever
+// wrote the card (tips on running it, intended model, etc), not a
+// per-session SillyTavern-style "Author's Note" injected at some depth
+// in the chat (AIvalon doesn't have that feature).
 type CharacterCard struct {
 	ID              int64
 	Name            string
@@ -20,10 +25,11 @@ type CharacterCard struct {
 	Scenario        string
 	FirstMessage    string
 	ExampleMessages string
+	AuthorNote      string
 }
 
 func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
-	rows, err := db.Query(`SELECT id, name, description, personality, scenario, first_message, example_messages FROM character_cards ORDER BY name`)
+	rows, err := db.Query(`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note FROM character_cards ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing character cards: %w", err)
 	}
@@ -32,7 +38,7 @@ func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
@@ -43,8 +49,8 @@ func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 func GetCharacterCard(db *sql.DB, id int64) (CharacterCard, error) {
 	var c CharacterCard
 	err := db.QueryRow(
-		`SELECT id, name, description, personality, scenario, first_message, example_messages FROM character_cards WHERE id = ?`, id,
-	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages)
+		`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note FROM character_cards WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote)
 	if err != nil {
 		return CharacterCard{}, fmt.Errorf("getting character card %d: %w", id, err)
 	}
@@ -57,8 +63,8 @@ func CreateCharacterCard(db *sql.DB, c CharacterCard) (int64, error) {
 		return 0, fmt.Errorf("encoding card for raw_json: %w", err)
 	}
 	res, err := db.Exec(
-		`INSERT INTO character_cards (name, description, personality, scenario, first_message, example_messages, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, string(rawJSON),
+		`INSERT INTO character_cards (name, description, personality, scenario, first_message, example_messages, author_note, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, c.AuthorNote, string(rawJSON),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating character card: %w", err)
@@ -72,8 +78,8 @@ func UpdateCharacterCard(db *sql.DB, c CharacterCard) error {
 		return fmt.Errorf("encoding card for raw_json: %w", err)
 	}
 	_, err = db.Exec(
-		`UPDATE character_cards SET name = ?, description = ?, personality = ?, scenario = ?, first_message = ?, example_messages = ?, raw_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
-		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, string(rawJSON), c.ID,
+		`UPDATE character_cards SET name = ?, description = ?, personality = ?, scenario = ?, first_message = ?, example_messages = ?, author_note = ?, raw_json = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?`,
+		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, c.AuthorNote, string(rawJSON), c.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating character card %d: %w", c.ID, err)
@@ -93,7 +99,7 @@ func DeleteCharacterCard(db *sql.DB, id int64) error {
 // session, in turn_order.
 func ListCharacterCardsForSession(db *sql.DB, sessionID int64) ([]CharacterCard, error) {
 	rows, err := db.Query(`
-		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages
+		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note
 		FROM character_cards cc
 		JOIN session_characters sc ON sc.character_card_id = cc.id
 		WHERE sc.session_id = ?
@@ -106,7 +112,7 @@ func ListCharacterCardsForSession(db *sql.DB, sessionID int64) ([]CharacterCard,
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
