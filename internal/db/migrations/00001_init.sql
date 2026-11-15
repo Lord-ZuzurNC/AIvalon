@@ -78,7 +78,7 @@ CREATE TABLE session_characters (
 CREATE TABLE messages (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id         INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    role               TEXT NOT NULL,  -- 'user' | 'character' | 'system'
+    role               TEXT NOT NULL,  -- 'user' | 'character' | 'narrator' | 'system'
     character_card_id  INTEGER REFERENCES character_cards(id),  -- set when role = 'character'
     content            TEXT NOT NULL,
     image_path         TEXT,  -- v2
