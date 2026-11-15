@@ -343,6 +343,9 @@ func renderCharactersBlock(characters []db.CharacterCard) string {
 		if c.Scenario != "" {
 			fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
 		}
+		if c.AuthorNote != "" {
+			fmt.Fprintf(&b, "\nAuthor's note on how to play %s: %s", c.Name, c.AuthorNote)
+		}
 	}
 	return b.String()
 }

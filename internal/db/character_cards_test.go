@@ -18,6 +18,7 @@ func TestCharacterCardCRUD(t *testing.T) {
 		Personality:  "Wise, cryptic.",
 		Scenario:     "A tower full of arcane tomes.",
 		FirstMessage: "Ah, a visitor.",
+		AuthorNote:   "Works best with a model that follows third-person narration closely.",
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -29,6 +30,9 @@ func TestCharacterCardCRUD(t *testing.T) {
 	}
 	if got.Name != "Merlin" || got.FirstMessage != "Ah, a visitor." {
 		t.Fatalf("Get returned %+v", got)
+	}
+	if got.AuthorNote != "Works best with a model that follows third-person narration closely." {
+		t.Fatalf("AuthorNote round-trip failed: got %+v", got)
 	}
 
 	got.Personality = "Wise, cryptic, impatient."
