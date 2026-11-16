@@ -72,14 +72,14 @@ func WorldPage(books []db.Lorebook) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</td><td><a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</td><td><span class=\"row-actions\"><a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var4 string
 					templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d", b.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 28, Col: 59}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 29, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 					if templ_7745c5c3_Err != nil {
@@ -92,13 +92,13 @@ func WorldPage(books []db.Lorebook) templ.Component {
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d/delete", b.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 29, Col: 85}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 30, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" style=\"display:inline\"><button type=\"submit\" class=\"secondary\">Delete</button></form></td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" style=\"display:inline\"><button type=\"submit\" class=\"danger\">Delete</button></form></span></td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -158,7 +158,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(book.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 51, Col: 17}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 53, Col: 17}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -171,7 +171,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d", book.ID))).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 52, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 54, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
@@ -184,7 +184,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(book.Name).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 55, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 57, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -212,7 +212,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(joinKeys(e.Keys))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 78, Col: 29}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 80, Col: 29}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -225,7 +225,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(e.TriggerStrategy)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 79, Col: 30}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 81, Col: 30}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -238,7 +238,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", e.InsertionOrder))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 80, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 82, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -251,7 +251,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", e.Probability))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 81, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 83, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -272,14 +272,14 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td><a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td><span class=\"row-actions\"><a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 90, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 93, Col: 85}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 					if templ_7745c5c3_Err != nil {
@@ -292,13 +292,13 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 91, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 94, Col: 106}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" style=\"display:inline\"><button type=\"submit\" class=\"secondary\">Delete</button></form></td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" style=\"display:inline\"><button type=\"submit\" class=\"danger\">Delete</button></form></span></td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -378,7 +378,7 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(action)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 128, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 132, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 		if templ_7745c5c3_Err != nil {
@@ -391,7 +391,7 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		var templ_7745c5c3_Var19 string
 		templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(keys).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 131, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 135, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 		if templ_7745c5c3_Err != nil {
@@ -404,7 +404,7 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(content)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 135, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 139, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -437,7 +437,7 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(insertionOrder).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 147, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 151, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
 		if templ_7745c5c3_Err != nil {
@@ -450,7 +450,7 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(probability).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 152, Col: 62}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 156, Col: 62}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {

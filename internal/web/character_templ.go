@@ -85,14 +85,14 @@ func CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) templ.Co
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td><a href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</td><td><span class=\"row-actions\"><a href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 29, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 30, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 					if templ_7745c5c3_Err != nil {
@@ -105,13 +105,13 @@ func CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) templ.Co
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 30, Col: 90}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 31, Col: 91}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" style=\"display:inline\"><button type=\"submit\" class=\"secondary\">Delete</button></form></td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" style=\"display:inline\"><button type=\"submit\" class=\"danger\">Delete</button></form></span></td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -184,7 +184,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var8 string
 		templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(action)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 60, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 62, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 		if templ_7745c5c3_Err != nil {
@@ -197,7 +197,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templruntime.NewAttributeExpression(c.Name).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 63, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 65, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -210,7 +210,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var10 string
 		templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(c.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 67, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 69, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 		if templ_7745c5c3_Err != nil {
@@ -223,7 +223,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(c.Personality)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 71, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 73, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
@@ -236,7 +236,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var12 string
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(c.Scenario)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 75, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 77, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -249,7 +249,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(c.FirstMessage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 79, Col: 50}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 81, Col: 50}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -262,7 +262,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var14 string
 		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(c.ExampleMessages)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 83, Col: 56}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 85, Col: 56}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
@@ -275,7 +275,7 @@ func characterCardForm(editing *db.CharacterCard) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(c.AuthorNote)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 87, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 89, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {

@@ -14,10 +14,11 @@ templ Layout(title string, active string) {
 		</head>
 		<body>
 			<header>
+				<div class="sidebar-header">
+					<strong class="brand"><span class="nav-label">AIvalon</span></strong>
+					<button id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar">«</button>
+				</div>
 				<nav>
-					<ul>
-						<li><strong>AIvalon</strong></li>
-					</ul>
 					<ul>
 						@navLink("/chat", "Chat", active)
 						@navLink("/world", "World", active)
@@ -29,15 +30,56 @@ templ Layout(title string, active string) {
 			<main>
 				{ children... }
 			</main>
+			<script>
+				// Sidebar collapse: a plain class toggle on <body>, persisted so
+				// it survives a full-page navigation (every link here is a
+				// regular <a>, not an SPA route) instead of snapping back open
+				// on the very next click.
+				(function () {
+					var STORAGE_KEY = "aivalon-sidebar-collapsed";
+					var toggle = document.getElementById("sidebar-toggle");
+
+					function apply(collapsed) {
+						document.body.classList.toggle("sidebar-collapsed", collapsed);
+						if (toggle) {
+							toggle.setAttribute("aria-expanded", String(!collapsed));
+							toggle.textContent = collapsed ? "»" : "«";
+						}
+					}
+
+					apply(localStorage.getItem(STORAGE_KEY) === "1");
+					if (toggle) {
+						toggle.addEventListener("click", function () {
+							var collapsed = !document.body.classList.contains("sidebar-collapsed");
+							apply(collapsed);
+							localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+						});
+					}
+				})();
+			</script>
 		</body>
 	</html>
 }
 
 templ navLink(href, label, active string) {
+	{{ initial := "" }}
+	if len(label) > 0 {
+		{{ initial = label[0:1] }}
+	}
 	if active == label {
-		<li><a href={ templ.URL(href) } aria-current="page">{ label }</a></li>
+		<li>
+			<a href={ templ.URL(href) } aria-current="page" title={ label }>
+				<span class="nav-label">{ label }</span>
+				<span class="nav-initial" aria-hidden="true">{ initial }</span>
+			</a>
+		</li>
 	} else {
-		<li><a href={ templ.URL(href) }>{ label }</a></li>
+		<li>
+			<a href={ templ.URL(href) } title={ label }>
+				<span class="nav-label">{ label }</span>
+				<span class="nav-initial" aria-hidden="true">{ initial }</span>
+			</a>
+		</li>
 	}
 }
 

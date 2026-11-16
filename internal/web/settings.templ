@@ -37,10 +37,12 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 						<td>{ p.BaseURL }</td>
 						<td>{ p.Model }</td>
 						<td>
-							<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
-							<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
-								<button type="submit" class="secondary">Delete</button>
-							</form>
+							<span class="row-actions">
+								<a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>Edit</a>
+								<form method="post" action={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID)) } style="display:inline">
+									<button type="submit" class="danger">Delete</button>
+								</form>
+							</span>
 						</td>
 					</tr>
 				}
@@ -76,10 +78,12 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 						<td>{ p.Name }</td>
 						<td>{ p.Description }</td>
 						<td>
-							<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>Edit</a>
-							<form method="post" action={ templ.URL(fmt.Sprintf("/settings/personas/%d/delete", p.ID)) } style="display:inline">
-								<button type="submit" class="secondary">Delete</button>
-							</form>
+							<span class="row-actions">
+								<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>Edit</a>
+								<form method="post" action={ templ.URL(fmt.Sprintf("/settings/personas/%d/delete", p.ID)) } style="display:inline">
+									<button type="submit" class="danger">Delete</button>
+								</form>
+							</span>
 						</td>
 					</tr>
 				}
