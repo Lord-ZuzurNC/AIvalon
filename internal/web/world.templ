@@ -25,10 +25,12 @@ templ WorldPage(books []db.Lorebook) {
 						<tr>
 							<td>{ b.Name }</td>
 							<td>
-								<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>Open</a>
-								<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/delete", b.ID)) } style="display:inline">
-									<button type="submit" class="secondary">Delete</button>
-								</form>
+								<span class="row-actions">
+									<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>Open</a>
+									<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/delete", b.ID)) } style="display:inline">
+										<button type="submit" class="danger">Delete</button>
+									</form>
+								</span>
 							</td>
 						</tr>
 					}
@@ -87,10 +89,12 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 								}
 							</td>
 							<td>
-								<a href={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)) }>Edit</a>
-								<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID)) } style="display:inline">
-									<button type="submit" class="secondary">Delete</button>
-								</form>
+								<span class="row-actions">
+									<a href={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)) }>Edit</a>
+									<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID)) } style="display:inline">
+										<button type="submit" class="danger">Delete</button>
+									</form>
+								</span>
 							</td>
 						</tr>
 					}

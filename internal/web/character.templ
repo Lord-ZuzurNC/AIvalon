@@ -26,10 +26,12 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 							<td>{ c.Name }</td>
 							<td>{ c.Scenario }</td>
 							<td>
-								<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>Edit</a>
-								<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID)) } style="display:inline">
-									<button type="submit" class="secondary">Delete</button>
-								</form>
+								<span class="row-actions">
+									<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>Edit</a>
+									<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/delete", c.ID)) } style="display:inline">
+										<button type="submit" class="danger">Delete</button>
+									</form>
+								</span>
 							</td>
 						</tr>
 					}
