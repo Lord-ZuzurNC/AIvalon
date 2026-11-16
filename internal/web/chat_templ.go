@@ -512,7 +512,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 	})
 }
 
-func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string) templ.Component {
+func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -541,42 +541,69 @@ func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, co
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<div")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if session.BackgroundImagePath != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, " style=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var27 string
+				templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(fmt.Sprintf("background-image:url(/static/%s);background-size:cover;background-position:center;background-attachment:fixed;", session.BackgroundImagePath))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 143, Col: 166}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, " class=\"chat-page-bg\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = BackLink("/chat", "Chat").Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<div class=\"chat-header\"><img class=\"chat-cover\" src=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var27 string
-			templ_7745c5c3_Var27, templ_7745c5c3_Err = templruntime.NewAttributeExpression(coverImage).ResolveURL(ctx)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 143, Col: 43}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\" alt=\"\"><h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<div class=\"chat-header\"><img class=\"chat-cover\" src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var28 string
-			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(session.Title)
+			templ_7745c5c3_Var28, templ_7745c5c3_Err = templruntime.NewAttributeExpression(coverImage).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 144, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 149, Col: 44}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</h1></div><div id=\"messages\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\" alt=\"\"><h1>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var29 string
+			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(session.Title)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 150, Col: 23}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</h1><button type=\"button\" class=\"session-panel-toggle\" aria-label=\"Session info\" onclick=\"document.getElementById('session-panel').classList.toggle('open')\">☰</button></div><div id=\"messages\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(messages) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<p><em>No messages yet — say something below to start.</em></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<p><em>No messages yet — say something below to start.</em></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -587,49 +614,174 @@ func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, co
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if needsReply {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<div id=\"live\" hx-ext=\"sse\" sse-connect=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<div id=\"live\" hx-ext=\"sse\" sse-connect=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/chat/%d/stream", session.ID)).Resolve(ctx)
+				var templ_7745c5c3_Var30 string
+				templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/chat/%d/stream", session.ID)).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 158, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 165, Col: 61}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\" sse-swap=\"message\" hx-swap=\"beforeend\"></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" sse-swap=\"message\" hx-swap=\"beforeend\"></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, " <form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var30 string
-			templ_7745c5c3_Var30, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID))).ResolveURL(ctx)
+			var templ_7745c5c3_Var31 string
+			templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID))).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 163, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 170, Col: 87}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\"><input type=\"text\" name=\"content\" placeholder=\"Say something...\" autocomplete=\"off\" required=\"required\"> <button type=\"submit\">Send</button> <button type=\"button\" disabled title=\"Not built yet\">Generate image</button></form><script>\n\t\t\t// Land on the bottom of the conversation on load, and keep\n\t\t\t// following it as tokens stream in / the final styled swap\n\t\t\t// lands — otherwise every full-page POST-then-redirect from\n\t\t\t// hitting Enter resets scroll to the top of a (possibly\n\t\t\t// long) session, and typed replies grow past the fold\n\t\t\t// without the view following them.\n\t\t\t(function () {\n\t\t\t\tfunction scrollChatToBottom() {\n\t\t\t\t\twindow.scrollTo(0, document.body.scrollHeight);\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"DOMContentLoaded\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:afterSwap\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:oobAfterSwap\", scrollChatToBottom);\n\t\t\t})();\n\n\t\t\t// Edit toggles a hidden <form> per message rather than\n\t\t\t// navigating anywhere — cheaper than a modal for a single\n\t\t\t// textarea, and keeps Save a plain form POST (no JS needed\n\t\t\t// for the actual edit, only for revealing it). The button\n\t\t\t// lives inside this message's own \"⋮\" dropdown, so the\n\t\t\t// form to toggle is always the sibling found by walking up\n\t\t\t// to .message — no id/lookup needed.\n\t\t\tfunction toggleEditForm(button) {\n\t\t\t\tvar message = button.closest(\".message\");\n\t\t\t\tvar form = message.querySelector(\".message-edit-form\");\n\t\t\t\tform.style.display = form.style.display === \"none\" ? \"block\" : \"none\";\n\t\t\t\tcloseOptionsMenu(button);\n\t\t\t}\n\n\t\t\t// Copy reads the message's own raw content back out of its\n\t\t\t// data-content attribute — never re-serializes it into a JS\n\t\t\t// string literal, so there's no quoting/escaping to get\n\t\t\t// wrong for apostrophes, backslashes, or newlines.\n\t\t\tfunction copyMessageContent(button) {\n\t\t\t\tvar message = button.closest(\".message\");\n\t\t\t\tnavigator.clipboard.writeText(message.dataset.content);\n\t\t\t\tcloseOptionsMenu(button);\n\t\t\t}\n\n\t\t\t// Both actions above run without leaving the page, unlike\n\t\t\t// Regenerate/Branch/Delete (plain form POSTs that navigate\n\t\t\t// away), so their \"⋮\" dropdown would otherwise stay open\n\t\t\t// after the click — this closes whichever one the button\n\t\t\t// lives in.\n\t\t\tfunction closeOptionsMenu(button) {\n\t\t\t\tvar dropdown = button.closest(\".options-dropdown\");\n\t\t\t\tif (dropdown) {\n\t\t\t\t\tdropdown.hidden = true;\n\t\t\t\t}\n\t\t\t}\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\"><input type=\"text\" name=\"content\" placeholder=\"Say something...\" autocomplete=\"off\" required=\"required\"> <button type=\"submit\">Send</button> <button type=\"button\" disabled title=\"Not built yet\">Generate image</button></form></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = sessionPanel(session, bgOptions).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<script>\n\t\t\t// Land on the bottom of the conversation on load, and keep\n\t\t\t// following it as tokens stream in / the final styled swap\n\t\t\t// lands — otherwise every full-page POST-then-redirect from\n\t\t\t// hitting Enter resets scroll to the top of a (possibly\n\t\t\t// long) session, and typed replies grow past the fold\n\t\t\t// without the view following them.\n\t\t\t(function () {\n\t\t\t\tfunction scrollChatToBottom() {\n\t\t\t\t\twindow.scrollTo(0, document.body.scrollHeight);\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"DOMContentLoaded\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:afterSwap\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:oobAfterSwap\", scrollChatToBottom);\n\t\t\t})();\n\n\t\t\t// Edit toggles a hidden <form> per message rather than\n\t\t\t// navigating anywhere — cheaper than a modal for a single\n\t\t\t// textarea, and keeps Save a plain form POST (no JS needed\n\t\t\t// for the actual edit, only for revealing it). The button\n\t\t\t// lives inside this message's own \"⋮\" dropdown, so the\n\t\t\t// form to toggle is always the sibling found by walking up\n\t\t\t// to .message — no id/lookup needed.\n\t\t\tfunction toggleEditForm(button) {\n\t\t\t\tvar message = button.closest(\".message\");\n\t\t\t\tvar form = message.querySelector(\".message-edit-form\");\n\t\t\t\tform.style.display = form.style.display === \"none\" ? \"block\" : \"none\";\n\t\t\t\tcloseOptionsMenu(button);\n\t\t\t}\n\n\t\t\t// Copy reads the message's own raw content back out of its\n\t\t\t// data-content attribute — never re-serializes it into a JS\n\t\t\t// string literal, so there's no quoting/escaping to get\n\t\t\t// wrong for apostrophes, backslashes, or newlines.\n\t\t\tfunction copyMessageContent(button) {\n\t\t\t\tvar message = button.closest(\".message\");\n\t\t\t\tnavigator.clipboard.writeText(message.dataset.content);\n\t\t\t\tcloseOptionsMenu(button);\n\t\t\t}\n\n\t\t\t// Both actions above run without leaving the page, unlike\n\t\t\t// Regenerate/Branch/Delete (plain form POSTs that navigate\n\t\t\t// away), so their \"⋮\" dropdown would otherwise stay open\n\t\t\t// after the click — this closes whichever one the button\n\t\t\t// lives in.\n\t\t\tfunction closeOptionsMenu(button) {\n\t\t\t\tvar dropdown = button.closest(\".options-dropdown\");\n\t\t\t\tif (dropdown) {\n\t\t\t\t\tdropdown.hidden = true;\n\t\t\t\t}\n\t\t\t}\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
 		templ_7745c5c3_Err = Layout(session.Title, "Chat").Render(templ.WithChildren(ctx, templ_7745c5c3_Var26), templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// sessionPanel is the collapsible right-hand drawer with this
+// session's own info — opened via the chat-header's "☰" button
+// (plain CSS :not/.open toggle, no htmx needed for a client-only
+// show/hide). Only a "Background" section exists so far: the fuller
+// "World / Characters / Persona" tabs Lord asked for are a separate,
+// bigger pass deferred for now — this ships the one piece that was
+// both explicitly requested and quick to get right (the wallpaper
+// picker), rather than a half-built set of empty tabs.
+func sessionPanel(session db.Session, bgOptions []BackgroundOption) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "<aside id=\"session-panel\" class=\"session-panel\"><div class=\"session-panel-header\"><strong>Session</strong> <button type=\"button\" aria-label=\"Close\" onclick=\"document.getElementById('session-panel').classList.remove('open')\">×</button></div><section><h3>Background</h3>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(bgOptions) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "<p><em>No lorebook/character images available on this session yet.</em></p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<form method=\"post\" action=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var33 string
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d/background", session.ID))).ResolveURL(ctx)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 251, Col: 90}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\"><select name=\"background_image_path\"><option value=\"\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if session.BackgroundImagePath == "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ">(none — default theme)</option> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, opt := range bgOptions {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var34 string
+				templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.NewAttributeExpression(opt.Path).Resolve(ctx)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 255, Col: 31}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if session.BackgroundImagePath == opt.Path {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, " selected")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, ">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var35 string
+				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(opt.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 255, Col: 99}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</select> <button type=\"submit\">Apply</button></form>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</section></aside>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

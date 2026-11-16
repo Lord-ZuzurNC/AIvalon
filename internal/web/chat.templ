@@ -136,35 +136,44 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 	}
 }
 
-templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string) {
+templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption) {
 	@Layout(session.Title, "Chat") {
-		@BackLink("/chat", "Chat")
-		<div class="chat-header">
-			<img class="chat-cover" src={ coverImage } alt=""/>
-			<h1>{ session.Title }</h1>
-		</div>
-		<div id="messages">
-			if len(messages) == 0 {
-				<p><em>No messages yet — say something below to start.</em></p>
+		<div
+			if session.BackgroundImagePath != "" {
+				style={ fmt.Sprintf("background-image:url(/static/%s);background-size:cover;background-position:center;background-attachment:fixed;", session.BackgroundImagePath) }
 			}
-			for _, m := range messages {
-				@MessageBlock(session.ID, m)
+			class="chat-page-bg"
+		>
+			@BackLink("/chat", "Chat")
+			<div class="chat-header">
+				<img class="chat-cover" src={ coverImage } alt=""/>
+				<h1>{ session.Title }</h1>
+				<button type="button" class="session-panel-toggle" aria-label="Session info" onclick="document.getElementById('session-panel').classList.toggle('open')">☰</button>
+			</div>
+			<div id="messages">
+				if len(messages) == 0 {
+					<p><em>No messages yet — say something below to start.</em></p>
+				}
+				for _, m := range messages {
+					@MessageBlock(session.ID, m)
+				}
+			</div>
+			if needsReply {
+				<div
+					id="live"
+					hx-ext="sse"
+					sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
+					sse-swap="message"
+					hx-swap="beforeend"
+				></div>
 			}
+			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) }>
+				<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
+				<button type="submit">Send</button>
+				<button type="button" disabled title="Not built yet">Generate image</button>
+			</form>
 		</div>
-		if needsReply {
-			<div
-				id="live"
-				hx-ext="sse"
-				sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
-				sse-swap="message"
-				hx-swap="beforeend"
-			></div>
-		}
-		<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) }>
-			<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
-			<button type="submit">Send</button>
-			<button type="button" disabled title="Not built yet">Generate image</button>
-		</form>
+		@sessionPanel(session, bgOptions)
 		<script>
 			// Land on the bottom of the conversation on load, and keep
 			// following it as tokens stream in / the final styled swap
@@ -218,4 +227,37 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			}
 		</script>
 	}
+}
+
+// sessionPanel is the collapsible right-hand drawer with this
+// session's own info — opened via the chat-header's "☰" button
+// (plain CSS :not/.open toggle, no htmx needed for a client-only
+// show/hide). Only a "Background" section exists so far: the fuller
+// "World / Characters / Persona" tabs Lord asked for are a separate,
+// bigger pass deferred for now — this ships the one piece that was
+// both explicitly requested and quick to get right (the wallpaper
+// picker), rather than a half-built set of empty tabs.
+templ sessionPanel(session db.Session, bgOptions []BackgroundOption) {
+	<aside id="session-panel" class="session-panel">
+		<div class="session-panel-header">
+			<strong>Session</strong>
+			<button type="button" aria-label="Close" onclick="document.getElementById('session-panel').classList.remove('open')">×</button>
+		</div>
+		<section>
+			<h3>Background</h3>
+			if len(bgOptions) == 0 {
+				<p><em>No lorebook/character images available on this session yet.</em></p>
+			} else {
+				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/background", session.ID)) }>
+					<select name="background_image_path">
+						<option value="" selected?={ session.BackgroundImagePath == "" }>(none — default theme)</option>
+						for _, opt := range bgOptions {
+							<option value={ opt.Path } selected?={ session.BackgroundImagePath == opt.Path }>{ opt.Label }</option>
+						}
+					</select>
+					<button type="submit">Apply</button>
+				</form>
+			}
+		</section>
+	</aside>
 }

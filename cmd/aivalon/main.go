@@ -98,6 +98,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/branch", chat.BranchMessage)
 	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/edit", chat.EditMessage)
 	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/delete", chat.DeleteMessage)
+	mux.HandleFunc("POST /chat/{id}/background", chat.SetBackground)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 
 	vault := web.VaultHandlers{DB: sqlDB, Gate: vaultGate}
