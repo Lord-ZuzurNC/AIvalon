@@ -34,6 +34,10 @@ body > header {
 	max-width: 220px;
 	width: auto;
 	margin: 0;
+	/* More room than Pico's default 1rem block-spacing: flush against
+	   the sidebar's own border, the brand name and nav read as cramped
+	   at that spacing. */
+	padding: 1.5rem 1.25rem;
 	/* Pin to the viewport edge and keep it in view while <main> scrolls:
 	   without align-self:flex-start, the default align-items:stretch on
 	   body would make header match body's full (content-driven, often
@@ -198,6 +202,20 @@ body.sidebar-collapsed #sidebar-toggle {
 .back-link:hover,
 .back-link:focus {
 	color: var(--pico-color);
+}
+
+/* Stays in view while a long chat/lorebook page scrolls underneath it,
+   same idea as the sidebar: sticky needs room to scroll past its normal
+   position, which it has here since it's the first thing in <main> and
+   the page below it is usually much taller. A background stops the
+   scrolled-under content from showing through while it's pinned. */
+.back-link-bar {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	margin: 0 0 1rem 0;
+	padding: 0.5rem 0;
+	background: var(--pico-background-color);
 }
 
 /* Chat/World's own list of sessions/lorebooks: a plain <li><a> plus a

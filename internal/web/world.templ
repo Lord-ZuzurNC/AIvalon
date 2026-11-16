@@ -37,14 +37,23 @@ templ WorldPage(books []db.Lorebook) {
 				</tbody>
 			</table>
 		}
-		<h2>Add a lorebook</h2>
-		<form method="post" action="/world">
-			<label>
-				Name
-				<input type="text" name="name" required="required"/>
-			</label>
-			<button type="submit">Add lorebook</button>
-		</form>
+		<button type="button" onclick="document.getElementById('lorebook-modal').setAttribute('open','')">Add a lorebook</button>
+
+		<dialog id="lorebook-modal">
+			<article>
+				<header>
+					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<strong>Add a lorebook</strong>
+				</header>
+				<form method="post" action="/world">
+					<label>
+						Name
+						<input type="text" name="name" required="required"/>
+					</label>
+					<button type="submit">Add lorebook</button>
+				</form>
+			</article>
+		</dialog>
 	}
 }
 
@@ -103,14 +112,23 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 			</table>
 		}
 
-		<h3>
-			if editingEntry != nil {
-				Edit entry
-			} else {
-				Add an entry
-			}
-		</h3>
-		@lorebookEntryForm(book, editingEntry)
+		<button type="button" onclick="document.getElementById('entry-modal').setAttribute('open','')">Add an entry</button>
+
+		<dialog id="entry-modal" open?={ editingEntry != nil }>
+			<article>
+				<header>
+					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<strong>
+						if editingEntry != nil {
+							Edit entry
+						} else {
+							Add an entry
+						}
+					</strong>
+				</header>
+				@lorebookEntryForm(book, editingEntry)
+			</article>
+		</dialog>
 	}
 }
 

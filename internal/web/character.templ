@@ -39,14 +39,23 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 			</table>
 		}
 
-		<h2>
-			if editing != nil {
-				Edit character
-			} else {
-				Add a character
-			}
-		</h2>
-		@characterCardForm(editing)
+		<button type="button" onclick="document.getElementById('character-modal').setAttribute('open','')">Add a character</button>
+
+		<dialog id="character-modal" open?={ editing != nil }>
+			<article>
+				<header>
+					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<strong>
+						if editing != nil {
+							Edit character
+						} else {
+							Add a character
+						}
+					</strong>
+				</header>
+				@characterCardForm(editing)
+			</article>
+		</dialog>
 	}
 }
 
