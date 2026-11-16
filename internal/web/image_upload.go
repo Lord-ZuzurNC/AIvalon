@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // maxUploadSize caps a single image upload — generous for a character
@@ -29,10 +30,16 @@ var allowedImageExt = map[string]string{
 // validates it's actually image bytes, and writes it to
 // web/static/uploads/<subdir>/<entityID><ext>, overwriting any previous
 // upload for that entity (one image per card/lorebook, not a gallery).
-// Returns the path relative to web/static — e.g. "uploads/characters/3.png"
-// — ready to store directly in the image_path column and to prefix with
-// "/static/" for an <img src>. Returns ("", nil), not an error, when the
-// field was left empty — uploading an image is always optional.
+// Returns the path relative to web/static plus a cache-busting query
+// string — e.g. "uploads/characters/3.png?v=1700000000000000000" —
+// ready to store directly in the image_path column and to prefix with
+// "/static/" for an <img src>. The query string matters: re-uploading
+// onto the same entity ID keeps the same filename, so without it the
+// browser's HTTP cache serves the OLD image forever after a replace —
+// what looked like "nothing happened" when swapping a character's
+// portrait was this, not a save failure (confirmed: the file on disk
+// did change). Returns ("", nil), not an error, when the field was left
+// empty — uploading an image is always optional.
 func saveUploadedImage(r *http.Request, formField, subdir string, entityID int64) (string, error) {
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		return "", fmt.Errorf("parsing multipart form: %w", err)
@@ -55,6 +62,13 @@ func saveUploadedImage(r *http.Request, formField, subdir string, entityID int64
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("creating upload dir: %w", err)
 	}
+
+	// A prior upload for this entity may have landed with a different
+	// extension (.png then .jpg, say) — same-extension overwrite below
+	// wouldn't touch that leftover file, which would otherwise rot on
+	// disk forever as an orphan nothing points to anymore.
+	removeExistingUploads(dir, entityID)
+
 	diskPath := filepath.Join(dir, fmt.Sprintf("%d%s", entityID, ext))
 	out, err := os.Create(diskPath)
 	if err != nil {
@@ -70,7 +84,18 @@ func saveUploadedImage(r *http.Request, formField, subdir string, entityID int64
 	}
 
 	_ = header // filename itself is untrusted/unused — ext comes from sniffing, name from entityID
-	return filepath.ToSlash(filepath.Join("uploads", subdir, fmt.Sprintf("%d%s", entityID, ext))), nil
+	relPath := filepath.ToSlash(filepath.Join("uploads", subdir, fmt.Sprintf("%d%s", entityID, ext)))
+	return fmt.Sprintf("%s?v=%d", relPath, time.Now().UnixNano()), nil
+}
+
+// removeExistingUploads deletes any file already named "<entityID>.*" in
+// dir. Errors are ignored — a missing file (the common case: nothing
+// uploaded yet) isn't a problem worth failing the new upload over.
+func removeExistingUploads(dir string, entityID int64) {
+	matches, _ := filepath.Glob(filepath.Join(dir, fmt.Sprintf("%d.*", entityID)))
+	for _, m := range matches {
+		_ = os.Remove(m)
+	}
 }
 
 func sniffImageExt(file multipart.File) (string, error) {

@@ -57,7 +57,7 @@ func TestCharacterCardCRUD(t *testing.T) {
 	}
 }
 
-func TestCharacterCardImagePath(t *testing.T) {
+func TestCharacterCardImageGallery(t *testing.T) {
 	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -76,22 +76,75 @@ func TestCharacterCardImagePath(t *testing.T) {
 	if got.ImagePath != "" {
 		t.Fatalf("expected no image by default, got %q", got.ImagePath)
 	}
+	has, err := HasPrimaryImage(sqlDB, id)
+	if err != nil {
+		t.Fatalf("HasPrimaryImage: %v", err)
+	}
+	if has {
+		t.Fatalf("expected no primary image yet")
+	}
 
-	if err := UpdateCharacterCardImagePath(sqlDB, id, "uploads/characters/1.png"); err != nil {
+	// First upload: becomes the gallery's only entry.
+	img1ID, err := CreateCharacterCardImage(sqlDB, id, "")
+	if err != nil {
+		t.Fatalf("CreateCharacterCardImage: %v", err)
+	}
+	if err := UpdateCharacterCardImagePath(sqlDB, img1ID, "uploads/characters/1.png"); err != nil {
 		t.Fatalf("UpdateCharacterCardImagePath: %v", err)
+	}
+	// Simulates handlers_character.go's saveImage: first image on a
+	// card auto-becomes primary.
+	if err := SetPrimaryCharacterCardImage(sqlDB, id, img1ID); err != nil {
+		t.Fatalf("SetPrimaryCharacterCardImage: %v", err)
 	}
 
 	got, err = GetCharacterCard(sqlDB, id)
 	if err != nil {
-		t.Fatalf("Get after image update: %v", err)
+		t.Fatalf("Get after first image: %v", err)
 	}
 	if got.ImagePath != "uploads/characters/1.png" {
-		t.Fatalf("ImagePath round-trip failed: got %+v", got)
+		t.Fatalf("ImagePath did not resolve to the primary image: got %+v", got)
 	}
-
-	// UpdateCharacterCardImagePath must not clobber the rest of the row.
 	if got.Name != "Merlin" {
 		t.Fatalf("image update touched unrelated fields: got %+v", got)
+	}
+
+	// Second upload: joins the gallery as secondary — ImagePath (the
+	// primary) must not change just because another image exists.
+	img2ID, err := CreateCharacterCardImage(sqlDB, id, "uploads/characters/2.png")
+	if err != nil {
+		t.Fatalf("CreateCharacterCardImage (second): %v", err)
+	}
+	got, _ = GetCharacterCard(sqlDB, id)
+	if got.ImagePath != "uploads/characters/1.png" {
+		t.Fatalf("adding a secondary image changed the primary: got %+v", got)
+	}
+
+	images, err := ListCharacterCardImages(sqlDB, id)
+	if err != nil {
+		t.Fatalf("ListCharacterCardImages: %v", err)
+	}
+	if len(images) != 2 {
+		t.Fatalf("expected 2 gallery images, got %+v", images)
+	}
+
+	// Promote the second image to primary.
+	if err := SetPrimaryCharacterCardImage(sqlDB, id, img2ID); err != nil {
+		t.Fatalf("SetPrimaryCharacterCardImage (promote): %v", err)
+	}
+	got, _ = GetCharacterCard(sqlDB, id)
+	if got.ImagePath != "uploads/characters/2.png" {
+		t.Fatalf("promotion did not swap the primary: got %+v", got)
+	}
+
+	// Deleting the now-primary image clears the pointer (ON DELETE SET
+	// NULL) rather than leaving a dangling reference.
+	if err := DeleteCharacterCardImage(sqlDB, img2ID); err != nil {
+		t.Fatalf("DeleteCharacterCardImage: %v", err)
+	}
+	got, _ = GetCharacterCard(sqlDB, id)
+	if got.ImagePath != "" {
+		t.Fatalf("expected primary pointer to clear after deleting it, got %+v", got)
 	}
 }
 
