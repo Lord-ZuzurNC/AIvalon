@@ -6,44 +6,45 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-// MessageBlock renders one chat line plus its per-message actions. It's
-// used both from ChatPage's history loop and from the Stream handler's
-// final SSE out-of-band swap (see handlers_chat.go) — that second use is
-// why this is its own templ component and not inlined: a reply you just
-// watched stream in needs the same Regenerate/Branch/Delete/Copy buttons
-// as one loaded from history, without a page reload.
+// MessageBlock renders one chat line plus its per-message actions in a
+// "⋮" dropdown, top-right — consistent with the same pattern used for
+// Chat/World/Character/Settings rows. It's used both from ChatPage's
+// history loop and from the Stream handler's final SSE out-of-band swap
+// (see handlers_chat.go) — that second use is why this is its own templ
+// component and not inlined: a reply you just watched stream in needs
+// the same Regenerate/Branch/Delete/Copy options as one loaded from
+// history, without a page reload.
 templ MessageBlock(sessionID int64, m DisplayMessage) {
-	<div class="message" data-content={ m.Content }>
-		<p>
-			if m.Speaker != "" {
-				<strong>{ m.Speaker }:</strong>
-			}
-			@templ.Raw(m.ContentHTML)
-		</p>
-		<span class="row-actions">
-			if m.Role == "user" {
-				<a href="#" data-message-id={ fmt.Sprintf("%d", m.ID) } onclick="toggleEditForm(this); return false;">Edit</a>
-			} else {
-				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
-					<button type="submit">Regenerate</button>
-				</form>
-				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
-					<button type="submit">Branch</button>
-				</form>
-			}
-			<button type="button" onclick="copyMessageContent(this)">Copy</button>
-			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/delete", sessionID, m.ID)) }>
-				<button type="submit" class="danger">Delete</button>
-			</form>
-		</span>
+	<div class={ "message", "message-" + m.Role } data-content={ m.Content }>
+		<div class="message-header">
+			<p>
+				if m.Speaker != "" {
+					<strong>{ m.Speaker }:</strong>
+				}
+				@templ.Raw(m.ContentHTML)
+			</p>
+			<div class="options-menu">
+				<button type="button" class="options-trigger" aria-label="Message options" data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
+				<div id={ fmt.Sprintf("options-message-%d", m.ID) } class="options-dropdown" hidden>
+					if m.Role == "user" {
+						<button type="button" onclick="toggleEditForm(this)">Edit</button>
+					} else {
+						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
+							<button type="submit">Regenerate</button>
+						</form>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
+							<button type="submit">Branch</button>
+						</form>
+					}
+					<button type="button" onclick="copyMessageContent(this)">Copy</button>
+					<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/delete", sessionID, m.ID)) }>
+						<button type="submit" class="danger">Delete</button>
+					</form>
+				</div>
+			</div>
+		</div>
 		if m.Role == "user" {
-			<form
-				id={ fmt.Sprintf("edit-form-%d", m.ID) }
-				class="message-edit-form"
-				style="display:none"
-				method="post"
-				action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/edit", sessionID, m.ID)) }
-			>
+			<form class="message-edit-form" style="display:none" method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/edit", sessionID, m.ID)) }>
 				<textarea name="content" rows="3">{ m.Content }</textarea>
 				<button type="submit">Save &amp; regenerate</button>
 			</form>
@@ -64,9 +65,8 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 			<ul class="list-with-actions">
 				for _, s := range sessions {
 					<li>
-						<span>{ s.Title }</span>
+						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
-							{Label: "Open", Href: fmt.Sprintf("/chat/%d", s.ID)},
 							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
 							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
 						})
@@ -182,11 +182,15 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			// Edit toggles a hidden <form> per message rather than
 			// navigating anywhere — cheaper than a modal for a single
 			// textarea, and keeps Save a plain form POST (no JS needed
-			// for the actual edit, only for revealing it).
-			function toggleEditForm(link) {
-				var id = link.dataset.messageId;
-				var form = document.getElementById("edit-form-" + id);
+			// for the actual edit, only for revealing it). The button
+			// lives inside this message's own "⋮" dropdown, so the
+			// form to toggle is always the sibling found by walking up
+			// to .message — no id/lookup needed.
+			function toggleEditForm(button) {
+				var message = button.closest(".message");
+				var form = message.querySelector(".message-edit-form");
 				form.style.display = form.style.display === "none" ? "block" : "none";
+				closeOptionsMenu(button);
 			}
 
 			// Copy reads the message's own raw content back out of its
@@ -196,6 +200,19 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			function copyMessageContent(button) {
 				var message = button.closest(".message");
 				navigator.clipboard.writeText(message.dataset.content);
+				closeOptionsMenu(button);
+			}
+
+			// Both actions above run without leaving the page, unlike
+			// Regenerate/Branch/Delete (plain form POSTs that navigate
+			// away), so their "⋮" dropdown would otherwise stay open
+			// after the click — this closes whichever one the button
+			// lives in.
+			function closeOptionsMenu(button) {
+				var dropdown = button.closest(".options-dropdown");
+				if (dropdown) {
+					dropdown.hidden = true;
+				}
 			}
 		</script>
 	}

@@ -23,11 +23,10 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 				<tbody>
 					for _, c := range cards {
 						<tr>
-							<td>@Avatar(c.ImagePath, c.Name)<span>{ c.Name }</span></td>
+							<td>@Avatar(c.ImagePath, c.Name)<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a></td>
 							<td>{ c.Scenario }</td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
-									{Label: "Edit", Href: fmt.Sprintf("/characters/%d/edit", c.ID)},
 									{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
 								})
 							</td>

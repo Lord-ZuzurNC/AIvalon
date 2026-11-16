@@ -1,3 +1,84 @@
+/* ============================================================
+   THEME — "Avalon": a dark, literary AI-RPG palette.
+   Deep indigo-black canvas, warm aged-gold accent (one accent,
+   rationed hard — see character.ai's design language: the accent
+   marks CTAs/links/active state and nothing else), parchment-warm
+   body text instead of stark white. Overriding Pico's own custom
+   properties means every component Pico already themes (buttons,
+   inputs, tables, dialogs, nav) picks this up for free instead of
+   needing its own override rule. System font stacks only — no
+   Google Fonts/CDN dependency, since AIvalon ships as one binary
+   that works offline.
+   ============================================================ */
+:root[data-theme="dark"] {
+	--pico-background-color: #121020;
+	--pico-color: #e8e2d4;
+	--pico-text-selection-color: rgba(204, 159, 69, 0.3);
+	--pico-muted-color: #938c9c;
+	--pico-muted-border-color: #2a2740;
+
+	--pico-primary: #cc9f45;
+	--pico-primary-background: #c0923a;
+	--pico-primary-border: var(--pico-primary-background);
+	--pico-primary-underline: rgba(204, 159, 69, 0.5);
+	--pico-primary-hover: #e4bd6c;
+	--pico-primary-hover-background: #d4af5c;
+	--pico-primary-hover-border: var(--pico-primary-hover-background);
+	--pico-primary-focus: rgba(204, 159, 69, 0.35);
+	--pico-primary-inverse: #1c1526;
+
+	--pico-secondary: #9b94b3;
+	--pico-secondary-background: #433e63;
+	--pico-secondary-border: var(--pico-secondary-background);
+	--pico-secondary-hover: #b3acc9;
+	--pico-secondary-hover-background: #534c78;
+	--pico-secondary-inverse: #fff;
+
+	--pico-h1-color: #e4c583;
+	--pico-h2-color: #d4af6a;
+	--pico-h3-color: #c7a263;
+	--pico-h4-color: var(--pico-color);
+	--pico-h5-color: var(--pico-color);
+	--pico-h6-color: var(--pico-muted-color);
+
+	--pico-card-background-color: #181527;
+	--pico-card-sectioning-background-color: #1d1a30;
+	--pico-card-border-color: var(--pico-muted-border-color);
+
+	--pico-form-element-background-color: #19172a;
+	--pico-form-element-border-color: #332e4d;
+	--pico-form-element-color: var(--pico-color);
+	--pico-form-element-placeholder-color: #6b6480;
+	--pico-form-element-active-border-color: var(--pico-primary);
+	--pico-form-element-focus-color: var(--pico-primary-focus);
+
+	--pico-code-background-color: #1d1a30;
+	--pico-code-color: #a79fc2;
+
+	--pico-border-radius: 0.5rem;
+	--pico-button-hover-box-shadow: 0 0 1.1rem rgba(204, 159, 69, 0.3);
+}
+
+/* A faint warm glow behind the top of the page — the one deliberate
+   "atmosphere" touch, cheap (a CSS gradient, no image asset) and never
+   fighting with content for attention. */
+body {
+	background-image: radial-gradient(ellipse 60rem 30rem at 50% -10%, rgba(204, 159, 69, 0.07), transparent 70%);
+	background-attachment: fixed;
+}
+
+h1, h2, h3,
+.brand {
+	font-family: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+	letter-spacing: 0.01em;
+}
+
+.brand {
+	font-size: 1.2rem;
+	letter-spacing: 0.03em;
+	color: var(--pico-primary);
+}
+
 .action {
 	color: var(--pico-muted-color);
 	font-style: italic;
@@ -100,6 +181,11 @@ body > header nav a:not([aria-current="page"]):hover {
 	background: transparent;
 	border: 1px solid var(--pico-muted-border-color);
 	border-radius: var(--pico-border-radius, 0.25rem);
+	/* Same shadowing issue as .options-dropdown button (see its comment
+	   above): Pico's bare `button` rule redefines --pico-color locally;
+	   reassert it so this flat/outlined button reads the real text
+	   color and doesn't render near-invisible against the sidebar. */
+	--pico-color: #e8e2d4;
 	color: var(--pico-color);
 	cursor: pointer;
 	line-height: 1;
@@ -144,66 +230,35 @@ body.sidebar-collapsed #sidebar-toggle {
 	padding: 0.25rem 0.4rem;
 }
 
-/* --- Row actions (Edit / Delete) ---
-   Previously: Edit was a bare text link, Delete was a full-size <button>
-   — same action slot, wildly different visual weight. Same size, same
-   shape now; only color tells them apart, and Delete only reads as
-   risky on hover/focus rather than shouting it at rest (Operate-mode
-   semantic color, not decoration). */
-.row-actions {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.4rem;
-}
-
-.row-actions a,
-.row-actions button {
-	display: inline-flex;
-	align-items: center;
-	width: auto;
-	margin: 0;
-	padding: 0.3rem 0.65rem;
-	font-size: 0.85rem;
-	line-height: 1.3;
-	border-radius: var(--pico-border-radius, 0.25rem);
-	border: 1px solid var(--pico-muted-border-color);
-	background: transparent;
-	color: var(--pico-color);
-	text-decoration: none;
-	cursor: pointer;
-}
-
-.row-actions a:hover,
-.row-actions a:focus {
-	background: var(--pico-secondary-background);
-	border-color: var(--pico-secondary-background);
-	color: #fff;
-}
-
-.row-actions button.danger {
-	color: #e06c75;
-	border-color: #e06c75;
-}
-
-.row-actions button.danger:hover,
-.row-actions button.danger:focus {
-	background: #e06c75;
-	border-color: #e06c75;
-	color: #fff;
-}
-
-.row-actions form {
-	display: contents;
-}
-
 .message {
 	margin-bottom: 0.75rem;
-	padding-bottom: 0.5rem;
+	padding: 0.1rem 0 0.5rem 0.9rem;
 	border-bottom: 1px solid var(--pico-muted-border-color);
+	border-left: 2px solid transparent;
 }
 
-.message .row-actions {
-	margin-top: 0.3rem;
+/* A quiet, label-free way to tell a line of narration from your own —
+   borrowed from the asymmetric-bubble idea (character.ai) but without
+   bubbles, since AIvalon's messages read as flowing prose, not short
+   back-and-forth lines. */
+.message-narrator {
+	border-left-color: rgba(204, 159, 69, 0.45);
+}
+
+.message-user {
+	border-left-color: var(--pico-secondary-background);
+}
+
+.message-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 0.5rem;
+}
+
+.message-header p {
+	margin: 0;
+	flex: 1;
 }
 
 .message-edit-form {
@@ -302,6 +357,8 @@ body.sidebar-collapsed #sidebar-toggle {
 	padding: 0.2rem 0.6rem;
 	border: none;
 	background: transparent;
+	/* Same --pico-color shadowing fix as #sidebar-toggle/.options-dropdown. */
+	--pico-color: #e8e2d4;
 	color: var(--pico-color);
 	font-size: 1.1rem;
 	line-height: 1;
@@ -343,6 +400,15 @@ body.sidebar-collapsed #sidebar-toggle {
 	border: none;
 	border-radius: var(--pico-border-radius, 0.25rem);
 	background: transparent;
+	/* Pico's own `button` rule redefines the --pico-color custom
+	   property locally (to --pico-primary-inverse, meant for filled
+	   primary buttons) — reading var(--pico-color) here would silently
+	   inherit THAT shadowed value instead of the page's actual text
+	   color, rendering near-invisible on a dark dropdown. Reassert the
+	   variable itself, with higher specificity than Pico's bare
+	   `button` selector, so every rule below that also reads
+	   var(--pico-color) resolves correctly too. */
+	--pico-color: #e8e2d4;
 	color: var(--pico-color);
 	text-align: left;
 	text-decoration: none;
@@ -393,12 +459,17 @@ body.sidebar-collapsed #sidebar-toggle {
 }
 
 .tab-btn[aria-selected="true"] {
+	/* Same --pico-color shadowing fix as #sidebar-toggle/.options-dropdown
+	   — .tab-btn is a <button>, so Pico's bare `button` rule would
+	   otherwise shadow this to the dark primary-inverse color. */
+	--pico-color: #e8e2d4;
 	color: var(--pico-color);
 	border-bottom-color: var(--pico-primary);
 }
 
 .tab-btn:hover,
 .tab-btn:focus {
+	--pico-color: #e8e2d4;
 	color: var(--pico-color);
 }
 
@@ -428,9 +499,8 @@ body.sidebar-collapsed #sidebar-toggle {
 	background: var(--pico-background-color);
 }
 
-/* Chat/World's own list of sessions/lorebooks: a plain <li><a> plus a
-   Delete tucked at the far end, same row-actions treatment as a table
-   row gets elsewhere. */
+/* Chat/World's own list of sessions/lorebooks: a plain <li><a> plus the
+   same "⋮" OptionsMenu used everywhere else. */
 .list-with-actions {
 	list-style: none;
 	padding: 0;

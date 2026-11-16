@@ -23,10 +23,9 @@ templ WorldPage(books []db.Lorebook) {
 				<tbody>
 					for _, b := range books {
 						<tr>
-							<td>@Avatar(b.ImagePath, b.Name)<span>{ b.Name }</span></td>
+							<td>@Avatar(b.ImagePath, b.Name)<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>{ b.Name }</a></td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-lorebook-%d", b.ID), []MenuAction{
-									{Label: "Open", Href: fmt.Sprintf("/world/%d", b.ID)},
 									{Label: "Delete", Action: fmt.Sprintf("/world/%d/delete", b.ID), Danger: true},
 								})
 							</td>
@@ -86,7 +85,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 				<tbody>
 					for _, e := range entries {
 						<tr>
-							<td>{ joinKeys(e.Keys) }</td>
+							<td><a href={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)) }>{ joinKeys(e.Keys) }</a></td>
 							<td>{ e.TriggerStrategy }</td>
 							<td>{ fmt.Sprintf("%d", e.InsertionOrder) }</td>
 							<td>{ fmt.Sprintf("%d", e.Probability) }</td>
@@ -99,7 +98,6 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 							</td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-entry-%d", e.ID), []MenuAction{
-									{Label: "Edit", Href: fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)},
 									{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID), Danger: true},
 								})
 							</td>
