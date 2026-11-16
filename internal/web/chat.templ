@@ -59,6 +59,7 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 		} else {
 			@PageHeaderWithCreate("Chat", "session-modal", "New session")
 		}
+		<p><a href="/vault">🔒 Vault</a></p>
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
 		} else {
@@ -68,6 +69,7 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
 							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
+							{Label: "Move to vault", Action: fmt.Sprintf("/vault/%d/in", s.ID)},
 							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
 						})
 					</li>

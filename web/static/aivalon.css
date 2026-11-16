@@ -458,6 +458,22 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: #e06c75;
 }
 
+.danger-text {
+	color: #e06c75;
+	font-weight: 600;
+}
+
+.vault-out-form {
+	display: inline-flex;
+	gap: 0.4rem;
+	align-items: center;
+}
+
+.vault-out-form input {
+	width: 8rem;
+	margin: 0;
+}
+
 .options-dropdown button.danger:hover,
 .options-dropdown button.danger:focus {
 	background: #e06c75;

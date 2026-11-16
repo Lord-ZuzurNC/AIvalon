@@ -46,6 +46,7 @@ func main() {
 
 func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux := http.NewServeMux()
+	vaultGate := web.NewVaultGate()
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("web/static"))))
 
@@ -86,7 +87,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /characters/{id}/images/{imageID}/primary", character.PromoteImage)
 	mux.HandleFunc("POST /characters/{id}/images/{imageID}/delete", character.DeleteImage)
 
-	chat := web.ChatHandlers{DB: sqlDB}
+	chat := web.ChatHandlers{DB: sqlDB, Gate: vaultGate}
 	mux.HandleFunc("GET /chat", chat.List)
 	mux.HandleFunc("POST /chat", chat.Create)
 	mux.HandleFunc("GET /chat/{id}", chat.Show)
@@ -98,6 +99,14 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/edit", chat.EditMessage)
 	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/delete", chat.DeleteMessage)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
+
+	vault := web.VaultHandlers{DB: sqlDB, Gate: vaultGate}
+	mux.HandleFunc("GET /vault", vault.Show)
+	mux.HandleFunc("POST /vault/setup", vault.Setup)
+	mux.HandleFunc("POST /vault/unlock", vault.Unlock)
+	mux.HandleFunc("POST /vault/lock", vault.Lock)
+	mux.HandleFunc("POST /vault/{id}/in", vault.MoveIn)
+	mux.HandleFunc("POST /vault/{id}/out", vault.MoveOut)
 
 	return mux
 }

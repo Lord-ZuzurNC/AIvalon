@@ -14,7 +14,8 @@ import (
 )
 
 type ChatHandlers struct {
-	DB *sql.DB
+	DB   *sql.DB
+	Gate *VaultGate
 }
 
 // DisplayMessage is the view-model for one rendered chat line: who's
@@ -124,6 +125,14 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	session, messages, err := h.loadSession(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	// A vaulted session's direct URL must refuse an unlocked-vault-less
+	// browser the same way the vault's own list would — otherwise
+	// hiding it from /chat's list is cosmetic, not real: anyone who
+	// knows or bookmarks /chat/{id} could still open it straight away.
+	if session.IsVaulted && !h.Gate.Unlocked(r) {
+		render(w, r, VaultUnlockPage(""))
 		return
 	}
 	display, err := h.displayMessages(session, messages)
@@ -363,6 +372,10 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	session, messages, err := h.loadSession(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if session.IsVaulted && !h.Gate.Unlocked(r) {
+		http.Error(w, "locked", http.StatusForbidden)
 		return
 	}
 	profile, err := db.GetBackendProfile(h.DB, session.BackendProfileID)
