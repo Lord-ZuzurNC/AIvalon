@@ -39,13 +39,12 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 					<tbody>
 						for _, p := range profiles {
 							<tr>
-								<td>{ p.Name }</td>
+								<td><a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>{ p.Name }</a></td>
 								<td>{ p.Kind }</td>
 								<td>{ p.BaseURL }</td>
 								<td>{ p.Model }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-profile-%d", p.ID), []MenuAction{
-										{Label: "Edit", Href: fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)},
 										{Label: "Delete", Action: fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID), Danger: true},
 									})
 								</td>
@@ -90,11 +89,10 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 					<tbody>
 						for _, p := range personas {
 							<tr>
-								<td>{ p.Name }</td>
+								<td><a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>{ p.Name }</a></td>
 								<td>{ p.Description }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-persona-%d", p.ID), []MenuAction{
-										{Label: "Edit", Href: fmt.Sprintf("/settings/personas/%d/edit", p.ID)},
 										{Label: "Delete", Action: fmt.Sprintf("/settings/personas/%d/delete", p.ID), Danger: true},
 									})
 								</td>
