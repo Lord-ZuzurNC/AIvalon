@@ -16,6 +16,7 @@ type Session struct {
 	BackendProfileID int64
 	PersonaID        int64
 	LorebookID       int64
+	IsVaulted        bool
 }
 
 // ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "system".
@@ -30,7 +31,7 @@ type ChatMessage struct {
 }
 
 func ListSessions(db *sql.DB) ([]Session, error) {
-	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0) FROM sessions ORDER BY created_at DESC`)
+	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted FROM sessions WHERE is_vaulted = 0 ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
@@ -39,7 +40,7 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 	var sessions []Session
 	for rows.Next() {
 		var s Session
-		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID); err != nil {
+		if err := rows.Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID, &s.IsVaulted); err != nil {
 			return nil, fmt.Errorf("scanning session: %w", err)
 		}
 		sessions = append(sessions, s)
@@ -49,8 +50,8 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 
 func GetSession(db *sql.DB, id int64) (Session, error) {
 	var s Session
-	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0) FROM sessions WHERE id = ?`, id).
-		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID)
+	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted FROM sessions WHERE id = ?`, id).
+		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID, &s.IsVaulted)
 	if err != nil {
 		return Session{}, fmt.Errorf("getting session %d: %w", id, err)
 	}

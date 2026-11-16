@@ -1,0 +1,76 @@
+package web
+
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
+
+templ VaultSetupPage(errMsg string) {
+	@Layout("Vault", "Chat") {
+		<h1>Vault</h1>
+		<p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>
+		if errMsg != "" {
+			<p class="danger-text">{ errMsg }</p>
+		}
+		<form method="post" action="/vault/setup">
+			<label>
+				PIN (4, 6, or 8 digits)
+				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" autocomplete="new-password" required="required"/>
+			</label>
+			<label>
+				Confirm PIN
+				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin_confirm" autocomplete="new-password" required="required"/>
+			</label>
+			<button type="submit">Set PIN</button>
+		</form>
+	}
+}
+
+templ VaultUnlockPage(errMsg string) {
+	@Layout("Vault", "Chat") {
+		<h1>Vault</h1>
+		if errMsg != "" {
+			<p class="danger-text">{ errMsg }</p>
+		}
+		<form method="post" action="/vault/unlock">
+			<label>
+				PIN
+				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" autocomplete="current-password" autofocus="autofocus" required="required"/>
+			</label>
+			<button type="submit">Unlock</button>
+		</form>
+	}
+}
+
+templ VaultListPage(sessions []db.Session) {
+	@VaultListPageWithError(sessions, "")
+}
+
+templ VaultListPageWithError(sessions []db.Session, errMsg string) {
+	@Layout("Vault", "Chat") {
+		@BackLink("/chat", "Chat")
+		<h1>Vault</h1>
+		if errMsg != "" {
+			<p class="danger-text">{ errMsg }</p>
+		}
+		if len(sessions) == 0 {
+			<p><em>Nothing in the vault — move a session here from its own options menu in Chat.</em></p>
+		} else {
+			<ul class="list-with-actions">
+				for _, s := range sessions {
+					<li>
+						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form">
+							<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" placeholder="PIN to remove" required="required"/>
+							<button type="submit">Remove from vault</button>
+						</form>
+					</li>
+				}
+			</ul>
+		}
+		<form method="post" action="/vault/lock">
+			<button type="submit">Lock vault now</button>
+		</form>
+	}
+}
