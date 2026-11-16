@@ -18,11 +18,16 @@ type ChatHandlers struct {
 }
 
 // DisplayMessage is the view-model for one rendered chat line: who's
-// speaking (persona name for "user", "World" for the narrator) and the
-// message already run through formatMessageContent into safe, styled
-// HTML.
+// speaking (persona name for "user", "World" for the narrator), the raw
+// content (needed verbatim for the Edit textarea and the Copy button —
+// ContentHTML is already escaped/styled, not a round-trippable source),
+// and the message already run through formatMessageContent into safe,
+// styled HTML.
 type DisplayMessage struct {
+	ID          int64
+	Role        string
 	Speaker     string
+	Content     string
 	ContentHTML string
 }
 
@@ -202,6 +207,111 @@ func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
+// messageIDs pulls {id} and {messageID} out of the route and checks the
+// message actually belongs to that session — without that check, a
+// crafted request could edit/delete/regenerate/branch a message that
+// lives in someone else's chat, since the two path params aren't
+// otherwise linked.
+func (h ChatHandlers) messageIDs(r *http.Request) (sessionID, messageID int64, err error) {
+	sessionID, err = strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid session id")
+	}
+	messageID, err = strconv.ParseInt(r.PathValue("messageID"), 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid message id")
+	}
+	msg, err := db.GetMessage(h.DB, messageID)
+	if err != nil {
+		return 0, 0, err
+	}
+	if msg.SessionID != sessionID {
+		return 0, 0, fmt.Errorf("message %d does not belong to session %d", messageID, sessionID)
+	}
+	return sessionID, messageID, nil
+}
+
+// RegenerateMessage drops the AI reply being regenerated (and anything
+// after it, though there normally is nothing) and redirects back to the
+// session. It writes no new reply itself: the redirect lands back on
+// Show, which — since the message right before the deleted one is a
+// user turn, by construction of this app's turn order — sets
+// needsReply=true and the page's existing SSE auto-connect does the
+// actual generation. Same mechanism Edit relies on below.
+func (h ChatHandlers) RegenerateMessage(w http.ResponseWriter, r *http.Request) {
+	sessionID, messageID, err := h.messageIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := db.DeleteMessagesFrom(h.DB, sessionID, messageID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", sessionID), http.StatusSeeOther)
+}
+
+// BranchMessage forks the conversation up to and including messageID
+// into a new session and redirects straight into it — see
+// db.BranchSession for what "fork" copies.
+func (h ChatHandlers) BranchMessage(w http.ResponseWriter, r *http.Request) {
+	sessionID, messageID, err := h.messageIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	newSessionID, err := db.BranchSession(h.DB, sessionID, messageID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", newSessionID), http.StatusSeeOther)
+}
+
+// EditMessage rewrites a user message's content and drops everything
+// that followed it (the AI reply it provoked is no longer answering the
+// right thing once the content changes) — then the same
+// needsReply-on-redirect mechanism as RegenerateMessage produces a fresh
+// reply to the edited line.
+func (h ChatHandlers) EditMessage(w http.ResponseWriter, r *http.Request) {
+	sessionID, messageID, err := h.messageIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	r.ParseForm()
+	content := strings.TrimSpace(r.FormValue("content"))
+	if content == "" {
+		http.Error(w, "content is required", http.StatusBadRequest)
+		return
+	}
+	if err := db.UpdateMessageContent(h.DB, messageID, content); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := db.DeleteMessagesFrom(h.DB, sessionID, messageID+1); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", sessionID), http.StatusSeeOther)
+}
+
+// DeleteMessage removes exactly one message — no cascade, unlike
+// Regenerate/Edit, since a plain Delete isn't meant to rewind the
+// conversation.
+func (h ChatHandlers) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	sessionID, messageID, err := h.messageIDs(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := db.DeleteMessage(h.DB, messageID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", sessionID), http.StatusSeeOther)
+}
+
 // Stream is the SSE endpoint. Every session is answered by the world, not
 // by one fixed character's voice — Lord's call, after hitting the natural
 // limit of the previous "one character replies" designs: no fixed
@@ -281,14 +391,31 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	var final strings.Builder
 	final.WriteString(`<div id="live" hx-swap-oob="true">`)
 	for _, d := range display {
-		final.WriteString("<p><strong>")
-		final.WriteString(html.EscapeString(d.Speaker))
-		final.WriteString(":</strong> ")
-		final.WriteString(d.ContentHTML)
-		final.WriteString("</p>")
+		if err := MessageBlock(session.ID, d).Render(r.Context(), &final); err != nil {
+			emitError(err)
+			return
+		}
 	}
 	final.WriteString(`</div>`)
-	fmt.Fprintf(w, "data: %s\n\n", final.String())
+	// SSE's framing is line-based: each physical line of an event's
+	// payload needs its own "data:" prefix, or a bare newline inside it
+	// is read as "end of this event" instead of literal content (per
+	// the spec's multi-line data convention). MessageBlock's own markup
+	// never contains one (templ drops insignificant whitespace between
+	// tags), but its data-content attribute carries the message's raw
+	// text verbatim — and a multi-paragraph narrator reply legitimately
+	// contains '\n'. emitRaw splits on that so the final swap survives
+	// unscathed instead of silently truncating at the first blank line.
+	emitRaw(w, flusher, final.String())
+}
+
+// emitRaw writes payload as one SSE event, prefixing every line with
+// "data: " per the spec's documented way to send multi-line data.
+func emitRaw(w http.ResponseWriter, flusher http.Flusher, payload string) {
+	for _, line := range strings.Split(payload, "\n") {
+		fmt.Fprintf(w, "data: %s\n", line)
+	}
+	fmt.Fprint(w, "\n")
 	if flusher != nil {
 		flusher.Flush()
 	}
@@ -481,7 +608,7 @@ func (h ChatHandlers) displayMessages(session db.Session, messages []db.ChatMess
 		case "system":
 			speaker = "System"
 		}
-		out = append(out, DisplayMessage{Speaker: speaker, ContentHTML: formatMessageContent(m.Content)})
+		out = append(out, DisplayMessage{ID: m.ID, Role: m.Role, Speaker: speaker, Content: m.Content, ContentHTML: formatMessageContent(m.Content)})
 	}
 	return out, nil
 }

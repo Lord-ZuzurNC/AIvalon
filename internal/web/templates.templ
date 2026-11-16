@@ -131,6 +131,22 @@ templ Avatar(imagePath, name string) {
 	}
 }
 
+// ImageField is the "Image" part of a character/lorebook create-or-edit
+// form: a collapsible <details> (closed by default on create, since
+// there's nothing to show yet) holding the current image at full modal
+// width — not the tiny list-row Avatar — plus the file input to replace
+// it. Lord's own ask: see it bigger, tucked away so it doesn't eat the
+// modal's height when you're not looking at it.
+templ ImageField(imagePath, name string) {
+	<details open?={ imagePath != "" }>
+		<summary>Image</summary>
+		if imagePath != "" {
+			<img class="image-field-preview" src={ "/static/" + imagePath } alt={ name }/>
+		}
+		<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
+	</details>
+}
+
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is
 // what the four routes render today.

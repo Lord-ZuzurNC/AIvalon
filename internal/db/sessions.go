@@ -123,3 +123,108 @@ func CreateMessage(db *sql.DB, m ChatMessage) (int64, error) {
 	}
 	return res.LastInsertId()
 }
+
+func GetMessage(db *sql.DB, id int64) (ChatMessage, error) {
+	var m ChatMessage
+	err := db.QueryRow(
+		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content FROM messages WHERE id = ?`, id,
+	).Scan(&m.ID, &m.SessionID, &m.Role, &m.CharacterCardID, &m.Content)
+	if err != nil {
+		return ChatMessage{}, fmt.Errorf("getting message %d: %w", id, err)
+	}
+	return m, nil
+}
+
+// UpdateMessageContent is Edit's write — see DeleteMessagesFrom for the
+// "and everything that followed is now stale" half of Edit.
+func UpdateMessageContent(db *sql.DB, id int64, content string) error {
+	_, err := db.Exec(`UPDATE messages SET content = ? WHERE id = ?`, content, id)
+	if err != nil {
+		return fmt.Errorf("updating message %d: %w", id, err)
+	}
+	return nil
+}
+
+// DeleteMessage removes exactly one message — Delete's write. Unlike
+// Regenerate/Edit, this never cascades to later messages: the point is
+// to drop one line, not rewind the conversation.
+func DeleteMessage(db *sql.DB, id int64) error {
+	_, err := db.Exec(`DELETE FROM messages WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting message %d: %w", id, err)
+	}
+	return nil
+}
+
+// DeleteMessagesFrom deletes fromMessageID and every message in the same
+// session that came after it. IDs are assigned in strict insertion order
+// (SQLite AUTOINCREMENT) and a session's own messages are always
+// inserted in conversation order, so "id >= fromMessageID within this
+// session" is exactly "this message onward" — no separate timestamp
+// comparison needed.
+//
+// Two callers, two different "from": Regenerate deletes the AI reply
+// itself to produce a fresh one in its place. Edit deletes everything
+// AFTER the edited message (pass editedID+1) — the edited message's own
+// new content is written separately via UpdateMessageContent, since
+// editing it doesn't mean deleting it.
+func DeleteMessagesFrom(db *sql.DB, sessionID, fromMessageID int64) error {
+	_, err := db.Exec(`DELETE FROM messages WHERE session_id = ? AND id >= ?`, sessionID, fromMessageID)
+	if err != nil {
+		return fmt.Errorf("deleting messages from %d in session %d: %w", fromMessageID, sessionID, err)
+	}
+	return nil
+}
+
+// BranchSession is Branch's write: a new session, same backend
+// profile/persona/lorebook/characters as the original, carrying a copy
+// of every message up to and including uptoMessageID — never the
+// original session's messages reused by reference, since further edits
+// in either session must not leak into the other. Returns the new
+// session's id so the handler can redirect straight into it.
+func BranchSession(db *sql.DB, sessionID, uptoMessageID int64) (int64, error) {
+	original, err := GetSession(db, sessionID)
+	if err != nil {
+		return 0, err
+	}
+
+	newSessionID, err := CreateSession(db, Session{
+		Title:            original.Title + " (branch)",
+		BackendProfileID: original.BackendProfileID,
+		PersonaID:        original.PersonaID,
+		LorebookID:       original.LorebookID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("creating branch session: %w", err)
+	}
+
+	characters, err := ListCharacterCardsForSession(db, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("listing characters to branch: %w", err)
+	}
+	for i, c := range characters {
+		if err := AttachCharacterToSession(db, newSessionID, c.ID, i); err != nil {
+			return 0, fmt.Errorf("attaching branched character %d: %w", c.ID, err)
+		}
+	}
+
+	messages, err := ListMessages(db, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("listing messages to branch: %w", err)
+	}
+	for _, m := range messages {
+		if _, err := CreateMessage(db, ChatMessage{
+			SessionID:       newSessionID,
+			Role:            m.Role,
+			CharacterCardID: m.CharacterCardID,
+			Content:         m.Content,
+		}); err != nil {
+			return 0, fmt.Errorf("copying message %d into branch: %w", m.ID, err)
+		}
+		if m.ID == uptoMessageID {
+			break
+		}
+	}
+
+	return newSessionID, nil
+}

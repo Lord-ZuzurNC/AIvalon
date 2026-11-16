@@ -6,6 +6,46 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
+// MessageBlock renders one chat line plus its per-message actions. It's
+// used both from ChatPage's history loop and from the Stream handler's
+// final SSE out-of-band swap (see handlers_chat.go) — that second use is
+// why this is its own templ component and not inlined: a reply you just
+// watched stream in needs the same Regenerate/Branch/Delete/Copy buttons
+// as one loaded from history, without a page reload.
+templ MessageBlock(sessionID int64, m DisplayMessage) {
+	<div class="message" data-content={ m.Content }>
+		<p><strong>{ m.Speaker }:</strong> @templ.Raw(m.ContentHTML)</p>
+		<span class="row-actions">
+			if m.Role == "user" {
+				<a href="#" data-message-id={ fmt.Sprintf("%d", m.ID) } onclick="toggleEditForm(this); return false;">Edit</a>
+			} else {
+				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
+					<button type="submit">Regenerate</button>
+				</form>
+				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
+					<button type="submit">Branch</button>
+				</form>
+			}
+			<button type="button" onclick="copyMessageContent(this)">Copy</button>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/delete", sessionID, m.ID)) }>
+				<button type="submit" class="danger">Delete</button>
+			</form>
+		</span>
+		if m.Role == "user" {
+			<form
+				id={ fmt.Sprintf("edit-form-%d", m.ID) }
+				class="message-edit-form"
+				style="display:none"
+				method="post"
+				action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/edit", sessionID, m.ID)) }
+			>
+				<textarea name="content" rows="3">{ m.Content }</textarea>
+				<button type="submit">Save &amp; regenerate</button>
+			</form>
+		}
+	</div>
+}
+
 templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
 	@Layout("Chat", "Chat") {
 		<h1>Chat</h1>
@@ -99,7 +139,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				<p><em>No messages yet — say something below to start.</em></p>
 			}
 			for _, m := range messages {
-				<p><strong>{ m.Speaker }:</strong> @templ.Raw(m.ContentHTML)</p>
+				@MessageBlock(session.ID, m)
 			}
 		</div>
 		if needsReply {
@@ -114,6 +154,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 		<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) }>
 			<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
 			<button type="submit">Send</button>
+			<button type="button" disabled title="Not built yet">Generate image</button>
 		</form>
 		<script>
 			// Land on the bottom of the conversation on load, and keep
@@ -130,6 +171,25 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				document.body.addEventListener("htmx:afterSwap", scrollChatToBottom);
 				document.body.addEventListener("htmx:oobAfterSwap", scrollChatToBottom);
 			})();
+
+			// Edit toggles a hidden <form> per message rather than
+			// navigating anywhere — cheaper than a modal for a single
+			// textarea, and keeps Save a plain form POST (no JS needed
+			// for the actual edit, only for revealing it).
+			function toggleEditForm(link) {
+				var id = link.dataset.messageId;
+				var form = document.getElementById("edit-form-" + id);
+				form.style.display = form.style.display === "none" ? "block" : "none";
+			}
+
+			// Copy reads the message's own raw content back out of its
+			// data-content attribute — never re-serializes it into a JS
+			// string literal, so there's no quoting/escaping to get
+			// wrong for apostrophes, backslashes, or newlines.
+			function copyMessageContent(button) {
+				var message = button.closest(".message");
+				navigator.clipboard.writeText(message.dataset.content);
+			}
 		</script>
 	}
 }

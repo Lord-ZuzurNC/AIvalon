@@ -50,10 +50,7 @@ templ WorldPage(books []db.Lorebook) {
 						Name
 						<input type="text" name="name" required="required"/>
 					</label>
-					<label>
-						Image (optional)
-						<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
-					</label>
+					@ImageField("", "")
 					<button type="submit">Add lorebook</button>
 				</form>
 			</article>
@@ -66,17 +63,11 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 		@BackLink("/world", "World")
 		<h1>{ book.Name }</h1>
 		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) } enctype="multipart/form-data">
-			if book.ImagePath != "" {
-				<p>@Avatar(book.ImagePath, book.Name)</p>
-			}
 			<label>
 				Name
 				<input type="text" name="name" value={ book.Name } required="required"/>
 			</label>
-			<label>
-				Image (optional)
-				<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
-			</label>
+			@ImageField(book.ImagePath, book.Name)
 			<button type="submit">Rename</button>
 		</form>
 

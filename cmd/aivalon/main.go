@@ -90,6 +90,10 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /chat/{id}", chat.Show)
 	mux.HandleFunc("POST /chat/{id}/delete", chat.Delete)
 	mux.HandleFunc("POST /chat/{id}/messages", chat.PostMessage)
+	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/regenerate", chat.RegenerateMessage)
+	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/branch", chat.BranchMessage)
+	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/edit", chat.EditMessage)
+	mux.HandleFunc("POST /chat/{id}/messages/{messageID}/delete", chat.DeleteMessage)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 
 	return mux

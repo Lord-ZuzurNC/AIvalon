@@ -192,6 +192,28 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: #fff;
 }
 
+.row-actions form {
+	display: contents;
+}
+
+.message {
+	margin-bottom: 0.75rem;
+	padding-bottom: 0.5rem;
+	border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.message .row-actions {
+	margin-top: 0.3rem;
+}
+
+.message-edit-form {
+	margin-top: 0.4rem;
+}
+
+.message-edit-form textarea {
+	width: 100%;
+}
+
 .avatar {
 	display: inline-flex;
 	align-items: center;
@@ -209,6 +231,16 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: #fff;
 	font-weight: 700;
 	font-size: 0.85rem;
+}
+
+.image-field-preview {
+	display: block;
+	width: 100%;
+	max-height: 50vh;
+	object-fit: contain;
+	background: var(--pico-secondary-background);
+	border-radius: var(--pico-border-radius, 0.25rem);
+	margin-bottom: 0.75rem;
 }
 
 .chat-header {

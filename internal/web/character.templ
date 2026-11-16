@@ -69,14 +69,7 @@ templ characterCardForm(editing *db.CharacterCard) {
 	}
 	}}
 	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
-		<label>
-			Image (optional)
-			if c.ImagePath != "" {
-				<br/>
-				@Avatar(c.ImagePath, c.Name)
-			}
-			<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
-		</label>
+		@ImageField(c.ImagePath, c.Name)
 		<label>
 			Name
 			<input type="text" name="name" value={ c.Name } required="required"/>
