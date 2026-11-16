@@ -192,6 +192,39 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: #fff;
 }
 
+.avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2rem;
+	height: 2rem;
+	border-radius: 50%;
+	object-fit: cover;
+	vertical-align: middle;
+	margin-right: 0.5rem;
+}
+
+.avatar-fallback {
+	background: var(--pico-secondary-background);
+	color: #fff;
+	font-weight: 700;
+	font-size: 0.85rem;
+}
+
+.chat-header {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.chat-cover {
+	width: 3rem;
+	height: 3rem;
+	border-radius: var(--pico-border-radius, 0.25rem);
+	object-fit: cover;
+	flex-shrink: 0;
+}
+
 .back-link {
 	display: inline-block;
 	color: var(--pico-muted-color);

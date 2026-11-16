@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"html"
+	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -126,7 +127,47 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	needsReply := len(messages) > 0 && messages[len(messages)-1].Role == "user"
-	render(w, r, ChatPage(session, display, needsReply))
+	coverImage, err := h.resolveSessionCoverImage(session)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatPage(session, display, needsReply, coverImage))
+}
+
+// resolveSessionCoverImage picks what to show next to the chat title: the
+// session's Lorebook's own uploaded image when it has one, otherwise one
+// of a small set of local placeholder SVGs — randomized per Lord's
+// explicit "pick something random for now, we'll build a real default
+// later" — picked fresh on every page load rather than stored, since it's
+// a stand-in, not a setting.
+func (h ChatHandlers) resolveSessionCoverImage(session db.Session) (string, error) {
+	if session.LorebookID != 0 {
+		book, err := db.GetLorebook(h.DB, session.LorebookID)
+		if err != nil {
+			return "", err
+		}
+		if book.ImagePath != "" {
+			return "/static/" + book.ImagePath, nil
+		}
+	}
+	return randomPlaceholderCoverImage(), nil
+}
+
+// placeholderCoverImages are plain authored SVGs (solid color + a simple
+// drawn book shape), not a reused icon-font glyph or emoji — see
+// web/static/placeholders/. Four is enough to make "random" visible
+// without a real default-image system, which is the whole point: a
+// stand-in, not a feature.
+var placeholderCoverImages = []string{
+	"/static/placeholders/lorebook-1.svg",
+	"/static/placeholders/lorebook-2.svg",
+	"/static/placeholders/lorebook-3.svg",
+	"/static/placeholders/lorebook-4.svg",
+}
+
+func randomPlaceholderCoverImage() string {
+	return placeholderCoverImages[rand.IntN(len(placeholderCoverImages))]
 }
 
 func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {

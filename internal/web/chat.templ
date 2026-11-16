@@ -25,7 +25,6 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 				}
 			</ul>
 		}
-		<h2>New session</h2>
 		if len(profiles) == 0 {
 			<p>
 				No backend profile yet —
@@ -33,55 +32,68 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 				first.
 			</p>
 		} else {
-			<form method="post" action="/chat">
-				<label>
-					Title
-					<input type="text" name="title" placeholder="Untitled chat" value=""/>
-				</label>
-				<label>
-					Backend profile
-					<select name="backend_profile_id">
-						for _, p := range profiles {
-							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
-						}
-					</select>
-				</label>
-				<label>
-					Persona (optional — defaults to "User")
-					<select name="persona_id">
-						<option value="">(default)</option>
-						for _, p := range personas {
-							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
-						}
-					</select>
-				</label>
-				<label>
-					Characters (optional, select multiple for a group chat)
-					<select name="character_ids" multiple="multiple">
-						for _, c := range characters {
-							<option value={ fmt.Sprintf("%d", c.ID) }>{ c.Name }</option>
-						}
-					</select>
-				</label>
-				<label>
-					Lorebook (optional — world info available to the narrator)
-					<select name="lorebook_id">
-						<option value="">(none)</option>
-						for _, l := range lorebooks {
-							<option value={ fmt.Sprintf("%d", l.ID) }>{ l.Name }</option>
-						}
-					</select>
-				</label>
-				<button type="submit">Start chat</button>
-			</form>
+			<button type="button" onclick="document.getElementById('session-modal').setAttribute('open','')">New session</button>
+
+			<dialog id="session-modal">
+				<article>
+					<header>
+						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+						<strong>New session</strong>
+					</header>
+					<form method="post" action="/chat">
+						<label>
+							Title
+							<input type="text" name="title" placeholder="Untitled chat" value=""/>
+						</label>
+						<label>
+							Backend profile
+							<select name="backend_profile_id">
+								for _, p := range profiles {
+									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Persona (optional — defaults to "User")
+							<select name="persona_id">
+								<option value="">(default)</option>
+								for _, p := range personas {
+									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Characters (optional, select multiple for a group chat)
+							<select name="character_ids" multiple="multiple">
+								for _, c := range characters {
+									<option value={ fmt.Sprintf("%d", c.ID) }>{ c.Name }</option>
+								}
+							</select>
+						</label>
+						<label>
+							Lorebook (optional — world info available to the narrator)
+							<select name="lorebook_id">
+								<option value="">(none)</option>
+								for _, l := range lorebooks {
+									<option value={ fmt.Sprintf("%d", l.ID) }>{ l.Name }</option>
+								}
+							</select>
+						</label>
+						<button type="submit">Start chat</button>
+					</form>
+				</article>
+			</dialog>
 		}
 	}
 }
 
-templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) {
+templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string) {
 	@Layout(session.Title, "Chat") {
 		@BackLink("/chat", "Chat")
-		<h1>{ session.Title }</h1>
+		<div class="chat-header">
+			<img class="chat-cover" src={ coverImage } alt=""/>
+			<h1>{ session.Title }</h1>
+		</div>
 		<div id="messages">
 			if len(messages) == 0 {
 				<p><em>No messages yet — say something below to start.</em></p>
