@@ -75,6 +75,30 @@ templ Layout(title string, active string) {
 					}
 				});
 			</script>
+			<script>
+				// Every row's "⋮" options dropdown (OptionsMenu, see
+				// templates.templ) shares this one toggle: close every
+				// other open dropdown first (only one makes sense open at
+				// a time), then flip the clicked one. A document-level
+				// click handler closes whatever's open when the click
+				// lands outside any .options-menu — otherwise a stray
+				// dropdown stays open after the user clicks elsewhere.
+				function toggleOptionsMenu(id) {
+					var menu = document.getElementById(id);
+					var wasOpen = !menu.hidden;
+					document.querySelectorAll(".options-dropdown").forEach(function (m) {
+						m.hidden = true;
+					});
+					menu.hidden = wasOpen;
+				}
+				document.addEventListener("click", function (e) {
+					if (!e.target.closest(".options-menu")) {
+						document.querySelectorAll(".options-dropdown").forEach(function (m) {
+							m.hidden = true;
+						});
+					}
+				});
+			</script>
 		</body>
 	</html>
 }
@@ -145,6 +169,57 @@ templ ImageField(imagePath, name string) {
 		}
 		<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
 	</details>
+}
+
+// MenuAction is one row of a per-item OptionsMenu (see below): either a
+// plain navigation link (Href set) or a POST action (Action set) —
+// never both. Danger marks it for the same red-on-hover treatment as
+// the old standalone Delete buttons.
+type MenuAction struct {
+	Label  string
+	Href   string
+	Action string
+	Danger bool
+}
+
+// OptionsMenu is the "⋮" dropdown that replaced every row's separate
+// Edit/Delete/Open buttons — Lord's call, for consistency across
+// Chat/World/Character/Settings rather than a different action layout
+// per list. menuID must be unique on the page (e.g.
+// fmt.Sprintf("options-chat-%d", s.ID)) since toggleOptionsMenu
+// (Layout's shared script) looks it up by id and closes every other
+// one first.
+templ OptionsMenu(menuID string, actions []MenuAction) {
+	<div class="options-menu">
+		<button type="button" class="options-trigger" aria-label="Options" data-menu-id={ menuID } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
+		<div id={ menuID } class="options-dropdown" hidden>
+			for _, a := range actions {
+				if a.Href != "" {
+					<a href={ templ.URL(a.Href) }>{ a.Label }</a>
+				} else if a.Danger {
+					<form method="post" action={ templ.URL(a.Action) }>
+						<button type="submit" class="danger">{ a.Label }</button>
+					</form>
+				} else {
+					<form method="post" action={ templ.URL(a.Action) }>
+						<button type="submit">{ a.Label }</button>
+					</form>
+				}
+			}
+		</div>
+	</div>
+}
+
+// PageHeaderWithCreate is a list page's title row: the heading on the
+// left, a round "+" button on the right that opens modalID (an existing
+// <dialog>) — replacing the old full-width "Add a ..." button, per
+// Lord's ask for a consistent create affordance across Chat/World/
+// Character instead of a different button per page.
+templ PageHeaderWithCreate(title, modalID, label string) {
+	<div class="page-header">
+		<h1>{ title }</h1>
+		<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+	</div>
 }
 
 // Page composes the layout with a placeholder body for a given section.

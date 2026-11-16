@@ -191,3 +191,49 @@ func TestBranchSessionCopiesUpToMessage(t *testing.T) {
 		t.Fatalf("branching mutated the original session: %+v", originalMessages)
 	}
 }
+
+func TestDuplicateSessionCopiesEverything(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer sqlDB.Close()
+
+	profileID, _ := CreateBackendProfile(sqlDB, BackendProfile{Name: "p", Kind: "llm", BaseURL: "http://x"})
+	originalID, _ := CreateSession(sqlDB, Session{Title: "original", BackendProfileID: profileID})
+	_, _ = CreateMessage(sqlDB, ChatMessage{SessionID: originalID, Role: "user", Content: "msg1"})
+	_, _ = CreateMessage(sqlDB, ChatMessage{SessionID: originalID, Role: "narrator", Content: "msg2"})
+
+	copyID, err := DuplicateSession(sqlDB, originalID)
+	if err != nil {
+		t.Fatalf("DuplicateSession: %v", err)
+	}
+	if copyID == originalID {
+		t.Fatalf("DuplicateSession returned the original session id")
+	}
+
+	copySession, err := GetSession(sqlDB, copyID)
+	if err != nil {
+		t.Fatalf("GetSession(copy): %v", err)
+	}
+	if copySession.Title != "original (copy)" {
+		t.Fatalf("expected '(copy)' suffix, got %q", copySession.Title)
+	}
+
+	copyMessages, err := ListMessages(sqlDB, copyID)
+	if err != nil {
+		t.Fatalf("ListMessages(copy): %v", err)
+	}
+	if len(copyMessages) != 2 || copyMessages[0].Content != "msg1" || copyMessages[1].Content != "msg2" {
+		t.Fatalf("expected both messages copied, got %+v", copyMessages)
+	}
+
+	// The original session must be untouched.
+	originalMessages, err := ListMessages(sqlDB, originalID)
+	if err != nil {
+		t.Fatalf("ListMessages(original): %v", err)
+	}
+	if len(originalMessages) != 2 {
+		t.Fatalf("duplicating mutated the original session: %+v", originalMessages)
+	}
+}

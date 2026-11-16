@@ -14,7 +14,12 @@ import (
 // as one loaded from history, without a page reload.
 templ MessageBlock(sessionID int64, m DisplayMessage) {
 	<div class="message" data-content={ m.Content }>
-		<p><strong>{ m.Speaker }:</strong> @templ.Raw(m.ContentHTML)</p>
+		<p>
+			if m.Speaker != "" {
+				<strong>{ m.Speaker }:</strong>
+			}
+			@templ.Raw(m.ContentHTML)
+		</p>
 		<span class="row-actions">
 			if m.Role == "user" {
 				<a href="#" data-message-id={ fmt.Sprintf("%d", m.ID) } onclick="toggleEditForm(this); return false;">Edit</a>
@@ -48,19 +53,23 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 
 templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
 	@Layout("Chat", "Chat") {
-		<h1>Chat</h1>
+		if len(profiles) == 0 {
+			<h1>Chat</h1>
+		} else {
+			@PageHeaderWithCreate("Chat", "session-modal", "New session")
+		}
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
 		} else {
 			<ul class="list-with-actions">
 				for _, s := range sessions {
 					<li>
-						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
-						<span class="row-actions">
-							<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/delete", s.ID)) } style="display:inline">
-								<button type="submit" class="danger">Delete</button>
-							</form>
-						</span>
+						<span>{ s.Title }</span>
+						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
+							{Label: "Open", Href: fmt.Sprintf("/chat/%d", s.ID)},
+							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
+							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
+						})
 					</li>
 				}
 			</ul>
@@ -72,8 +81,6 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 				first.
 			</p>
 		} else {
-			<button type="button" onclick="document.getElementById('session-modal').setAttribute('open','')">New session</button>
-
 			<dialog id="session-modal">
 				<article>
 					<header>

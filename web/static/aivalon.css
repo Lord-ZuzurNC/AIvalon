@@ -257,6 +257,151 @@ body.sidebar-collapsed #sidebar-toggle {
 	flex-shrink: 0;
 }
 
+/* --- Page header with round create button ---
+   Replaces the old full-width "Add a ..." button: the heading and a
+   round "+" sit on the same row, "+" pinned to the right. */
+.page-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+}
+
+.page-header h1 {
+	margin: 0;
+}
+
+.create-button {
+	width: 2.5rem;
+	height: 2.5rem;
+	min-width: 2.5rem;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 1.4rem;
+	line-height: 1;
+	padding: 0;
+	margin: 0;
+	flex-shrink: 0;
+}
+
+/* --- Options menu ("⋮") ---
+   Replaces per-row Edit/Delete/Open buttons everywhere (Chat sessions,
+   World lorebooks/entries, Character cards, Settings profiles/personas)
+   with one consistent dropdown — toggleOptionsMenu lives in Layout's
+   shared script since every page needs the same open/close behavior. */
+.options-menu {
+	position: relative;
+	display: inline-block;
+}
+
+.options-trigger {
+	width: auto;
+	margin: 0;
+	padding: 0.2rem 0.6rem;
+	border: none;
+	background: transparent;
+	color: var(--pico-color);
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.options-trigger:hover,
+.options-trigger:focus {
+	background: var(--pico-secondary-background);
+	border-radius: var(--pico-border-radius, 0.25rem);
+}
+
+.options-dropdown {
+	position: absolute;
+	top: 100%;
+	right: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	min-width: 9rem;
+	margin-top: 0.25rem;
+	padding: 0.35rem;
+	background: var(--pico-card-background-color, #222);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--pico-border-radius, 0.25rem);
+	box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.4);
+}
+
+.options-dropdown form {
+	display: contents;
+}
+
+.options-dropdown a,
+.options-dropdown button {
+	display: block;
+	width: 100%;
+	margin: 0;
+	padding: 0.35rem 0.6rem;
+	border: none;
+	border-radius: var(--pico-border-radius, 0.25rem);
+	background: transparent;
+	color: var(--pico-color);
+	text-align: left;
+	text-decoration: none;
+	font-size: 0.9rem;
+	cursor: pointer;
+}
+
+.options-dropdown a:hover,
+.options-dropdown a:focus,
+.options-dropdown button:hover,
+.options-dropdown button:focus {
+	background: var(--pico-secondary-background);
+	color: #fff;
+}
+
+.options-dropdown button.danger {
+	color: #e06c75;
+}
+
+.options-dropdown button.danger:hover,
+.options-dropdown button.danger:focus {
+	background: #e06c75;
+	color: #fff;
+}
+
+/* --- Settings tabs ---
+   Replaces one long scroll of three sections with tab-switched panels;
+   JS just toggles [hidden] + aria-selected, no framework. */
+.tab-list {
+	display: flex;
+	gap: 0.25rem;
+	border-bottom: 1px solid var(--pico-muted-border-color);
+	margin-bottom: 1rem;
+	padding: 0;
+	list-style: none;
+}
+
+.tab-btn {
+	width: auto;
+	margin: 0;
+	padding: 0.5rem 1rem;
+	border: none;
+	border-bottom: 2px solid transparent;
+	border-radius: 0;
+	background: transparent;
+	color: var(--pico-muted-color);
+	cursor: pointer;
+}
+
+.tab-btn[aria-selected="true"] {
+	color: var(--pico-color);
+	border-bottom-color: var(--pico-primary);
+}
+
+.tab-btn:hover,
+.tab-btn:focus {
+	color: var(--pico-color);
+}
+
 .back-link {
 	display: inline-block;
 	color: var(--pico-muted-color);

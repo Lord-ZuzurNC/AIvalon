@@ -183,29 +183,9 @@ func DeleteMessagesFrom(db *sql.DB, sessionID, fromMessageID int64) error {
 // in either session must not leak into the other. Returns the new
 // session's id so the handler can redirect straight into it.
 func BranchSession(db *sql.DB, sessionID, uptoMessageID int64) (int64, error) {
-	original, err := GetSession(db, sessionID)
+	newSessionID, err := copySessionShell(db, sessionID, "branch")
 	if err != nil {
 		return 0, err
-	}
-
-	newSessionID, err := CreateSession(db, Session{
-		Title:            original.Title + " (branch)",
-		BackendProfileID: original.BackendProfileID,
-		PersonaID:        original.PersonaID,
-		LorebookID:       original.LorebookID,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("creating branch session: %w", err)
-	}
-
-	characters, err := ListCharacterCardsForSession(db, sessionID)
-	if err != nil {
-		return 0, fmt.Errorf("listing characters to branch: %w", err)
-	}
-	for i, c := range characters {
-		if err := AttachCharacterToSession(db, newSessionID, c.ID, i); err != nil {
-			return 0, fmt.Errorf("attaching branched character %d: %w", c.ID, err)
-		}
 	}
 
 	messages, err := ListMessages(db, sessionID)
@@ -223,6 +203,69 @@ func BranchSession(db *sql.DB, sessionID, uptoMessageID int64) (int64, error) {
 		}
 		if m.ID == uptoMessageID {
 			break
+		}
+	}
+
+	return newSessionID, nil
+}
+
+// DuplicateSession is Duplicate's write: same as BranchSession but
+// copies every message in the session, not just up to a cutoff — a
+// plain full clone to branch off from (or just keep as a backup before
+// trying something risky in the original) rather than a specific-point
+// fork.
+func DuplicateSession(db *sql.DB, sessionID int64) (int64, error) {
+	newSessionID, err := copySessionShell(db, sessionID, "copy")
+	if err != nil {
+		return 0, err
+	}
+
+	messages, err := ListMessages(db, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("listing messages to duplicate: %w", err)
+	}
+	for _, m := range messages {
+		if _, err := CreateMessage(db, ChatMessage{
+			SessionID:       newSessionID,
+			Role:            m.Role,
+			CharacterCardID: m.CharacterCardID,
+			Content:         m.Content,
+		}); err != nil {
+			return 0, fmt.Errorf("copying message %d into duplicate: %w", m.ID, err)
+		}
+	}
+
+	return newSessionID, nil
+}
+
+// copySessionShell is the part Branch and Duplicate share: a new
+// session with the original's backend profile/persona/lorebook and
+// attached characters, titled "<original> (suffix)". Neither caller's
+// message-copying logic lives here, since that's the one thing they do
+// differently (a cutoff vs. everything).
+func copySessionShell(db *sql.DB, sessionID int64, suffix string) (int64, error) {
+	original, err := GetSession(db, sessionID)
+	if err != nil {
+		return 0, err
+	}
+
+	newSessionID, err := CreateSession(db, Session{
+		Title:            fmt.Sprintf("%s (%s)", original.Title, suffix),
+		BackendProfileID: original.BackendProfileID,
+		PersonaID:        original.PersonaID,
+		LorebookID:       original.LorebookID,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("creating %s session: %w", suffix, err)
+	}
+
+	characters, err := ListCharacterCardsForSession(db, sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("listing characters to copy: %w", err)
+	}
+	for i, c := range characters {
+		if err := AttachCharacterToSession(db, newSessionID, c.ID, i); err != nil {
+			return 0, fmt.Errorf("attaching copied character %d: %w", c.ID, err)
 		}
 	}
 
