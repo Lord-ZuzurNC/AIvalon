@@ -146,7 +146,93 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatPage(session, display, needsReply, coverImage))
+	bgOptions, err := h.backgroundOptions(session)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatPage(session, display, needsReply, coverImage, bgOptions))
+}
+
+// BackgroundOption is one entry in the "use this as wallpaper" picker —
+// always sourced from an image the session already has access to
+// (its Lorebook's cover, or an attached Character's portrait), never
+// an arbitrary upload of its own; see SetBackground for why that
+// matters.
+type BackgroundOption struct {
+	Label string
+	Path  string
+}
+
+func (h ChatHandlers) backgroundOptions(session db.Session) ([]BackgroundOption, error) {
+	var opts []BackgroundOption
+	if session.LorebookID != 0 {
+		book, err := db.GetLorebook(h.DB, session.LorebookID)
+		if err != nil {
+			return nil, err
+		}
+		if book.ImagePath != "" {
+			opts = append(opts, BackgroundOption{Label: "World: " + book.Name, Path: book.ImagePath})
+		}
+	}
+	characters, err := db.ListCharacterCardsForSession(h.DB, session.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range characters {
+		if c.ImagePath != "" {
+			opts = append(opts, BackgroundOption{Label: "Character: " + c.Name, Path: c.ImagePath})
+		}
+	}
+	return opts, nil
+}
+
+// SetBackground only ever accepts a path that's currently one of this
+// session's own backgroundOptions (or "" to clear) — never whatever a
+// POST body happens to contain. A free-text path here would land raw
+// inside a CSS url(...) in ChatPage's style attribute; restricting it
+// to known, already-uploaded, MIME-sniffed image paths closes that off
+// at the source instead of trying to sanitize arbitrary CSS later.
+func (h ChatHandlers) SetBackground(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	session, err := db.GetSession(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if session.IsVaulted && !h.Gate.Unlocked(r) {
+		http.Error(w, "locked", http.StatusForbidden)
+		return
+	}
+	r.ParseForm()
+	path := r.FormValue("background_image_path")
+	if path != "" {
+		opts, err := h.backgroundOptions(session)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		valid := false
+		for _, o := range opts {
+			if o.Path == path {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			http.Error(w, "not one of this session's available images", http.StatusBadRequest)
+			return
+		}
+	}
+	if err := db.UpdateSessionBackground(h.DB, id, path); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
 // resolveSessionCoverImage picks what to show next to the chat title: the
@@ -184,10 +270,31 @@ func randomPlaceholderCoverImage() string {
 	return placeholderCoverImages[rand.IntN(len(placeholderCoverImages))]
 }
 
+// vaultBlocks loads session id and reports whether it's vaulted and
+// this browser hasn't unlocked the vault — every /chat/{id}/* route
+// that can read or mutate a session (not just Show/Stream) needs this
+// check, or hiding a session from the list is purely cosmetic: its
+// direct URL, its Duplicate/Branch copies, and its message edits would
+// all still go through untouched.
+func (h ChatHandlers) vaultBlocks(r *http.Request, id int64) (bool, error) {
+	session, err := db.GetSession(h.DB, id)
+	if err != nil {
+		return false, err
+	}
+	return session.IsVaulted && !h.Gate.Unlocked(r), nil
+}
+
 func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if blocked, err := h.vaultBlocks(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if blocked {
+		http.Error(w, "locked", http.StatusForbidden)
 		return
 	}
 	if err := db.DeleteSession(h.DB, id); err != nil {
@@ -206,6 +313,13 @@ func (h ChatHandlers) Duplicate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	if blocked, err := h.vaultBlocks(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if blocked {
+		http.Error(w, "locked", http.StatusForbidden)
+		return
+	}
 	newID, err := db.DuplicateSession(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -218,6 +332,13 @@ func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if blocked, err := h.vaultBlocks(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if blocked {
+		http.Error(w, "locked", http.StatusForbidden)
 		return
 	}
 	r.ParseForm()
@@ -233,11 +354,13 @@ func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }
 
-// messageIDs pulls {id} and {messageID} out of the route and checks the
-// message actually belongs to that session — without that check, a
+// messageIDs pulls {id} and {messageID} out of the route, checks the
+// message actually belongs to that session (without that check, a
 // crafted request could edit/delete/regenerate/branch a message that
 // lives in someone else's chat, since the two path params aren't
-// otherwise linked.
+// otherwise linked), and refuses the whole thing if the session is
+// vaulted and this browser hasn't unlocked it — Regenerate/Branch/Edit/
+// DeleteMessage all share this one gate.
 func (h ChatHandlers) messageIDs(r *http.Request) (sessionID, messageID int64, err error) {
 	sessionID, err = strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -246,6 +369,11 @@ func (h ChatHandlers) messageIDs(r *http.Request) (sessionID, messageID int64, e
 	messageID, err = strconv.ParseInt(r.PathValue("messageID"), 10, 64)
 	if err != nil {
 		return 0, 0, fmt.Errorf("invalid message id")
+	}
+	if blocked, err := h.vaultBlocks(r, sessionID); err != nil {
+		return 0, 0, err
+	} else if blocked {
+		return 0, 0, fmt.Errorf("session %d is locked", sessionID)
 	}
 	msg, err := db.GetMessage(h.DB, messageID)
 	if err != nil {

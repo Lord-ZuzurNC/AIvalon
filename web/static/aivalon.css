@@ -486,6 +486,60 @@ body.sidebar-collapsed #sidebar-toggle {
 	margin: 0;
 }
 
+/* Right-hand session info drawer (chat.templ's sessionPanel) — a fixed
+   off-canvas panel, same sliding pattern as the left nav but mirrored,
+   toggled by a plain class instead of htmx since there's nothing
+   server-side to fetch for it. */
+.session-panel {
+	position: fixed;
+	top: 0;
+	right: -20rem;
+	width: 20rem;
+	height: 100vh;
+	overflow-y: auto;
+	background: var(--pico-background-color);
+	border-left: 1px solid var(--pico-muted-border-color);
+	padding: 1rem;
+	transition: right 0.2s ease;
+	z-index: 20;
+}
+
+.session-panel.open {
+	right: 0;
+}
+
+.session-panel-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 1rem;
+}
+
+.session-panel-header button {
+	width: auto;
+	padding: 0.1rem 0.6rem;
+	margin: 0;
+}
+
+.session-panel-toggle {
+	width: auto;
+	margin: 0 0 0 auto;
+	padding: 0.25rem 0.6rem;
+}
+
+.chat-header {
+	position: relative;
+}
+
+/* The chat page's own background-image wrapper (set inline per
+   session — see ChatPage) needs its content to stay legible over
+   whatever photo ends up behind it; .message already carries its own
+   solid background, so only the page chrome around it needs a touch
+   more contrast here. */
+.chat-page-bg {
+	border-radius: var(--pico-border-radius, 0.25rem);
+}
+
 .options-dropdown button.danger:hover,
 .options-dropdown button.danger:focus {
 	background: #e06c75;

@@ -38,11 +38,19 @@ func (h VaultHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	render(w, r, VaultListPage(sessions))
 }
 
-// Setup creates the vault's one PIN. Only reachable while none exists
-// yet (Show gates the form itself); a repeat POST once a PIN is already
-// set just overwrites it, same as any other first-run setting would —
-// there's no "change PIN" flow separate from this in the UI.
+// Setup creates the vault's one PIN — or changes it, but only for a
+// browser that already proved it knows the current one (Gate.Unlocked):
+// without that check, anyone could silently overwrite an existing PIN
+// via POST /vault/setup with a PIN of their own choosing and walk
+// straight into every hidden session, defeating the whole feature.
 func (h VaultHandlers) Setup(w http.ResponseWriter, r *http.Request) {
+	if _, err := db.GetVaultPIN(h.DB); err == nil && !h.Gate.Unlocked(r) {
+		render(w, r, VaultUnlockPage("A PIN is already set — unlock the vault first to change it."))
+		return
+	} else if err != nil && err != db.ErrVaultNotConfigured {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	r.ParseForm()
 	pin := r.FormValue("pin")
 	confirm := r.FormValue("pin_confirm")
