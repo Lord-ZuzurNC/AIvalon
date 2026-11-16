@@ -57,6 +57,24 @@ templ Layout(title string, active string) {
 					}
 				})();
 			</script>
+			<script>
+				// Click-to-dismiss on the backdrop for every <dialog> on the
+				// page (create/edit modals): these are opened by toggling the
+				// plain `open` attribute (set server-side for "edit", or by
+				// the "Add" button's onclick for "create"), not
+				// showModal() — so there's no native top-layer/backdrop
+				// click-to-close behavior to rely on. A click lands with
+				// e.target === the <dialog> element itself only when it hits
+				// the dialog's own padding/overlay area; a click on the
+				// <article> card inside bubbles from that inner element
+				// instead, so this never closes the dialog from a click
+				// meant for its content.
+				document.addEventListener("click", function (e) {
+					if (e.target.tagName === "DIALOG") {
+						e.target.removeAttribute("open");
+					}
+				});
+			</script>
 		</body>
 	</html>
 }
@@ -92,7 +110,7 @@ templ Placeholder(section string) {
 // list (a chat session from Chat, a lorebook from World) — the sidebar
 // alone doesn't convey that relationship once you're inside one.
 templ BackLink(href, label string) {
-	<p><a href={ templ.URL(href) } class="back-link">← { label }</a></p>
+	<p class="back-link-bar"><a href={ templ.URL(href) } class="back-link">← { label }</a></p>
 }
 
 // Page composes the layout with a placeholder body for a given section.

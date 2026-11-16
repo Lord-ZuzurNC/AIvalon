@@ -50,14 +50,23 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		</table>
 	}
 
-	<h2>
-		if editing != nil {
-			Edit profile
-		} else {
-			Add a profile
-		}
-	</h2>
-	@backendProfileForm(editing)
+	<button type="button" onclick="document.getElementById('profile-modal').setAttribute('open','')">Add a profile</button>
+
+	<dialog id="profile-modal" open?={ editing != nil }>
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>
+					if editing != nil {
+						Edit profile
+					} else {
+						Add a profile
+					}
+				</strong>
+			</header>
+			@backendProfileForm(editing)
+		</article>
+	</dialog>
 
 	<h2>Your persona</h2>
 	<p>How you're represented to the AI. A session with none picked uses a built-in default ("User").</p>
@@ -91,14 +100,23 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		</table>
 	}
 
-	<h2>
-		if editingPersona != nil {
-			Edit persona
-		} else {
-			Add a persona
-		}
-	</h2>
-	@personaForm(editingPersona)
+	<button type="button" onclick="document.getElementById('persona-modal').setAttribute('open','')">Add a persona</button>
+
+	<dialog id="persona-modal" open?={ editingPersona != nil }>
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>
+					if editingPersona != nil {
+						Edit persona
+					} else {
+						Add a persona
+					}
+				</strong>
+			</header>
+			@personaForm(editingPersona)
+		</article>
+	</dialog>
 
 	<h2>System prompt</h2>
 	<p>
