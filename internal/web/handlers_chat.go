@@ -188,6 +188,23 @@ func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chat", http.StatusSeeOther)
 }
 
+// Duplicate clones a whole session (see db.DuplicateSession) and
+// redirects into the copy — unlike Branch, there's no cutoff message to
+// pick: this is a full clone, reachable straight from the session list.
+func (h ChatHandlers) Duplicate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	newID, err := db.DuplicateSession(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", newID), http.StatusSeeOther)
+}
+
 func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -604,7 +621,7 @@ func (h ChatHandlers) displayMessages(session db.Session, messages []db.ChatMess
 				speaker = name
 			}
 		case "narrator":
-			speaker = "World"
+			speaker = ""
 		case "system":
 			speaker = "System"
 		}
