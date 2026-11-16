@@ -1,0 +1,88 @@
+package web
+
+import (
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
+)
+
+// maxUploadSize caps a single image upload — generous for a character
+// portrait or a lorebook cover, not so generous that a confused 50MB PNG
+// export silently eats disk space.
+const maxUploadSize = 10 << 20 // 10 MiB
+
+// allowedImageExt maps a sniffed content-type to the extension saved to
+// disk. net/http.DetectContentType sniffs the actual bytes rather than
+// trusting the browser-supplied filename, so a renamed .exe can't ride
+// in as "image.png".
+var allowedImageExt = map[string]string{
+	"image/png":  ".png",
+	"image/jpeg": ".jpg",
+	"image/gif":  ".gif",
+	"image/webp": ".webp",
+}
+
+// saveUploadedImage reads formField from r (an already-multipart POST),
+// validates it's actually image bytes, and writes it to
+// web/static/uploads/<subdir>/<entityID><ext>, overwriting any previous
+// upload for that entity (one image per card/lorebook, not a gallery).
+// Returns the path relative to web/static — e.g. "uploads/characters/3.png"
+// — ready to store directly in the image_path column and to prefix with
+// "/static/" for an <img src>. Returns ("", nil), not an error, when the
+// field was left empty — uploading an image is always optional.
+func saveUploadedImage(r *http.Request, formField, subdir string, entityID int64) (string, error) {
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		return "", fmt.Errorf("parsing multipart form: %w", err)
+	}
+	file, header, err := r.FormFile(formField)
+	if err == http.ErrMissingFile {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("reading upload: %w", err)
+	}
+	defer file.Close()
+
+	ext, err := sniffImageExt(file)
+	if err != nil {
+		return "", err
+	}
+
+	dir := filepath.Join("web", "static", "uploads", subdir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating upload dir: %w", err)
+	}
+	diskPath := filepath.Join(dir, fmt.Sprintf("%d%s", entityID, ext))
+	out, err := os.Create(diskPath)
+	if err != nil {
+		return "", fmt.Errorf("creating %s: %w", diskPath, err)
+	}
+	defer out.Close()
+
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("rewinding upload: %w", err)
+	}
+	if _, err := io.Copy(out, file); err != nil {
+		return "", fmt.Errorf("writing %s: %w", diskPath, err)
+	}
+
+	_ = header // filename itself is untrusted/unused — ext comes from sniffing, name from entityID
+	return filepath.ToSlash(filepath.Join("uploads", subdir, fmt.Sprintf("%d%s", entityID, ext))), nil
+}
+
+func sniffImageExt(file multipart.File) (string, error) {
+	head := make([]byte, 512)
+	n, err := file.Read(head)
+	if err != nil && err != io.EOF {
+		return "", fmt.Errorf("reading upload header: %w", err)
+	}
+	contentType := http.DetectContentType(head[:n])
+	ext, ok := allowedImageExt[contentType]
+	if !ok {
+		return "", fmt.Errorf("unsupported image type %q (png/jpeg/gif/webp only)", contentType)
+	}
+	return ext, nil
+}

@@ -47,6 +47,42 @@ func TestLorebookCRUD(t *testing.T) {
 	}
 }
 
+func TestLorebookImagePath(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer sqlDB.Close()
+
+	id, err := CreateLorebook(sqlDB, Lorebook{Name: "Avalon"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := GetLorebook(sqlDB, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ImagePath != "" {
+		t.Fatalf("expected no image by default, got %q", got.ImagePath)
+	}
+
+	if err := UpdateLorebookImagePath(sqlDB, id, "uploads/lorebooks/1.png"); err != nil {
+		t.Fatalf("UpdateLorebookImagePath: %v", err)
+	}
+
+	got, err = GetLorebook(sqlDB, id)
+	if err != nil {
+		t.Fatalf("Get after image update: %v", err)
+	}
+	if got.ImagePath != "uploads/lorebooks/1.png" {
+		t.Fatalf("ImagePath round-trip failed: got %+v", got)
+	}
+	if got.Name != "Avalon" {
+		t.Fatalf("image update touched unrelated fields: got %+v", got)
+	}
+}
+
 func TestLorebookEntryCRUD(t *testing.T) {
 	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

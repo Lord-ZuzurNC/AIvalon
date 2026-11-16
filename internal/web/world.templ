@@ -23,7 +23,7 @@ templ WorldPage(books []db.Lorebook) {
 				<tbody>
 					for _, b := range books {
 						<tr>
-							<td>{ b.Name }</td>
+							<td>@Avatar(b.ImagePath, b.Name)<span>{ b.Name }</span></td>
 							<td>
 								<span class="row-actions">
 									<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>Open</a>
@@ -45,10 +45,14 @@ templ WorldPage(books []db.Lorebook) {
 					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 					<strong>Add a lorebook</strong>
 				</header>
-				<form method="post" action="/world">
+				<form method="post" action="/world" enctype="multipart/form-data">
 					<label>
 						Name
 						<input type="text" name="name" required="required"/>
+					</label>
+					<label>
+						Image (optional)
+						<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
 					</label>
 					<button type="submit">Add lorebook</button>
 				</form>
@@ -61,10 +65,17 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 	@Layout(book.Name, "World") {
 		@BackLink("/world", "World")
 		<h1>{ book.Name }</h1>
-		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) }>
+		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) } enctype="multipart/form-data">
+			if book.ImagePath != "" {
+				<p>@Avatar(book.ImagePath, book.Name)</p>
+			}
 			<label>
 				Name
 				<input type="text" name="name" value={ book.Name } required="required"/>
+			</label>
+			<label>
+				Image (optional)
+				<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
 			</label>
 			<button type="submit">Rename</button>
 		</form>

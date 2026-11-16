@@ -108,7 +108,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " <h2>New session</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -118,7 +118,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<form method=\"post\" action=\"/chat\"><label>Title <input type=\"text\" name=\"title\" placeholder=\"Untitled chat\" value=\"\"></label> <label>Backend profile <select name=\"backend_profile_id\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<button type=\"button\" onclick=\"document.getElementById('session-modal').setAttribute('open','')\">New session</button> <dialog id=\"session-modal\"><article><header><button aria-label=\"Close\" rel=\"prev\" onclick=\"this.closest('dialog').removeAttribute('open')\"></button> <strong>New session</strong></header><form method=\"post\" action=\"/chat\"><label>Title <input type=\"text\" name=\"title\" placeholder=\"Untitled chat\" value=\"\"></label> <label>Backend profile <select name=\"backend_profile_id\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -130,7 +130,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%d", p.ID)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 45, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 52, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
@@ -143,7 +143,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 45, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 52, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -166,7 +166,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%d", p.ID)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 54, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 61, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 					if templ_7745c5c3_Err != nil {
@@ -179,7 +179,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(p.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 54, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 61, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -202,7 +202,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%d", c.ID)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 62, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 69, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 					if templ_7745c5c3_Err != nil {
@@ -215,7 +215,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 62, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 69, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -238,7 +238,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%d", l.ID)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 71, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 78, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 					if templ_7745c5c3_Err != nil {
@@ -251,7 +251,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(l.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 71, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 78, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -262,7 +262,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</select></label> <button type=\"submit\">Start chat</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</select></label> <button type=\"submit\">Start chat</button></form></article></dialog>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -277,7 +277,7 @@ func ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas 
 	})
 }
 
-func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) templ.Component {
+func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -310,44 +310,57 @@ func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) te
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<h1>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<div class=\"chat-header\"><img class=\"chat-cover\" src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
-			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(session.Title)
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(coverImage).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 84, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 94, Col: 43}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</h1><div id=\"messages\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\" alt=\"\"><h1>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var17 string
+			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(session.Title)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 95, Col: 22}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</h1></div><div id=\"messages\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(messages) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<p><em>No messages yet — say something below to start.</em></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<p><em>No messages yet — say something below to start.</em></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			for _, m := range messages {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<p><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<p><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var17 string
-				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(m.Speaker)
+				var templ_7745c5c3_Var18 string
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(m.Speaker)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 90, Col: 26}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 102, Col: 26}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, ":</strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, ":</strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -355,48 +368,48 @@ func ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) te
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if needsReply {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<div id=\"live\" hx-ext=\"sse\" sse-connect=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<div id=\"live\" hx-ext=\"sse\" sse-connect=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var18 string
-				templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/chat/%d/stream", session.ID)).Resolve(ctx)
+				var templ_7745c5c3_Var19 string
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("/chat/%d/stream", session.ID)).Resolve(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 97, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 109, Col: 60}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" sse-swap=\"message\" hx-swap=\"beforeend\"></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" sse-swap=\"message\" hx-swap=\"beforeend\"></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, " <form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, " <form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var19 string
-			templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID))).ResolveURL(ctx)
+			var templ_7745c5c3_Var20 string
+			templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID))).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 102, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 114, Col: 86}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"><input type=\"text\" name=\"content\" placeholder=\"Say something...\" autocomplete=\"off\" required=\"required\"> <button type=\"submit\">Send</button></form><script>\n\t\t\t// Land on the bottom of the conversation on load, and keep\n\t\t\t// following it as tokens stream in / the final styled swap\n\t\t\t// lands — otherwise every full-page POST-then-redirect from\n\t\t\t// hitting Enter resets scroll to the top of a (possibly\n\t\t\t// long) session, and typed replies grow past the fold\n\t\t\t// without the view following them.\n\t\t\t(function () {\n\t\t\t\tfunction scrollChatToBottom() {\n\t\t\t\t\twindow.scrollTo(0, document.body.scrollHeight);\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"DOMContentLoaded\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:afterSwap\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:oobAfterSwap\", scrollChatToBottom);\n\t\t\t})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\"><input type=\"text\" name=\"content\" placeholder=\"Say something...\" autocomplete=\"off\" required=\"required\"> <button type=\"submit\">Send</button></form><script>\n\t\t\t// Land on the bottom of the conversation on load, and keep\n\t\t\t// following it as tokens stream in / the final styled swap\n\t\t\t// lands — otherwise every full-page POST-then-redirect from\n\t\t\t// hitting Enter resets scroll to the top of a (possibly\n\t\t\t// long) session, and typed replies grow past the fold\n\t\t\t// without the view following them.\n\t\t\t(function () {\n\t\t\t\tfunction scrollChatToBottom() {\n\t\t\t\t\twindow.scrollTo(0, document.body.scrollHeight);\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"DOMContentLoaded\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:afterSwap\", scrollChatToBottom);\n\t\t\t\tdocument.body.addEventListener(\"htmx:oobAfterSwap\", scrollChatToBottom);\n\t\t\t})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

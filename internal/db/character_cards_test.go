@@ -57,6 +57,44 @@ func TestCharacterCardCRUD(t *testing.T) {
 	}
 }
 
+func TestCharacterCardImagePath(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer sqlDB.Close()
+
+	id, err := CreateCharacterCard(sqlDB, CharacterCard{Name: "Merlin"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	got, err := GetCharacterCard(sqlDB, id)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ImagePath != "" {
+		t.Fatalf("expected no image by default, got %q", got.ImagePath)
+	}
+
+	if err := UpdateCharacterCardImagePath(sqlDB, id, "uploads/characters/1.png"); err != nil {
+		t.Fatalf("UpdateCharacterCardImagePath: %v", err)
+	}
+
+	got, err = GetCharacterCard(sqlDB, id)
+	if err != nil {
+		t.Fatalf("Get after image update: %v", err)
+	}
+	if got.ImagePath != "uploads/characters/1.png" {
+		t.Fatalf("ImagePath round-trip failed: got %+v", got)
+	}
+
+	// UpdateCharacterCardImagePath must not clobber the rest of the row.
+	if got.Name != "Merlin" {
+		t.Fatalf("image update touched unrelated fields: got %+v", got)
+	}
+}
+
 func TestAttachCharacterToSession(t *testing.T) {
 	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

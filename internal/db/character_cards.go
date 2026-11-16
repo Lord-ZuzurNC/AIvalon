@@ -26,10 +26,14 @@ type CharacterCard struct {
 	FirstMessage    string
 	ExampleMessages string
 	AuthorNote      string
+	// ImagePath is relative to web/static (e.g. "uploads/characters/3.png"),
+	// served by the existing GET /static/ route — "" means no image was
+	// uploaded, which the UI treats as a placeholder case, not an error.
+	ImagePath string
 }
 
 func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
-	rows, err := db.Query(`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note FROM character_cards ORDER BY name`)
+	rows, err := db.Query(`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note, image_path FROM character_cards ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing character cards: %w", err)
 	}
@@ -38,7 +42,7 @@ func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
@@ -49,8 +53,8 @@ func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 func GetCharacterCard(db *sql.DB, id int64) (CharacterCard, error) {
 	var c CharacterCard
 	err := db.QueryRow(
-		`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note FROM character_cards WHERE id = ?`, id,
-	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote)
+		`SELECT id, name, description, personality, scenario, first_message, example_messages, author_note, image_path FROM character_cards WHERE id = ?`, id,
+	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath)
 	if err != nil {
 		return CharacterCard{}, fmt.Errorf("getting character card %d: %w", id, err)
 	}
@@ -95,11 +99,22 @@ func DeleteCharacterCard(db *sql.DB, id int64) error {
 	return nil
 }
 
+// UpdateCharacterCardImagePath is separate from UpdateCharacterCard
+// because the image upload is its own form/request (multipart, not the
+// main text-field form) — see handlers_character.go.
+func UpdateCharacterCardImagePath(db *sql.DB, id int64, imagePath string) error {
+	_, err := db.Exec(`UPDATE character_cards SET image_path = ? WHERE id = ?`, imagePath, id)
+	if err != nil {
+		return fmt.Errorf("updating character card %d image: %w", id, err)
+	}
+	return nil
+}
+
 // ListCharacterCardsForSession returns the characters attached to a
 // session, in turn_order.
 func ListCharacterCardsForSession(db *sql.DB, sessionID int64) ([]CharacterCard, error) {
 	rows, err := db.Query(`
-		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note
+		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, cc.image_path
 		FROM character_cards cc
 		JOIN session_characters sc ON sc.character_card_id = cc.id
 		WHERE sc.session_id = ?
@@ -112,7 +127,7 @@ func ListCharacterCardsForSession(db *sql.DB, sessionID int64) ([]CharacterCard,
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)

@@ -23,7 +23,7 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 				<tbody>
 					for _, c := range cards {
 						<tr>
-							<td>{ c.Name }</td>
+							<td>@Avatar(c.ImagePath, c.Name)<span>{ c.Name }</span></td>
 							<td>{ c.Scenario }</td>
 							<td>
 								<span class="row-actions">
@@ -68,7 +68,15 @@ templ characterCardForm(editing *db.CharacterCard) {
 		c = *editing
 	}
 	}}
-	<form method="post" action={ templ.URL(action) }>
+	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
+		<label>
+			Image (optional)
+			if c.ImagePath != "" {
+				<br/>
+				@Avatar(c.ImagePath, c.Name)
+			}
+			<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
+		</label>
 		<label>
 			Name
 			<input type="text" name="name" value={ c.Name } required="required"/>

@@ -13,6 +13,9 @@ import (
 type Lorebook struct {
 	ID   int64
 	Name string
+	// ImagePath mirrors CharacterCard.ImagePath — relative to
+	// web/static, "" means no image uploaded.
+	ImagePath string
 }
 
 // LorebookEntry.TriggerStrategy is "constant" (always included whenever
@@ -36,7 +39,7 @@ type LorebookEntry struct {
 }
 
 func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
-	rows, err := db.Query(`SELECT id, name FROM lorebooks ORDER BY name`)
+	rows, err := db.Query(`SELECT id, name, image_path FROM lorebooks ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing lorebooks: %w", err)
 	}
@@ -45,7 +48,7 @@ func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
 	var books []Lorebook
 	for rows.Next() {
 		var l Lorebook
-		if err := rows.Scan(&l.ID, &l.Name); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath); err != nil {
 			return nil, fmt.Errorf("scanning lorebook: %w", err)
 		}
 		books = append(books, l)
@@ -55,7 +58,7 @@ func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
 
 func GetLorebook(db *sql.DB, id int64) (Lorebook, error) {
 	var l Lorebook
-	err := db.QueryRow(`SELECT id, name FROM lorebooks WHERE id = ?`, id).Scan(&l.ID, &l.Name)
+	err := db.QueryRow(`SELECT id, name, image_path FROM lorebooks WHERE id = ?`, id).Scan(&l.ID, &l.Name, &l.ImagePath)
 	if err != nil {
 		return Lorebook{}, fmt.Errorf("getting lorebook %d: %w", id, err)
 	}
@@ -85,6 +88,16 @@ func DeleteLorebook(db *sql.DB, id int64) error {
 	_, err := db.Exec(`DELETE FROM lorebooks WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("deleting lorebook %d: %w", id, err)
+	}
+	return nil
+}
+
+// UpdateLorebookImagePath mirrors UpdateCharacterCardImagePath — its own
+// multipart upload request, separate from the plain-text rename form.
+func UpdateLorebookImagePath(db *sql.DB, id int64, imagePath string) error {
+	_, err := db.Exec(`UPDATE lorebooks SET image_path = ? WHERE id = ?`, imagePath, id)
+	if err != nil {
+		return fmt.Errorf("updating lorebook %d image: %w", id, err)
 	}
 	return nil
 }

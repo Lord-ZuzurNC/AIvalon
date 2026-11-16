@@ -113,6 +113,24 @@ templ BackLink(href, label string) {
 	<p class="back-link-bar"><a href={ templ.URL(href) } class="back-link">← { label }</a></p>
 }
 
+// Avatar renders a character card's or lorebook's image, or — when
+// imagePath is "" (nothing uploaded yet) — a flat initial-letter
+// fallback. Not the same as the chat page's "no lorebook image, pick a
+// random placeholder" fallback (see pickRandomPlaceholder in
+// handlers_chat.go): this one is deterministic, since a list row should
+// look the same every time you load it, not shuffle on refresh.
+templ Avatar(imagePath, name string) {
+	if imagePath != "" {
+		<img class="avatar" src={ "/static/" + imagePath } alt={ name }/>
+	} else {
+		{{ initial := "" }}
+		if len(name) > 0 {
+			{{ initial = name[0:1] }}
+		}
+		<span class="avatar avatar-fallback" aria-hidden="true">{ initial }</span>
+	}
+}
+
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is
 // what the four routes render today.

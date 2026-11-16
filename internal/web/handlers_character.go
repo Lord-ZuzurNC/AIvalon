@@ -42,8 +42,13 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 
 func (h CharacterHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	c := characterCardFromForm(r, db.CharacterCard{})
-	if _, err := db.CreateCharacterCard(h.DB, c); err != nil {
+	id, err := db.CreateCharacterCard(h.DB, c)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := h.saveImage(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	http.Redirect(w, r, "/characters", http.StatusSeeOther)
@@ -60,7 +65,24 @@ func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := h.saveImage(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	http.Redirect(w, r, "/characters", http.StatusSeeOther)
+}
+
+// saveImage is a no-op (no error, no write) when the form's "image"
+// field was left empty — see saveUploadedImage.
+func (h CharacterHandlers) saveImage(r *http.Request, id int64) error {
+	imagePath, err := saveUploadedImage(r, "image", "characters", id)
+	if err != nil {
+		return err
+	}
+	if imagePath == "" {
+		return nil
+	}
+	return db.UpdateCharacterCardImagePath(h.DB, id, imagePath)
 }
 
 func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +99,11 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func characterCardFromForm(r *http.Request, base db.CharacterCard) db.CharacterCard {
-	r.ParseForm()
+	// The create/edit form is multipart (it carries the optional image
+	// file) — ParseForm alone skips multipart bodies entirely (see Go's
+	// own doc comment on it), so the text fields would silently come back
+	// empty without this.
+	r.ParseMultipartForm(maxUploadSize)
 	base.Name = r.FormValue("name")
 	base.Description = r.FormValue("description")
 	base.Personality = r.FormValue("personality")

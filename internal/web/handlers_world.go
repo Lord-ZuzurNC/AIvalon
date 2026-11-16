@@ -24,10 +24,14 @@ func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h WorldHandlers) Create(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	r.ParseMultipartForm(maxUploadSize)
 	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name")})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := h.saveImage(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)
@@ -48,12 +52,29 @@ func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	r.ParseForm()
+	r.ParseMultipartForm(maxUploadSize)
 	if err := db.UpdateLorebook(h.DB, db.Lorebook{ID: id, Name: r.FormValue("name")}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := h.saveImage(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)
+}
+
+// saveImage is a no-op (no error, no write) when the form's "image"
+// field was left empty — see saveUploadedImage.
+func (h WorldHandlers) saveImage(r *http.Request, id int64) error {
+	imagePath, err := saveUploadedImage(r, "image", "lorebooks", id)
+	if err != nil {
+		return err
+	}
+	if imagePath == "" {
+		return nil
+	}
+	return db.UpdateLorebookImagePath(h.DB, id, imagePath)
 }
 
 func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {

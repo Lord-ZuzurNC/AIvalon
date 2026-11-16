@@ -24,3 +24,6 @@ go.work.sum
 *.db-journal
 *.sqlite
 *.sqlite3
+
+# User-uploaded character/lorebook images — local data, not source
+/web/static/uploads/
