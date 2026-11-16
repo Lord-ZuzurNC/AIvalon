@@ -50,6 +50,7 @@ templ WorldPage(books []db.Lorebook) {
 
 templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry) {
 	@Layout(book.Name, "World") {
+		@BackLink("/world", "World")
 		<h1>{ book.Name }</h1>
 		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) }>
 			<label>

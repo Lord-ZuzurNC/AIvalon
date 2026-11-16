@@ -12,9 +12,16 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
 		} else {
-			<ul>
+			<ul class="list-with-actions">
 				for _, s := range sessions {
-					<li><a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a></li>
+					<li>
+						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
+						<span class="row-actions">
+							<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/delete", s.ID)) } style="display:inline">
+								<button type="submit" class="danger">Delete</button>
+							</form>
+						</span>
+					</li>
 				}
 			</ul>
 		}
@@ -73,6 +80,7 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 
 templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool) {
 	@Layout(session.Title, "Chat") {
+		@BackLink("/chat", "Chat")
 		<h1>{ session.Title }</h1>
 		<div id="messages">
 			if len(messages) == 0 {

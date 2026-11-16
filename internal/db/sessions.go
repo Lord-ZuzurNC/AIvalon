@@ -75,6 +75,19 @@ func CreateSession(db *sql.DB, s Session) (int64, error) {
 	return res.LastInsertId()
 }
 
+// DeleteSession relies on the schema's ON DELETE CASCADE (messages,
+// session_characters both reference sessions(id) that way — see
+// 00001_init.sql) plus the foreign_keys pragma Open sets on every
+// connection, so this one DELETE is enough; it does not need to clean up
+// either table itself.
+func DeleteSession(db *sql.DB, id int64) error {
+	_, err := db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("deleting session %d: %w", id, err)
+	}
+	return nil
+}
+
 func ListMessages(db *sql.DB, sessionID int64) ([]ChatMessage, error) {
 	rows, err := db.Query(
 		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content FROM messages WHERE session_id = ? ORDER BY created_at, id`,
