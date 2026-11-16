@@ -2,11 +2,24 @@ package web
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
+// truncate shortens s to at most n runes (so a multi-byte UTF-8
+// character never gets split mid-sequence), appending "…" when it had
+// to cut. Used for the character list's Description column — a card's
+// bio can run to several paragraphs, far too long for a table cell.
+func truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return strings.TrimRight(string(r[:n]), " ") + "…"
+}
+
+templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
 	@Layout("Character", "Character") {
 		@PageHeaderWithCreate("Character", "character-modal", "Add a character")
 		if len(cards) == 0 {
@@ -16,7 +29,7 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 				<thead>
 					<tr>
 						<th>Name</th>
-						<th>Scenario</th>
+						<th>Description</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -24,7 +37,7 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 					for _, c := range cards {
 						<tr>
 							<td>@Avatar(c.ImagePath, c.Name)<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a></td>
-							<td>{ c.Scenario }</td>
+							<td>{ truncate(c.Description, 120) }</td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
 									{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
@@ -49,9 +62,44 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard) {
 					</strong>
 				</header>
 				@characterCardForm(editing)
+				if editing != nil {
+					@characterImageGallery(editing.ID, editing.ImagePath, editingImages)
+				}
 			</article>
 		</dialog>
 	}
+}
+
+// characterImageGallery lists every secondary image on this character
+// card alongside the current primary — "Make primary" swaps the
+// pointer (see db.SetPrimaryCharacterCardImage), "Delete" removes the
+// row outright. The primary image itself has neither button: it's
+// already what ImageField above shows as the main portrait, and
+// deleting your only image from here instead of via a fresh upload
+// would leave the card pointing at nothing without an obvious way back.
+templ characterImageGallery(characterID int64, primaryPath string, images []db.CharacterCardImage) {
+	<details>
+		<summary>Other images ({ fmt.Sprintf("%d", len(images)) })</summary>
+		if len(images) == 0 {
+			<p><em>No other images yet — upload one above; it joins the gallery here until you make it primary.</em></p>
+		} else {
+			<div class="image-gallery">
+				for _, img := range images {
+					if img.ImagePath != primaryPath {
+						<div class="image-gallery-item">
+							<img src={ "/static/" + img.ImagePath } alt="Character image"/>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/images/%d/primary", characterID, img.ID)) }>
+								<button type="submit">Make primary</button>
+							</form>
+							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/images/%d/delete", characterID, img.ID)) }>
+								<button type="submit" class="danger">Delete</button>
+							</form>
+						</div>
+					}
+				}
+			</div>
+		}
+	</details>
 }
 
 templ characterCardForm(editing *db.CharacterCard) {

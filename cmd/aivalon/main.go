@@ -83,6 +83,8 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /characters/{id}/edit", character.EditForm)
 	mux.HandleFunc("POST /characters/{id}", character.Update)
 	mux.HandleFunc("POST /characters/{id}/delete", character.Delete)
+	mux.HandleFunc("POST /characters/{id}/images/{imageID}/primary", character.PromoteImage)
+	mux.HandleFunc("POST /characters/{id}/images/{imageID}/delete", character.DeleteImage)
 
 	chat := web.ChatHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /chat", chat.List)
