@@ -88,6 +88,13 @@ templ Placeholder(section string) {
 	<p>Not built yet — scaffold only.</p>
 }
 
+// BackLink is the "go up a level" link for a detail page reached from a
+// list (a chat session from Chat, a lorebook from World) — the sidebar
+// alone doesn't convey that relationship once you're inside one.
+templ BackLink(href, label string) {
+	<p><a href={ templ.URL(href) } class="back-link">← { label }</a></p>
+}
+
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is
 // what the four routes render today.

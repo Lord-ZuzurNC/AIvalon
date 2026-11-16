@@ -88,6 +88,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /chat", chat.List)
 	mux.HandleFunc("POST /chat", chat.Create)
 	mux.HandleFunc("GET /chat/{id}", chat.Show)
+	mux.HandleFunc("POST /chat/{id}/delete", chat.Delete)
 	mux.HandleFunc("POST /chat/{id}/messages", chat.PostMessage)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 

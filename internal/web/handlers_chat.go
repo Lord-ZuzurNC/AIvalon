@@ -129,6 +129,19 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	render(w, r, ChatPage(session, display, needsReply))
 }
 
+func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if err := db.DeleteSession(h.DB, id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/chat", http.StatusSeeOther)
+}
+
 func (h ChatHandlers) PostMessage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {

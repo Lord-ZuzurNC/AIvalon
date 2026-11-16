@@ -32,9 +32,21 @@ body {
 body > header {
 	flex: 0 0 220px;
 	max-width: 220px;
+	width: auto;
+	margin: 0;
+	/* Pin to the viewport edge and keep it in view while <main> scrolls:
+	   without align-self:flex-start, the default align-items:stretch on
+	   body would make header match body's full (content-driven, often
+	   taller-than-viewport) height, leaving nothing for `sticky` to stick
+	   against. */
+	position: sticky;
+	top: 0;
+	align-self: flex-start;
+	height: 100vh;
+	overflow-y: auto;
+	overflow-x: hidden;
 	border-right: 1px solid var(--pico-muted-border-color);
 	transition: flex-basis 150ms ease-out, max-width 150ms ease-out, padding 150ms ease-out;
-	overflow: hidden;
 }
 
 body > main {
@@ -174,4 +186,33 @@ body.sidebar-collapsed #sidebar-toggle {
 	background: #e06c75;
 	border-color: #e06c75;
 	color: #fff;
+}
+
+.back-link {
+	display: inline-block;
+	color: var(--pico-muted-color);
+	text-decoration: none;
+	font-size: 0.9rem;
+}
+
+.back-link:hover,
+.back-link:focus {
+	color: var(--pico-color);
+}
+
+/* Chat/World's own list of sessions/lorebooks: a plain <li><a> plus a
+   Delete tucked at the far end, same row-actions treatment as a table
+   row gets elsewhere. */
+.list-with-actions {
+	list-style: none;
+	padding: 0;
+}
+
+.list-with-actions li {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	padding: 0.4rem 0;
+	border-bottom: 1px solid var(--pico-muted-border-color);
 }
