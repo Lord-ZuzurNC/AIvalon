@@ -159,17 +159,6 @@ func UpdateMessageContent(db *sql.DB, id int64, content string) error {
 	return nil
 }
 
-// DeleteMessage removes exactly one message — Delete's write. Unlike
-// Regenerate/Edit, this never cascades to later messages: the point is
-// to drop one line, not rewind the conversation.
-func DeleteMessage(db *sql.DB, id int64) error {
-	_, err := db.Exec(`DELETE FROM messages WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting message %d: %w", id, err)
-	}
-	return nil
-}
-
 // DeleteMessagesFrom deletes fromMessageID and every message in the same
 // session that came after it. IDs are assigned in strict insertion order
 // (SQLite AUTOINCREMENT) and a session's own messages are always

@@ -13,9 +13,13 @@ type VaultHandlers struct {
 	Gate *VaultGate
 }
 
-// Show renders whichever of three states applies: no PIN configured
-// yet (setup form), a PIN exists but this browser hasn't unlocked it
-// (PIN entry form), or it's unlocked (the vaulted session list).
+// Show renders whichever of two states applies: no PIN configured yet
+// (setup form), or a PIN entry form. Unlike the rest of the app's
+// unlock state, this always re-prompts — Lord's call: "on doit taper
+// le pin à chaque ouverture du vault". The Gate's unlock cookie still
+// exists and still gates a vaulted session's own URL/Stream for the
+// rest of this visit once Unlock below succeeds; it just isn't
+// consulted here to skip the prompt on the vault's own landing page.
 func (h VaultHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	_, err := db.GetVaultPIN(h.DB)
 	if err == db.ErrVaultNotConfigured {
@@ -26,16 +30,7 @@ func (h VaultHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !h.Gate.Unlocked(r) {
-		render(w, r, VaultUnlockPage(""))
-		return
-	}
-	sessions, err := db.ListVaultedSessions(h.DB)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	render(w, r, VaultListPage(sessions))
+	render(w, r, VaultUnlockPage(""))
 }
 
 // Setup creates the vault's one PIN — or changes it, but only for a
@@ -75,7 +70,7 @@ func (h VaultHandlers) Setup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/vault", http.StatusSeeOther)
+	h.renderList(w, r)
 }
 
 // Unlock checks the PIN against the stored hash and, on success,
@@ -102,7 +97,20 @@ func (h VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/vault", http.StatusSeeOther)
+	h.renderList(w, r)
+}
+
+// renderList is shared by Setup and Unlock's success path: both end
+// with the vaulted session list, not a redirect to GET /vault — a
+// redirect would land back on the always-re-prompt unlock form (see
+// Show's comment) instead of actually showing what unlocking was for.
+func (h VaultHandlers) renderList(w http.ResponseWriter, r *http.Request) {
+	sessions, err := db.ListVaultedSessions(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, VaultListPage(sessions))
 }
 
 // Lock clears this browser's unlock cookie — an explicit "re-lock

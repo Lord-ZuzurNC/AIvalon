@@ -450,16 +450,16 @@ func (h ChatHandlers) EditMessage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/chat/%d", sessionID), http.StatusSeeOther)
 }
 
-// DeleteMessage removes exactly one message — no cascade, unlike
-// Regenerate/Edit, since a plain Delete isn't meant to rewind the
-// conversation.
+// DeleteMessage removes a message and, per Lord's call, everything
+// that came after it too — same cascade DeleteMessagesFrom already
+// does for Regenerate/Edit, reused here rather than duplicated.
 func (h ChatHandlers) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 	sessionID, messageID, err := h.messageIDs(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := db.DeleteMessage(h.DB, messageID); err != nil {
+	if err := db.DeleteMessagesFrom(h.DB, sessionID, messageID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
