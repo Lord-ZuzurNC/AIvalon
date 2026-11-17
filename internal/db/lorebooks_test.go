@@ -116,6 +116,30 @@ func TestLorebookEntryCRUD(t *testing.T) {
 	if !reflect.DeepEqual(got.Keys, entry.Keys) {
 		t.Fatalf("Keys round-trip: got %v, want %v", got.Keys, entry.Keys)
 	}
+
+	// ListLorebooks.EntryCount is a join, not a stored column — World's
+	// list shows it next to Name, so it has to track real entry rows.
+	books, err := ListLorebooks(sqlDB)
+	if err != nil {
+		t.Fatalf("ListLorebooks: %v", err)
+	}
+	if len(books) != 1 || books[0].EntryCount != 1 {
+		t.Fatalf("expected EntryCount 1 after adding one entry, got %+v", books)
+	}
+	secondID, err := CreateLorebookEntry(sqlDB, entry)
+	if err != nil {
+		t.Fatalf("CreateLorebookEntry (2nd): %v", err)
+	}
+	books, err = ListLorebooks(sqlDB)
+	if err != nil {
+		t.Fatalf("ListLorebooks (2nd): %v", err)
+	}
+	if len(books) != 1 || books[0].EntryCount != 2 {
+		t.Fatalf("expected EntryCount 2 after adding a second entry, got %+v", books)
+	}
+	if err := DeleteLorebookEntry(sqlDB, secondID); err != nil {
+		t.Fatalf("DeleteLorebookEntry (2nd): %v", err)
+	}
 	if got.Content != entry.Content || got.TriggerStrategy != "selective" || !got.Enabled {
 		t.Fatalf("got %+v", got)
 	}
