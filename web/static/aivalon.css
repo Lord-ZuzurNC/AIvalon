@@ -603,10 +603,21 @@ body.sidebar-collapsed #sidebar-toggle {
 	margin: 0;
 }
 
+/* Fixed, not just pushed to the flex row's end: Lord's call — a
+   button living inside the (non-sticky) .chat-header used to scroll
+   away with the rest of the page, so reopening/closing the session
+   panel mid-conversation meant scrolling back to the top first. Fixed
+   positioning keeps it reachable the whole time, same idea as the
+   panel it opens. z-index above the panel's own (20) so it stays
+   clickable (to close the panel) even while the panel is open. */
 .session-panel-toggle {
+	position: fixed;
+	top: 1rem;
+	right: 1rem;
 	width: auto;
-	margin: 0 0 0 auto;
+	margin: 0;
 	padding: 0.25rem 0.6rem;
+	z-index: 21;
 }
 
 .chat-header {
@@ -667,11 +678,20 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: var(--pico-color);
 }
 
+/* Sized to the text, not the full row (that was the complaint fixed
+   earlier) — but with *some* background, because "none at all" let
+   whatever scrolls underneath the sticky bar show through right
+   behind the letters and made it hard to read (Lord's follow-up
+   call). A small pill is the middle ground between "full-width block"
+   and "invisible". */
 .back-link {
 	display: inline-block;
 	color: var(--pico-muted-color);
 	text-decoration: none;
 	font-size: 0.9rem;
+	background: var(--pico-card-background-color);
+	padding: 0.25rem 0.6rem;
+	border-radius: var(--pico-border-radius, 0.5rem);
 }
 
 .back-link:hover,

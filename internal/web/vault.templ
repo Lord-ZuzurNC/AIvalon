@@ -6,48 +6,98 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ VaultSetupPage(errMsg string) {
+// vaultPinHashScript hashes a PIN client-side (SHA-256 of salt+pin via
+// the Web Crypto API) before any <form class="pin-form"> on the page
+// ever submits — so a glance at the browser's own DevTools Network tab
+// during unlock shows a hash, not the raw digits (Lord caught this: the
+// payload used to carry "pin: 564546" in the clear). The salt itself
+// isn't secret — it's embedded in the page precisely so the client can
+// reproduce the same hash the server stored — only the PIN is.
+// Each pin-form needs: a hidden input[name=salt] (the salt to hash
+// with), one or more visible input[data-pin][data-hash-field=X], and a
+// matching hidden input[name=X] to receive the hex digest. An optional
+// hidden input[name=digits] gets the first PIN field's length (purely
+// informational — see db.VaultPIN.Digits — never a security boundary,
+// since nothing server-side actually gates on it).
+templ vaultPinHashScript() {
+	<script>
+		async function aivalonSha256Hex(text) {
+			var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+			return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+		}
+		document.querySelectorAll("form.pin-form").forEach(function (form) {
+			form.addEventListener("submit", async function (e) {
+				e.preventDefault();
+				var salt = form.querySelector('input[name="salt"]').value;
+				var pinInputs = form.querySelectorAll("input[data-pin]");
+				var firstLen = pinInputs.length ? pinInputs[0].value.length : 0;
+				for (var i = 0; i < pinInputs.length; i++) {
+					var pinInput = pinInputs[i];
+					var hashField = form.querySelector('input[name="' + pinInput.dataset.hashField + '"]');
+					hashField.value = await aivalonSha256Hex(salt + pinInput.value);
+					pinInput.value = "";
+					pinInput.removeAttribute("name");
+				}
+				var digitsField = form.querySelector('input[name="digits"]');
+				if (digitsField) {
+					digitsField.value = String(firstLen);
+				}
+				form.submit();
+			});
+		});
+	</script>
+}
+
+templ VaultSetupPage(errMsg, salt string) {
 	@Layout("Vault", "Chat") {
 		<h1>Vault</h1>
 		<p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
 		}
-		<form method="post" action="/vault/setup">
+		<form method="post" action="/vault/setup" class="pin-form">
+			<input type="hidden" name="salt" value={ salt }/>
+			<input type="hidden" name="pin_hash"/>
+			<input type="hidden" name="confirm_hash"/>
+			<input type="hidden" name="digits"/>
 			<label>
 				PIN (4, 6, or 8 digits)
-				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" autocomplete="new-password" required="required"/>
+				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" autocomplete="new-password" required="required"/>
 			</label>
 			<label>
 				Confirm PIN
-				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin_confirm" autocomplete="new-password" required="required"/>
+				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="confirm_hash" autocomplete="new-password" required="required"/>
 			</label>
 			<button type="submit">Set PIN</button>
 		</form>
+		@vaultPinHashScript()
 	}
 }
 
-templ VaultUnlockPage(errMsg string) {
+templ VaultUnlockPage(errMsg, salt string) {
 	@Layout("Vault", "Chat") {
 		<h1>Vault</h1>
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
 		}
-		<form method="post" action="/vault/unlock">
+		<form method="post" action="/vault/unlock" class="pin-form">
+			<input type="hidden" name="salt" value={ salt }/>
+			<input type="hidden" name="pin_hash"/>
 			<label>
 				PIN
-				<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" autocomplete="current-password" autofocus="autofocus" required="required"/>
+				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" autocomplete="current-password" autofocus="autofocus" required="required"/>
 			</label>
 			<button type="submit">Unlock</button>
 		</form>
+		@vaultPinHashScript()
 	}
 }
 
-templ VaultListPage(sessions []db.Session) {
-	@VaultListPageWithError(sessions, "")
+templ VaultListPage(sessions []db.Session, salt string) {
+	@VaultListPageWithError(sessions, salt, "")
 }
 
-templ VaultListPageWithError(sessions []db.Session, errMsg string) {
+templ VaultListPageWithError(sessions []db.Session, salt, errMsg string) {
 	@Layout("Vault", "Chat") {
 		@BackLink("/chat", "Chat")
 		<h1>Vault</h1>
@@ -61,8 +111,10 @@ templ VaultListPageWithError(sessions []db.Session, errMsg string) {
 				for _, s := range sessions {
 					<li>
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
-						<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form">
-							<input type="password" inputmode="numeric" pattern="[0-9]*" name="pin" placeholder="PIN to remove" required="required"/>
+						<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form pin-form">
+							<input type="hidden" name="salt" value={ salt }/>
+							<input type="hidden" name="pin_hash"/>
+							<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" placeholder="PIN to remove" required="required"/>
 							<button type="submit">Remove from vault</button>
 						</form>
 					</li>
@@ -72,5 +124,6 @@ templ VaultListPageWithError(sessions []db.Session, errMsg string) {
 		<form method="post" action="/vault/lock">
 			<button type="submit">Lock vault now</button>
 		</form>
+		@vaultPinHashScript()
 	}
 }
