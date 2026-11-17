@@ -47,13 +47,14 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h CharacterHandlers) Create(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	c := characterCardFromForm(r, db.CharacterCard{})
 	id, err := db.CreateCharacterCard(h.DB, c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.saveImage(r, id); err != nil {
+	if err := h.saveImage(w, r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -66,12 +67,13 @@ func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	c := characterCardFromForm(r, db.CharacterCard{ID: id})
 	if err := db.UpdateCharacterCard(h.DB, c); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.saveImage(r, id); err != nil {
+	if err := h.saveImage(w, r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -84,12 +86,12 @@ func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 // auto-becomes its primary (there's nothing to choose between yet);
 // every later upload joins the gallery as secondary until explicitly
 // promoted via PromoteImage.
-func (h CharacterHandlers) saveImage(r *http.Request, id int64) error {
+func (h CharacterHandlers) saveImage(w http.ResponseWriter, r *http.Request, id int64) error {
 	imageID, err := db.CreateCharacterCardImage(h.DB, id, "")
 	if err != nil {
 		return err
 	}
-	imagePath, err := saveUploadedImage(r, "image", "characters", imageID)
+	imagePath, err := saveUploadedImage(w, r, "image", "characters", imageID)
 	if err != nil {
 		_ = db.DeleteCharacterCardImage(h.DB, imageID)
 		return err
@@ -112,9 +114,7 @@ func (h CharacterHandlers) saveImage(r *http.Request, id int64) error {
 }
 
 // PromoteImage makes an existing gallery image the character's primary
-// — a pointer swap, no files touched. "Left as-is" isn't an option in
-// the UI (the already-primary image doesn't get a Promote button), so
-// no extra validation is needed here beyond the id itself being valid.
+// — a pointer swap, no files touched.
 func (h CharacterHandlers) PromoteImage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -126,6 +126,18 @@ func (h CharacterHandlers) PromoteImage(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid image id", http.StatusBadRequest)
 		return
 	}
+	// Without this, a crafted request naming a DIFFERENT character's
+	// {id} in the path than the image actually belongs to would still
+	// succeed — the two path params aren't otherwise linked.
+	img, err := db.GetCharacterCardImage(h.DB, imageID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if img.CharacterCardID != id {
+		http.Error(w, "image does not belong to this character", http.StatusBadRequest)
+		return
+	}
 	if err := db.SetPrimaryCharacterCardImage(h.DB, id, imageID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -133,9 +145,9 @@ func (h CharacterHandlers) PromoteImage(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, fmt.Sprintf("/characters/%d/edit", id), http.StatusSeeOther)
 }
 
-// DeleteImage removes one gallery image. If it was the primary, the
-// schema clears that pointer automatically (ON DELETE SET NULL) — see
-// db.DeleteCharacterCardImage.
+// DeleteImage removes one gallery image and its on-disk file. If it
+// was the primary, the schema clears that pointer automatically (ON
+// DELETE SET NULL) — see db.DeleteCharacterCardImage.
 func (h CharacterHandlers) DeleteImage(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -147,10 +159,20 @@ func (h CharacterHandlers) DeleteImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid image id", http.StatusBadRequest)
 		return
 	}
+	img, err := db.GetCharacterCardImage(h.DB, imageID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if img.CharacterCardID != id {
+		http.Error(w, "image does not belong to this character", http.StatusBadRequest)
+		return
+	}
 	if err := db.DeleteCharacterCardImage(h.DB, imageID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	removeUploadedFile(img.ImagePath)
 	http.Redirect(w, r, fmt.Sprintf("/characters/%d/edit", id), http.StatusSeeOther)
 }
 
@@ -160,9 +182,22 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	// Gallery rows cascade-delete with the character (ON DELETE
+	// CASCADE, see migration 00006), but that only removes the DB
+	// rows — their files would rot on disk under /static/uploads
+	// forever otherwise, so list them first and unlink after the
+	// character itself is gone.
+	images, err := db.ListCharacterCardImages(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := db.DeleteCharacterCard(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	for _, img := range images {
+		removeUploadedFile(img.ImagePath)
 	}
 	http.Redirect(w, r, "/characters", http.StatusSeeOther)
 }

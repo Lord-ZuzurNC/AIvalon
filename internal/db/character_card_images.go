@@ -36,6 +36,21 @@ func ListCharacterCardImages(db *sql.DB, characterCardID int64) ([]CharacterCard
 	return images, rows.Err()
 }
 
+// GetCharacterCardImage is used before PromoteImage/DeleteImage to
+// check the image's CharacterCardID actually matches the {id} the
+// request's own URL claims — without that check, a crafted request
+// could promote or delete an image belonging to a different character
+// card than the one named in the path, since nothing else links them.
+func GetCharacterCardImage(db *sql.DB, imageID int64) (CharacterCardImage, error) {
+	var img CharacterCardImage
+	err := db.QueryRow(`SELECT id, character_card_id, image_path FROM character_card_images WHERE id = ?`, imageID).
+		Scan(&img.ID, &img.CharacterCardID, &img.ImagePath)
+	if err != nil {
+		return CharacterCardImage{}, fmt.Errorf("getting character card image %d: %w", imageID, err)
+	}
+	return img, nil
+}
+
 // CreateCharacterCardImage inserts a placeholder row (imagePath "")
 // before the file is actually written — the row's own id becomes part
 // of the on-disk filename (see saveUploadedImage's entityID param),

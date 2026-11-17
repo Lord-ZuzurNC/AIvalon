@@ -50,7 +50,17 @@ func (h SettingsHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	p := profileFromForm(r, db.BackendProfile{ID: id, Kind: "llm"})
+	// Load the existing row first so an empty "api_key" field in the
+	// submitted form means "keep the current key", not "clear it" —
+	// the form never shows the real key back (see backendProfileForm),
+	// so a blank field is the normal, expected state on every edit
+	// that isn't specifically changing the key.
+	existing, err := db.GetBackendProfile(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	p := profileFromForm(r, existing)
 	if err := db.UpdateBackendProfile(h.DB, p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -173,7 +183,12 @@ func profileFromForm(r *http.Request, base db.BackendProfile) db.BackendProfile 
 	base.Name = r.FormValue("name")
 	base.BaseURL = r.FormValue("base_url")
 	base.Model = r.FormValue("model")
-	base.APIKey = r.FormValue("api_key")
+	// An empty field means "leave the existing key alone" (Create's
+	// base has no key yet, so this is a no-op there) — see Update's
+	// comment for why the form is never pre-filled with the real key.
+	if apiKey := r.FormValue("api_key"); apiKey != "" {
+		base.APIKey = apiKey
+	}
 	base.ModelParams = map[string]float64{}
 	if v, err := strconv.ParseFloat(r.FormValue("temperature"), 64); err == nil {
 		base.ModelParams["temperature"] = v

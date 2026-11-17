@@ -497,6 +497,23 @@ func (h ChatHandlers) DeleteMessage(w http.ResponseWriter, r *http.Request) {
 // context is passed to llmclient.StreamChat, so closing the tab actually
 // stops the backend from generating, not just from being heard.
 func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
+	// http.CrossOriginProtection (wired in cmd/aivalon's newHandler)
+	// explicitly treats GET as a "safe" method and never blocks it —
+	// correct for a handler that only reads, wrong for this one: it
+	// triggers a real LLM call (billed, on whatever backend the user
+	// configured) and writes the reply to the DB, so a hostile page
+	// doing nothing more than <img src="http://127.0.0.1:4140/chat/1/
+	// stream"> would make this app spend the user's API credits and
+	// pollute their session. Sec-Fetch-Site is sent by every browser
+	// since 2023; a cross-site value means some other page initiated
+	// this, not the app's own session page — reject that. Missing
+	// entirely (old browser, or a non-browser client like curl) is let
+	// through, same as CrossOriginProtection's own fallback, since
+	// there's no signal to act on either way.
+	if site := r.Header.Get("Sec-Fetch-Site"); site == "cross-site" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	session, messages, err := h.loadSession(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -523,6 +540,14 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 	flusher, _ := w.(http.Flusher)
 
 	emit := func(text string) {
+		// Normalize any \r\n or bare \r to \n before the \n→<br>
+		// replace below — SSE's spec treats a lone \r as its own line
+		// terminator (same as \n), so an unnormalized \r surviving
+		// into "data: ...\n\n" would make the browser's EventSource
+		// parser split this one event into two, truncating what's
+		// displayed. LLM output legitimately contains \r\n on some
+		// backends/platforms.
+		text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 		escaped := strings.ReplaceAll(html.EscapeString(text), "\n", "<br>")
 		fmt.Fprintf(w, "data: %s\n\n", escaped)
 		if flusher != nil {
@@ -569,7 +594,12 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 
 // emitRaw writes payload as one SSE event, prefixing every line with
 // "data: " per the spec's documented way to send multi-line data.
+// Normalizes \r\n/\r to \n first for the same reason as emit above: a
+// bare \r is its own SSE line terminator per spec, and MessageBlock's
+// data-content attribute carries a message's raw text verbatim, which
+// can legitimately contain \r\n.
 func emitRaw(w http.ResponseWriter, flusher http.Flusher, payload string) {
+	payload = strings.ReplaceAll(strings.ReplaceAll(payload, "\r\n", "\n"), "\r", "\n")
 	for _, line := range strings.Split(payload, "\n") {
 		fmt.Fprintf(w, "data: %s\n", line)
 	}

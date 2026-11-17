@@ -59,7 +59,13 @@ func StreamChat(ctx context.Context, profile db.BackendProfile, messages []Messa
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
+		// The backend is whatever base_url the user configured —
+		// trusted to be an LLM API, but not trusted to cap its own
+		// error response size. io.LimitReader keeps a misbehaving or
+		// malicious backend from making this read (and the resulting
+		// error string, which flows straight into the chat's SSE
+		// error event) unbounded.
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		return fmt.Errorf("backend returned %s: %s", resp.Status, b)
 	}
 

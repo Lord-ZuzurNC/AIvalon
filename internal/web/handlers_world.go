@@ -24,13 +24,14 @@ func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h WorldHandlers) Create(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	r.ParseMultipartForm(maxUploadSize)
 	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name")})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.saveImage(r, id); err != nil {
+	if err := h.saveImage(w, r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -52,12 +53,13 @@ func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	r.ParseMultipartForm(maxUploadSize)
 	if err := db.UpdateLorebook(h.DB, db.Lorebook{ID: id, Name: r.FormValue("name")}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.saveImage(r, id); err != nil {
+	if err := h.saveImage(w, r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -66,8 +68,8 @@ func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 // saveImage is a no-op (no error, no write) when the form's "image"
 // field was left empty — see saveUploadedImage.
-func (h WorldHandlers) saveImage(r *http.Request, id int64) error {
-	imagePath, err := saveUploadedImage(r, "image", "lorebooks", id)
+func (h WorldHandlers) saveImage(w http.ResponseWriter, r *http.Request, id int64) error {
+	imagePath, err := saveUploadedImage(w, r, "image", "lorebooks", id)
 	if err != nil {
 		return err
 	}
@@ -83,10 +85,16 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	book, err := db.GetLorebook(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	if err := db.DeleteLorebook(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	removeUploadedFile(book.ImagePath)
 	http.Redirect(w, r, "/world", http.StatusSeeOther)
 }
 
@@ -104,6 +112,10 @@ func (h WorldHandlers) EntryEditForm(w http.ResponseWriter, r *http.Request) {
 	entry, err := db.GetLorebookEntry(h.DB, entryID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if entry.LorebookID != book.ID {
+		http.Error(w, "entry does not belong to this lorebook", http.StatusBadRequest)
 		return
 	}
 	render(w, r, LorebookPage(book, entries, &entry))
@@ -134,6 +146,13 @@ func (h WorldHandlers) EntryUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid entry id", http.StatusBadRequest)
 		return
 	}
+	if existing, err := db.GetLorebookEntry(h.DB, entryID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if existing.LorebookID != bookID {
+		http.Error(w, "entry does not belong to this lorebook", http.StatusBadRequest)
+		return
+	}
 	entry := entryFromForm(r, db.LorebookEntry{ID: entryID, LorebookID: bookID})
 	if err := db.UpdateLorebookEntry(h.DB, entry); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -151,6 +170,13 @@ func (h WorldHandlers) EntryDelete(w http.ResponseWriter, r *http.Request) {
 	entryID, err := strconv.ParseInt(r.PathValue("entryID"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid entry id", http.StatusBadRequest)
+		return
+	}
+	if existing, err := db.GetLorebookEntry(h.DB, entryID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if existing.LorebookID != bookID {
+		http.Error(w, "entry does not belong to this lorebook", http.StatusBadRequest)
 		return
 	}
 	if err := db.DeleteLorebookEntry(h.DB, entryID); err != nil {
