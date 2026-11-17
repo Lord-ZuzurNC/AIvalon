@@ -2,7 +2,6 @@ package web
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
@@ -117,17 +116,21 @@ func (g *VaultGate) recordSuccess() {
 	g.failedAttempts = 0
 }
 
-// hashPIN is sha256(salt || pin), hex-encoded. Not bcrypt/argon2: a
-// 4-8 digit PIN's entire keyspace is small enough that a slow hash
-// wouldn't meaningfully raise the cost of an offline brute force
-// anyway (10^4 to 10^8 guesses is nothing to try even at bcrypt
-// speeds) — the real defense against *online* guessing is the lockout
-// above; a salted hash here is just so a copy of the DB file doesn't
-// hand over the PIN in the clear.
-func hashPIN(pin, salt string) string {
-	sum := sha256.Sum256([]byte(salt + pin))
-	return hex.EncodeToString(sum[:])
-}
+// hashClientSide is sha256(salt || pin), hex-encoded — kept here only
+// as documentation of exactly what the client's vaultPinHashScript
+// must reproduce (see vault.templ); the Go side never calls it, since
+// the browser does the hashing before the PIN ever hits the network
+// (Lord caught the raw PIN sitting in a Network-tab payload at
+// unlock — see vault.templ's comment). Not bcrypt/argon2: a 4-8 digit
+// PIN's entire keyspace is small enough that a slow hash wouldn't
+// meaningfully raise the cost of an offline brute force anyway (10^4
+// to 10^8 guesses is nothing to try even at bcrypt speeds) — the real
+// defense against *online* guessing is the lockout above; a salted
+// hash is just so a copy of the DB file doesn't hand over the PIN in
+// the clear, and doing it client-side additionally keeps it out of
+// the request body entirely.
+//
+//	sha256Hex(salt + pin) // JS: crypto.subtle.digest("SHA-256", ...)
 
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
@@ -137,26 +140,10 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// verifyPIN does a constant-time comparison of the computed hash
-// against the stored one — not that timing meaningfully leaks a sha256
-// hex digest, but there's no reason to compare it the sloppy way either.
-func verifyPIN(pin, salt, wantHash string) bool {
-	got := hashPIN(pin, salt)
-	return subtle.ConstantTimeCompare([]byte(got), []byte(wantHash)) == 1
-}
-
-// isValidPINFormat accepts exactly 4, 6, or 8 ASCII digits — the three
-// lengths offered in the UI.
-func isValidPINFormat(pin string) bool {
-	switch len(pin) {
-	case 4, 6, 8:
-	default:
-		return false
-	}
-	for _, c := range pin {
-		if c < '0' || c > '9' {
-			return false
-		}
-	}
-	return true
+// verifyHash does a constant-time comparison of the client-submitted
+// hash against the stored one — not that timing meaningfully leaks a
+// sha256 hex digest, but there's no reason to compare it the sloppy
+// way either.
+func verifyHash(gotHash, wantHash string) bool {
+	return subtle.ConstantTimeCompare([]byte(gotHash), []byte(wantHash)) == 1
 }
