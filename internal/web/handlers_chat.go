@@ -155,7 +155,68 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatPage(session, display, needsReply, coverImage, bgOptions))
+	info, err := h.sessionInfo(session)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatPage(session, display, needsReply, coverImage, bgOptions, info))
+}
+
+// SessionInfo is the right-hand panel's "what's attached to this
+// session" summary — one query per related table, each optional
+// (PersonaID/LorebookID are 0 until set; Characters can be empty for a
+// freeform chat). ActiveLorebookEntries is filtered to Enabled==true
+// only: "active" here means "this entry's own on/off switch in World",
+// not "triggered by the last message" — that's a per-turn, per-message
+// computation (see formatMessageContent's lorebook injection) that
+// doesn't have a single stable answer to show in a static panel.
+type SessionInfo struct {
+	BackendProfileName    string
+	Persona               db.Persona
+	LorebookName          string
+	ActiveLorebookEntries []db.LorebookEntry
+	Characters            []db.CharacterCard
+}
+
+func (h ChatHandlers) sessionInfo(session db.Session) (SessionInfo, error) {
+	info := SessionInfo{Persona: db.DefaultPersona}
+	if session.BackendProfileID != 0 {
+		profile, err := db.GetBackendProfile(h.DB, session.BackendProfileID)
+		if err != nil {
+			return info, err
+		}
+		info.BackendProfileName = profile.Name
+	}
+	if session.PersonaID != 0 {
+		persona, err := db.GetPersona(h.DB, session.PersonaID)
+		if err != nil {
+			return info, err
+		}
+		info.Persona = persona
+	}
+	if session.LorebookID != 0 {
+		book, err := db.GetLorebook(h.DB, session.LorebookID)
+		if err != nil {
+			return info, err
+		}
+		info.LorebookName = book.Name
+		entries, err := db.ListLorebookEntries(h.DB, session.LorebookID)
+		if err != nil {
+			return info, err
+		}
+		for _, e := range entries {
+			if e.Enabled {
+				info.ActiveLorebookEntries = append(info.ActiveLorebookEntries, e)
+			}
+		}
+	}
+	characters, err := db.ListCharacterCardsForSession(h.DB, session.ID)
+	if err != nil {
+		return info, err
+	}
+	info.Characters = characters
+	return info, nil
 }
 
 // BackgroundOption is one entry in the "use this as wallpaper" picker —

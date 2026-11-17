@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
@@ -69,7 +70,7 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
 							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
-							{Label: "Move to vault", Action: fmt.Sprintf("/vault/%d/in", s.ID)},
+							{Label: "Hide into vault", Action: fmt.Sprintf("/vault/%d/in", s.ID)},
 							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
 						})
 					</li>
@@ -155,7 +156,7 @@ templ imageIcon() {
 	</svg>
 }
 
-templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption) {
+templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption, info SessionInfo) {
 	@Layout(session.Title, "Chat") {
 		<div
 			if session.BackgroundImagePath != "" {
@@ -199,7 +200,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				</button>
 			</form>
 		</div>
-		@sessionPanel(session, bgOptions)
+		@sessionPanel(session, bgOptions, info)
 		<script>
 			// Land on the bottom of the conversation on load, and keep
 			// following it as tokens stream in / the final styled swap
@@ -255,35 +256,127 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 	}
 }
 
-// sessionPanel is the collapsible right-hand drawer with this
-// session's own info — opened via the chat-header's "☰" button
-// (plain CSS :not/.open toggle, no htmx needed for a client-only
-// show/hide). Only a "Background" section exists so far: the fuller
-// "World / Characters / Persona" tabs Lord asked for are a separate,
-// bigger pass deferred for now — this ships the one piece that was
-// both explicitly requested and quick to get right (the wallpaper
-// picker), rather than a half-built set of empty tabs.
-templ sessionPanel(session db.Session, bgOptions []BackgroundOption) {
+// sessionPanel is the collapsible right-hand card with this session's
+// own info — opened via the chat-header's "☰" button (plain CSS
+// :not/.open toggle, no htmx needed for a client-only show/hide).
+// Tabs reuse Settings' exact [hidden]+aria-selected pattern (see
+// switchPanelTab below, a copy of settings.templ's switchSettingsTab —
+// each page owns its own script in this codebase, nothing shared
+// globally, so duplicating ~8 lines beats inventing a shared-script
+// mechanism for one function).
+templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info SessionInfo) {
 	<aside id="session-panel" class="session-panel">
 		<div class="session-panel-header">
 			<strong>Session</strong>
 			<button type="button" aria-label="Close" onclick="document.getElementById('session-panel').classList.remove('open')">×</button>
 		</div>
-		<section>
-			<h3>Background</h3>
-			if len(bgOptions) == 0 {
-				<p><em>No lorebook/character images available on this session yet.</em></p>
-			} else {
-				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/background", session.ID)) }>
-					<select name="background_image_path">
-						<option value="" selected?={ session.BackgroundImagePath == "" }>(none — default theme)</option>
-						for _, opt := range bgOptions {
-							<option value={ opt.Path } selected?={ session.BackgroundImagePath == opt.Path }>{ opt.Label }</option>
+		<div class="tabs">
+			<div role="tablist" class="tab-list">
+				<button type="button" class="tab-btn" data-tab-target="summary" aria-selected="true" onclick="switchPanelTab(this)">Summary</button>
+				<button type="button" class="tab-btn" data-tab-target="characters" aria-selected="false" onclick="switchPanelTab(this)">Characters</button>
+				<button type="button" class="tab-btn" data-tab-target="world" aria-selected="false" onclick="switchPanelTab(this)">World</button>
+				<button type="button" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchPanelTab(this)">Persona</button>
+				<button type="button" class="tab-btn" data-tab-target="gallery" aria-selected="false" onclick="switchPanelTab(this)">Gallery</button>
+				<button type="button" class="tab-btn" data-tab-target="background" aria-selected="false" onclick="switchPanelTab(this)">Background</button>
+			</div>
+			<div data-tab-panel="summary">
+				<dl class="session-summary">
+					<dt>Backend profile</dt>
+					<dd>
+						if info.BackendProfileName != "" {
+							{ info.BackendProfileName }
+						} else {
+							<em>none</em>
 						}
-					</select>
-					<button type="submit">Apply</button>
-				</form>
+					</dd>
+					<dt>Persona</dt>
+					<dd>{ info.Persona.Name }</dd>
+					<dt>World</dt>
+					<dd>
+						if info.LorebookName != "" {
+							{ info.LorebookName }
+						} else {
+							<em>none attached</em>
+						}
+					</dd>
+					<dt>Characters</dt>
+					<dd>
+						if len(info.Characters) == 0 {
+							<em>none — freeform narrator</em>
+						} else {
+							{ fmt.Sprintf("%d attached", len(info.Characters)) }
+						}
+					</dd>
+				</dl>
+			</div>
+			<div data-tab-panel="characters" hidden="hidden">
+				if len(info.Characters) == 0 {
+					<p><em>No characters attached — the narrator improvises freely.</em></p>
+				} else {
+					<ul class="panel-list">
+						for _, c := range info.Characters {
+							<li>
+								@Avatar(c.ImagePath, c.Name)
+								<a href={ templ.URL(fmt.Sprintf("/character/%d", c.ID)) }>{ c.Name }</a>
+							</li>
+						}
+					</ul>
+				}
+			</div>
+			<div data-tab-panel="world" hidden="hidden">
+				if info.LorebookName == "" {
+					<p><em>No lorebook attached to this session.</em></p>
+				} else {
+					<p><a href={ templ.URL(fmt.Sprintf("/world/%d", session.LorebookID)) }>{ info.LorebookName }</a></p>
+					if len(info.ActiveLorebookEntries) == 0 {
+						<p><em>No active entries (all disabled, or the book is empty).</em></p>
+					} else {
+						<p><small>Active entries — on in World, independent of whether this conversation has actually triggered them yet.</small></p>
+						<ul class="panel-list">
+							for _, e := range info.ActiveLorebookEntries {
+								<li>{ strings.Join(e.Keys, ", ") }</li>
+							}
+						</ul>
+					}
+				}
+			</div>
+			<div data-tab-panel="persona" hidden="hidden">
+				<p><strong>{ info.Persona.Name }</strong></p>
+				if info.Persona.Description != "" {
+					<p>{ info.Persona.Description }</p>
+				} else {
+					<p><em>No description set.</em></p>
+				}
+			</div>
+			<div data-tab-panel="gallery" hidden="hidden">
+				<p><em>Image generation isn't built yet (see the disabled "Generate image" button) — once it is, this tab will hold this session's generated images with a PNG download on each.</em></p>
+			</div>
+			<div data-tab-panel="background" hidden="hidden">
+				if len(bgOptions) == 0 {
+					<p><em>No lorebook/character images available on this session yet.</em></p>
+				} else {
+					<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/background", session.ID)) }>
+						<select name="background_image_path">
+							<option value="" selected?={ session.BackgroundImagePath == "" }>(none — default theme)</option>
+							for _, opt := range bgOptions {
+								<option value={ opt.Path } selected?={ session.BackgroundImagePath == opt.Path }>{ opt.Label }</option>
+							}
+						</select>
+						<button type="submit">Apply</button>
+					</form>
+				}
+			</div>
+		</div>
+		<script>
+			function switchPanelTab(button) {
+				var target = button.dataset.tabTarget;
+				button.parentElement.querySelectorAll(".tab-btn").forEach(function (btn) {
+					btn.setAttribute("aria-selected", String(btn === button));
+				});
+				button.closest(".tabs").querySelectorAll("[data-tab-panel]").forEach(function (panel) {
+					panel.hidden = panel.dataset.tabPanel !== target;
+				});
 			}
-		</section>
+		</script>
 	</aside>
 }

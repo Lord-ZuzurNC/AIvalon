@@ -622,6 +622,11 @@ body.sidebar-collapsed #sidebar-toggle {
 	justify-content: center;
 	gap: 0.4rem;
 	min-height: 1.6rem;
+	margin-top: -0.4rem;
+	padding: 0.5rem 1rem;
+	border: 1px solid var(--pico-primary, #cc9f45);
+	border-radius: var(--pico-border-radius, 0.5rem);
+	box-shadow: 0 0 0.9rem rgba(204, 159, 69, 0.55);
 }
 
 .pin-shape {
@@ -692,7 +697,7 @@ body.sidebar-collapsed #sidebar-toggle {
 	position: fixed;
 	top: 4.5rem;
 	right: 1rem;
-	width: 18rem;
+	width: 22rem;
 	max-height: calc(100vh - 6rem);
 	overflow-y: auto;
 	background: var(--pico-card-background-color);
@@ -724,6 +729,49 @@ body.sidebar-collapsed #sidebar-toggle {
 	width: auto;
 	padding: 0.1rem 0.6rem;
 	margin: 0;
+}
+
+/* The session panel's own tabs reuse .tab-list/.tab-btn (Settings'
+   pattern) but need to fit 6 short labels into ~22rem instead of
+   Settings' full-width page — tighter padding/font and wrapping
+   instead of a single forced row. */
+.session-panel .tab-list {
+	flex-wrap: wrap;
+	margin-bottom: 0.75rem;
+}
+
+.session-panel .tab-btn {
+	padding: 0.3rem 0.5rem;
+	font-size: 0.8rem;
+}
+
+.session-summary {
+	margin: 0;
+}
+
+.session-summary dt {
+	color: var(--pico-muted-color);
+	font-size: 0.8rem;
+	margin-top: 0.6rem;
+}
+
+.session-summary dd {
+	margin: 0.1rem 0 0 0;
+}
+
+.panel-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.panel-list li {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 
 /* Fixed, not just pushed to the flex row's end: Lord's call — a

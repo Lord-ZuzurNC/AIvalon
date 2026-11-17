@@ -45,7 +45,7 @@ func vaultPinHashScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script>\n\t\tasync function aivalonSha256Hex(text) {\n\t\t\tvar buf = await crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(text));\n\t\t\treturn Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, \"0\"); }).join(\"\");\n\t\t}\n\t\tdocument.querySelectorAll(\"form.pin-form\").forEach(function (form) {\n\t\t\tform.addEventListener(\"submit\", async function (e) {\n\t\t\t\te.preventDefault();\n\t\t\t\tvar salt = form.querySelector('input[name=\"salt\"]').value;\n\t\t\t\tvar pinInputs = form.querySelectorAll(\"input[data-pin]\");\n\t\t\t\tvar firstLen = pinInputs.length ? pinInputs[0].value.length : 0;\n\t\t\t\tfor (var i = 0; i < pinInputs.length; i++) {\n\t\t\t\t\tvar pinInput = pinInputs[i];\n\t\t\t\t\tvar hashField = form.querySelector('input[name=\"' + pinInput.dataset.hashField + '\"]');\n\t\t\t\t\thashField.value = await aivalonSha256Hex(salt + pinInput.value);\n\t\t\t\t\tpinInput.value = \"\";\n\t\t\t\t\tpinInput.removeAttribute(\"name\");\n\t\t\t\t}\n\t\t\t\tvar digitsField = form.querySelector('input[name=\"digits\"]');\n\t\t\t\tif (digitsField) {\n\t\t\t\t\tdigitsField.value = String(firstLen);\n\t\t\t\t}\n\t\t\t\tform.submit();\n\t\t\t});\n\t\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script>\n\t\tasync function aivalonSha256Hex(text) {\n\t\t\tvar buf = await crypto.subtle.digest(\"SHA-256\", new TextEncoder().encode(text));\n\t\t\treturn Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, \"0\"); }).join(\"\");\n\t\t}\n\t\tdocument.querySelectorAll(\"form.pin-form\").forEach(function (form) {\n\t\t\tform.addEventListener(\"submit\", async function (e) {\n\t\t\t\te.preventDefault();\n\t\t\t\tvar salt = form.querySelector('input[name=\"salt\"]').value;\n\t\t\t\tvar pinInputs = form.querySelectorAll(\"input[data-pin]\");\n\t\t\t\tvar firstLen = pinInputs.length ? pinInputs[0].value.length : 0;\n\t\t\t\tfor (var i = 0; i < pinInputs.length; i++) {\n\t\t\t\t\tvar pinInput = pinInputs[i];\n\t\t\t\t\tvar hashField = form.querySelector('input[name=\"' + pinInput.dataset.hashField + '\"]');\n\t\t\t\t\thashField.value = await aivalonSha256Hex(salt + pinInput.value);\n\t\t\t\t\tpinInput.value = \"\";\n\t\t\t\t\tpinInput.removeAttribute(\"name\");\n\t\t\t\t}\n\t\t\t\tvar digitsField = form.querySelector('input[name=\"digits\"]');\n\t\t\t\tif (digitsField) {\n\t\t\t\t\tdigitsField.value = String(firstLen);\n\t\t\t\t}\n\t\t\t\t// Mark the enclosing dialog (if any) as \"really\n\t\t\t\t// submitting\" before handing off to the real POST —\n\t\t\t\t// so the dialog's own \"close\" listener (see\n\t\t\t\t// pinPadScript) can tell a genuine submit apart from\n\t\t\t\t// a cancel/backdrop-click/Escape dismissal, which is\n\t\t\t\t// what should redirect away (see data-cancel-redirect).\n\t\t\t\tvar dialog = form.closest(\"dialog\");\n\t\t\t\tif (dialog) {\n\t\t\t\t\tdialog.dataset.submitted = \"true\";\n\t\t\t\t}\n\t\t\t\tform.submit();\n\t\t\t});\n\t\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -64,6 +64,19 @@ func vaultPinHashScript() templ.Component {
 // stays focused (digit clicks refocus it immediately after writing),
 // so "use the pad" and "type on the keyboard" are just two ways of
 // changing the same value, never a choice the markup has to branch on.
+//
+// It also owns every ".pin-pad-modal" dialog's open/close behavior:
+// dialogs marked data-autoopen="true" pop open via showModal() as soon
+// as the script runs (VaultUnlockPage's dialog is the whole point of
+// that page, and a re-rendered Unhide dialog after a wrong PIN needs
+// to come back up already open rather than making Lord re-click
+// "Unhide"); clicking the backdrop closes a dialog the same as
+// pressing Escape already does natively; and closing *without* having
+// actually submitted (tracked by vaultPinHashScript's submit handler
+// above) sends the browser to data-cancel-redirect if the dialog has
+// one — Lord's bug report: dismissing the Unlock pad without entering
+// a PIN used to strand him on a near-empty "Vault" page instead of
+// going back to Chat.
 func pinPadScript() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -81,7 +94,7 @@ func pinPadScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<script>\n\t\t(function () {\n\t\t\tvar SHAPES = {\n\t\t\t\tcircle: '<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>',\n\t\t\t\tsquare: '<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"5\"/>',\n\t\t\t\ttriangle: '<polygon points=\"12,3.5 20.5,19.5 3.5,19.5\" stroke-linejoin=\"round\" stroke-width=\"1\" stroke=\"currentColor\"/>',\n\t\t\t\theart: '<path d=\"M12 19.5s-7.3-4.4-9.3-8.7C1.3 7.6 3 4.5 6.2 4.5c2 0 3.4 1.1 5.8 4 2.4-2.9 3.8-4 5.8-4 3.2 0 4.9 3.1 3.5 6.3-2 4.3-9.3 8.7-9.3 8.7z\"/>',\n\t\t\t\thexagon: '<polygon points=\"12,3.5 19.8,8 19.8,16.5 12,21 4.2,16.5 4.2,8\" stroke-linejoin=\"round\" stroke-width=\"1\" stroke=\"currentColor\"/>',\n\t\t\t};\n\t\t\tvar NAMES = Object.keys(SHAPES);\n\n\t\t\tfunction renderShapes(pad) {\n\t\t\t\tvar input = pad.querySelector(\"input[data-pin]\");\n\t\t\t\tvar tray = pad.querySelector(\".pin-shapes\");\n\t\t\t\tif (!input || !tray) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar len = input.value.length;\n\t\t\t\twhile (pad._pinShapeNames.length < len) {\n\t\t\t\t\tpad._pinShapeNames.push(NAMES[Math.floor(Math.random() * NAMES.length)]);\n\t\t\t\t}\n\t\t\t\tpad._pinShapeNames.length = len;\n\t\t\t\ttray.innerHTML = pad._pinShapeNames.map(function (name) {\n\t\t\t\t\treturn '<svg class=\"pin-shape\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\">' + SHAPES[name] + \"</svg>\";\n\t\t\t\t}).join(\"\");\n\t\t\t}\n\n\t\t\tdocument.querySelectorAll(\".pin-pad\").forEach(function (pad) {\n\t\t\t\tpad._pinShapeNames = [];\n\t\t\t\tvar input = pad.querySelector(\"input[data-pin]\");\n\t\t\t\tif (!input) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar maxLen = parseInt(pad.dataset.maxLen || \"8\", 10);\n\t\t\t\tinput.addEventListener(\"input\", function () {\n\t\t\t\t\trenderShapes(pad);\n\t\t\t\t});\n\t\t\t\tpad.querySelectorAll(\"button[data-digit]\").forEach(function (btn) {\n\t\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\t\tif (input.value.length >= maxLen) {\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tinput.value += btn.dataset.digit;\n\t\t\t\t\t\tinput.dispatchEvent(new Event(\"input\", { bubbles: true }));\n\t\t\t\t\t\tinput.focus();\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t\tvar backspace = pad.querySelector(\".pin-pad-backspace\");\n\t\t\t\tif (backspace) {\n\t\t\t\t\tbackspace.addEventListener(\"click\", function () {\n\t\t\t\t\t\tinput.value = input.value.slice(0, -1);\n\t\t\t\t\t\tinput.dispatchEvent(new Event(\"input\", { bubbles: true }));\n\t\t\t\t\t\tinput.focus();\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tdocument.querySelectorAll(\"[data-open-dialog]\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tvar dialog = document.getElementById(btn.dataset.openDialog);\n\t\t\t\t\tif (dialog) {\n\t\t\t\t\t\tdialog.showModal();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t\tdocument.querySelectorAll(\"[data-close-dialog]\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tvar dialog = btn.closest(\"dialog\");\n\t\t\t\t\tif (dialog) {\n\t\t\t\t\t\tdialog.close();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<script>\n\t\t(function () {\n\t\t\tvar SHAPES = {\n\t\t\t\tcircle: '<circle cx=\"12\" cy=\"12\" r=\"8.5\"/>',\n\t\t\t\tsquare: '<rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"5\"/>',\n\t\t\t\ttriangle: '<polygon points=\"12,3.5 20.5,19.5 3.5,19.5\" stroke-linejoin=\"round\" stroke-width=\"1\" stroke=\"currentColor\"/>',\n\t\t\t\theart: '<path d=\"M12 19.5s-7.3-4.4-9.3-8.7C1.3 7.6 3 4.5 6.2 4.5c2 0 3.4 1.1 5.8 4 2.4-2.9 3.8-4 5.8-4 3.2 0 4.9 3.1 3.5 6.3-2 4.3-9.3 8.7-9.3 8.7z\"/>',\n\t\t\t\thexagon: '<polygon points=\"12,3.5 19.8,8 19.8,16.5 12,21 4.2,16.5 4.2,8\" stroke-linejoin=\"round\" stroke-width=\"1\" stroke=\"currentColor\"/>',\n\t\t\t};\n\t\t\tvar NAMES = Object.keys(SHAPES);\n\n\t\t\tfunction renderShapes(pad) {\n\t\t\t\tvar input = pad.querySelector(\"input[data-pin]\");\n\t\t\t\tvar tray = pad.querySelector(\".pin-shapes\");\n\t\t\t\tif (!input || !tray) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar len = input.value.length;\n\t\t\t\twhile (pad._pinShapeNames.length < len) {\n\t\t\t\t\tpad._pinShapeNames.push(NAMES[Math.floor(Math.random() * NAMES.length)]);\n\t\t\t\t}\n\t\t\t\tpad._pinShapeNames.length = len;\n\t\t\t\ttray.innerHTML = pad._pinShapeNames.map(function (name) {\n\t\t\t\t\treturn '<svg class=\"pin-shape\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\">' + SHAPES[name] + \"</svg>\";\n\t\t\t\t}).join(\"\");\n\t\t\t}\n\n\t\t\tdocument.querySelectorAll(\".pin-pad\").forEach(function (pad) {\n\t\t\t\tpad._pinShapeNames = [];\n\t\t\t\tvar input = pad.querySelector(\"input[data-pin]\");\n\t\t\t\tif (!input) {\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\tvar maxLen = parseInt(pad.dataset.maxLen || \"8\", 10);\n\t\t\t\tinput.addEventListener(\"input\", function () {\n\t\t\t\t\trenderShapes(pad);\n\t\t\t\t});\n\t\t\t\tpad.querySelectorAll(\"button[data-digit]\").forEach(function (btn) {\n\t\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\t\tif (input.value.length >= maxLen) {\n\t\t\t\t\t\t\treturn;\n\t\t\t\t\t\t}\n\t\t\t\t\t\tinput.value += btn.dataset.digit;\n\t\t\t\t\t\tinput.dispatchEvent(new Event(\"input\", { bubbles: true }));\n\t\t\t\t\t\tinput.focus();\n\t\t\t\t\t});\n\t\t\t\t});\n\t\t\t\tvar backspace = pad.querySelector(\".pin-pad-backspace\");\n\t\t\t\tif (backspace) {\n\t\t\t\t\tbackspace.addEventListener(\"click\", function () {\n\t\t\t\t\t\tinput.value = input.value.slice(0, -1);\n\t\t\t\t\t\tinput.dispatchEvent(new Event(\"input\", { bubbles: true }));\n\t\t\t\t\t\tinput.focus();\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t});\n\n\t\t\tdocument.querySelectorAll(\"[data-open-dialog]\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tvar dialog = document.getElementById(btn.dataset.openDialog);\n\t\t\t\t\tif (dialog) {\n\t\t\t\t\t\tdialog.showModal();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t\tdocument.querySelectorAll(\"[data-close-dialog]\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tvar dialog = btn.closest(\"dialog\");\n\t\t\t\t\tif (dialog) {\n\t\t\t\t\t\tdialog.close();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\n\t\t\tdocument.querySelectorAll(\"dialog.pin-pad-modal\").forEach(function (dialog) {\n\t\t\t\tif (dialog.dataset.autoopen === \"true\" && !dialog.open) {\n\t\t\t\t\tdialog.showModal();\n\t\t\t\t}\n\t\t\t\tdialog.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (e.target === dialog) {\n\t\t\t\t\t\tdialog.close();\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t\tdialog.addEventListener(\"close\", function () {\n\t\t\t\t\tif (dialog.dataset.cancelRedirect && dialog.dataset.submitted !== \"true\") {\n\t\t\t\t\t\twindow.location.href = dialog.dataset.cancelRedirect;\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t});\n\t\t})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -97,8 +110,12 @@ func pinPadScript() templ.Component {
 // used by callers that open this pad inside a <dialog> they control
 // themselves (the vault list's per-session "Unhide" pads); pass ""
 // when the pad is the only thing on the page (Unlock) and doesn't
-// need a close button.
-func pinPad(hashField, placeholder, dialogID string) templ.Component {
+// need a close button. errMsg renders inside the pad (and so inside
+// the enclosing <dialog>) — a <dialog> is in the browser's "top
+// layer" once opened via showModal(), so an error message left
+// outside it in the normal page flow ends up visually underneath it;
+// Lord caught "Wrong PIN" going invisible that way.
+func pinPad(hashField, placeholder, dialogID, errMsg string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -115,79 +132,102 @@ func pinPad(hashField, placeholder, dialogID string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"pin-pad\" data-max-len=\"8\"><div class=\"pin-shapes\" aria-hidden=\"true\"></div><input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"pin-pad\" data-max-len=\"8\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hashField).Resolve(ctx)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 157, Col: 30}
+		if errMsg != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"danger-text\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var4 string
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 195, Col: 34}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" autocomplete=\"current-password\" autofocus=\"autofocus\" required=\"required\" class=\"pin-pad-real-input\" aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"pin-shapes\" aria-hidden=\"true\"></div><input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(placeholder).Resolve(ctx)
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(hashField).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 162, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 203, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"><div class=\"pin-pad-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" autocomplete=\"current-password\" autofocus=\"autofocus\" required=\"required\" class=\"pin-pad-real-input\" aria-label=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(placeholder).Resolve(ctx)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 208, Col: 27}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><div class=\"pin-pad-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, d := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"} {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button type=\"button\" data-digit=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var6 string
-			templ_7745c5c3_Var6, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d).Resolve(ctx)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 166, Col: 40}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<button type=\"button\" data-digit=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(d)
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(d).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 166, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 212, Col: 40}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</button> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(d)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 212, Col: 46}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</button> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<button type=\"button\" class=\"pin-pad-backspace\" aria-label=\"Backspace\">⌫</button> <button type=\"button\" data-digit=\"0\">0</button> <button type=\"submit\" class=\"pin-pad-validate\" aria-label=\"Validate\">✓</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<button type=\"button\" class=\"pin-pad-backspace\" aria-label=\"Backspace\">⌫</button> <button type=\"button\" data-digit=\"0\">0</button> <button type=\"submit\" class=\"pin-pad-validate\" aria-label=\"Validate\">✓</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if dialogID != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<button type=\"button\" class=\"pin-pad-cancel\" data-close-dialog=\"true\">Cancel</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<button type=\"button\" class=\"pin-pad-cancel\" data-close-dialog=\"true\">Cancel</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -216,7 +256,7 @@ func lockIcon() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm0 2a3 3 0 0 1 3 3v3H9V7a3 3 0 0 1 3-3zm0 10a1.75 1.75 0 0 1 1 3.2V19a1 1 0 1 1-2 0v-1.8A1.75 1.75 0 0 1 12 14z\"></path></svg>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm0 2a3 3 0 0 1 3 3v3H9V7a3 3 0 0 1 3-3zm0 10a1.75 1.75 0 0 1 1 3.2V19a1 1 0 1 1-2 0v-1.8A1.75 1.75 0 0 1 12 14z\"></path></svg>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -241,7 +281,7 @@ func VaultSetupPage(errMsg, salt string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var10 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var11 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -253,43 +293,43 @@ func VaultSetupPage(errMsg, salt string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<h1>Vault</h1><p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<h1>Vault</h1><p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if errMsg != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<p class=\"danger-text\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<p class=\"danger-text\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var11 string
-				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
+				var templ_7745c5c3_Var12 string
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 193, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 239, Col: 34}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, " <form method=\"post\" action=\"/vault/setup\" class=\"pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " <form method=\"post\" action=\"/vault/setup\" class=\"pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templruntime.NewAttributeExpression(salt).Resolve(ctx)
+			var templ_7745c5c3_Var13 string
+			templ_7745c5c3_Var13, templ_7745c5c3_Err = templruntime.NewAttributeExpression(salt).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 196, Col: 48}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 242, Col: 48}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\"> <input type=\"hidden\" name=\"pin_hash\"> <input type=\"hidden\" name=\"confirm_hash\"> <input type=\"hidden\" name=\"digits\"> <label>PIN (4, 6, or 8 digits) <input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"pin_hash\" autocomplete=\"new-password\" required=\"required\"></label> <label>Confirm PIN <input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"confirm_hash\" autocomplete=\"new-password\" required=\"required\"></label> <button type=\"submit\">Set PIN</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\"> <input type=\"hidden\" name=\"pin_hash\"> <input type=\"hidden\" name=\"confirm_hash\"> <input type=\"hidden\" name=\"digits\"> <label>PIN (4, 6, or 8 digits) <input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"pin_hash\" autocomplete=\"new-password\" required=\"required\"></label> <label>Confirm PIN <input type=\"password\" inputmode=\"numeric\" pattern=\"[0-9]*\" data-pin data-hash-field=\"confirm_hash\" autocomplete=\"new-password\" required=\"required\"></label> <button type=\"submit\">Set PIN</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -299,7 +339,7 @@ func VaultSetupPage(errMsg, salt string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Vault", "Chat").Render(templ.WithChildren(ctx, templ_7745c5c3_Var10), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Vault", "Chat").Render(templ.WithChildren(ctx, templ_7745c5c3_Var11), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -324,7 +364,7 @@ func VaultUnlockPage(errMsg, salt string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var14 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var15 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -336,37 +376,14 @@ func VaultUnlockPage(errMsg, salt string) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<h1>Vault</h1>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if errMsg != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "<p class=\"danger-text\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var15 string
-				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 218, Col: 34}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, " <dialog open=\"open\" class=\"pin-pad-modal\"><form method=\"post\" action=\"/vault/unlock\" class=\"pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<h1>Vault</h1><dialog class=\"pin-pad-modal\" data-autoopen=\"true\" data-cancel-redirect=\"/chat\"><form method=\"post\" action=\"/vault/unlock\" class=\"pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var16 string
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templruntime.NewAttributeExpression(salt).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 222, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 265, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 			if templ_7745c5c3_Err != nil {
@@ -376,7 +393,7 @@ func VaultUnlockPage(errMsg, salt string) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = pinPad("pin_hash", "PIN", "").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = pinPad("pin_hash", "PIN", "", errMsg).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -394,7 +411,7 @@ func VaultUnlockPage(errMsg, salt string) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout("Vault", "Chat").Render(templ.WithChildren(ctx, templ_7745c5c3_Var14), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Vault", "Chat").Render(templ.WithChildren(ctx, templ_7745c5c3_Var15), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -419,7 +436,7 @@ func VaultListPage(sessions []db.Session, salt string) templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = VaultListPageWithError(sessions, salt, "").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = VaultListPageWithError(sessions, salt, "", 0).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -427,7 +444,12 @@ func VaultListPage(sessions []db.Session, salt string) templ.Component {
 	})
 }
 
-func VaultListPageWithError(sessions []db.Session, salt, errMsg string) templ.Component {
+// errSessionID identifies which vaulted session's own Unhide dialog a
+// wrong-PIN retry belongs to (0 means no error) — MoveOut re-renders
+// this whole page on failure, so only *that* session's dialog gets
+// reopened (data-autoopen) with the error message inside it; every
+// other session's dialog stays closed as normal.
+func VaultListPageWithError(sessions []db.Session, salt, errMsg string, errSessionID int64) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -472,138 +494,136 @@ func VaultListPageWithError(sessions []db.Session, salt, errMsg string) templ.Co
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if errMsg != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<p class=\"danger-text\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var20 string
-				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(errMsg)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 248, Col: 34}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</p>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, " ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
 			if len(sessions) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p><em>Nothing in the vault — move a session here from its own options menu in Chat.</em></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<p><em>Nothing in the vault — move a session here from its own options menu in Chat.</em></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<ul class=\"list-with-actions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<ul class=\"list-with-actions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, s := range sessions {
 					dialogID := fmt.Sprintf("unhide-modal-%d", s.ID)
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "<li><a href=\"")
+					isErrTarget := s.ID == errSessionID
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<li><a href=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var20 string
+					templ_7745c5c3_Var20, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d", s.ID))).ResolveURL(ctx)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 303, Col: 56}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var21 string
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/chat/%d", s.ID))).ResolveURL(ctx)
+					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(s.Title)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 257, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 303, Col: 68}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</a> <button type=\"button\" data-open-dialog=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var22 string
-					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(s.Title)
+					templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogID).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 257, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 304, Col: 55}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</a> <button type=\"button\" data-open-dialog=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\">Unhide</button> <dialog id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var23 string
 					templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogID).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 258, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 305, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\">Unhide</button> <dialog id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "\" class=\"pin-pad-modal\" data-autoopen=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var24 string
-					templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.NewAttributeExpression(dialogID).Resolve(ctx)
+					templ_7745c5c3_Var24, templ_7745c5c3_Err = templruntime.NewAttributeExpression(fmt.Sprintf("%t", isErrTarget)).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 259, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 305, Col: 98}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"pin-pad-modal\"><form method=\"post\" action=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\"><form method=\"post\" action=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var25 string
 					templ_7745c5c3_Var25, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/vault/%d/out", s.ID))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 260, Col: 81}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 306, Col: 81}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" class=\"vault-out-form pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\" class=\"vault-out-form pin-form\"><input type=\"hidden\" name=\"salt\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.NewAttributeExpression(salt).Resolve(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 261, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/vault.templ`, Line: 307, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\"> <input type=\"hidden\" name=\"pin_hash\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\"> <input type=\"hidden\" name=\"pin_hash\"> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = pinPad("pin_hash", "PIN to unhide this session", dialogID).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
+					if isErrTarget {
+						templ_7745c5c3_Err = pinPad("pin_hash", "PIN to unhide this session", dialogID, errMsg).Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+					} else {
+						templ_7745c5c3_Err = pinPad("pin_hash", "PIN to unhide this session", dialogID, "").Render(ctx, templ_7745c5c3_Buffer)
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</form></dialog></li>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</form></dialog></li>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</ul>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</ul>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
