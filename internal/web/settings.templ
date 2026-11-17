@@ -175,11 +175,13 @@ templ systemPromptForm(template string) {
 templ backendProfileForm(editing *db.BackendProfile) {
 	{{
 	action := "/settings/backend-profiles"
-	name, baseURL, model, apiKey := "", "", "", ""
+	name, baseURL, model := "", "", ""
+	hasKey := false
 	temperature, topP := "", ""
 	if editing != nil {
 		action = fmt.Sprintf("/settings/backend-profiles/%d", editing.ID)
-		name, baseURL, model, apiKey = editing.Name, editing.BaseURL, editing.Model, editing.APIKey
+		name, baseURL, model = editing.Name, editing.BaseURL, editing.Model
+		hasKey = editing.APIKey != ""
 		if v, ok := editing.ModelParams["temperature"]; ok {
 			temperature = strconv.FormatFloat(v, 'f', -1, 64)
 		}
@@ -203,7 +205,11 @@ templ backendProfileForm(editing *db.BackendProfile) {
 		</label>
 		<label>
 			API key (optional)
-			<input type="password" name="api_key" value={ apiKey }/>
+			if hasKey {
+				<input type="password" name="api_key" placeholder="•••••••• (leave blank to keep the current key)" autocomplete="new-password"/>
+			} else {
+				<input type="password" name="api_key" placeholder="(none set)" autocomplete="new-password"/>
+			}
 		</label>
 		<label>
 			Temperature

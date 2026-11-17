@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -40,7 +41,15 @@ var allowedImageExt = map[string]string{
 // portrait was this, not a save failure (confirmed: the file on disk
 // did change). Returns ("", nil), not an error, when the field was left
 // empty — uploading an image is always optional.
-func saveUploadedImage(r *http.Request, formField, subdir string, entityID int64) (string, error) {
+func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir string, entityID int64) (string, error) {
+	// ParseMultipartForm's own maxMemory argument only bounds how much
+	// gets buffered in RAM before spilling to a temp file — it does
+	// NOT cap the request body's total size, so without this a 25MiB+
+	// upload sails through and lands on disk anyway (confirmed by the
+	// security review). MaxBytesReader makes the body itself refuse to
+	// yield more than maxUploadSize bytes, so ParseMultipartForm fails
+	// outright once the limit is crossed.
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
 		return "", fmt.Errorf("parsing multipart form: %w", err)
 	}
@@ -96,6 +105,22 @@ func removeExistingUploads(dir string, entityID int64) {
 	for _, m := range matches {
 		_ = os.Remove(m)
 	}
+}
+
+// removeUploadedFile deletes the on-disk file behind a stored
+// image_path value — which may carry the "?v=..." cache-busting query
+// appended by saveUploadedImage, so that suffix is stripped first. A
+// missing file (already gone, or path was "" meaning no image) isn't
+// treated as an error: the goal is "don't leave an orphan behind when
+// one exists", not "guarantee one existed".
+func removeUploadedFile(relPath string) {
+	if relPath == "" {
+		return
+	}
+	if i := strings.IndexByte(relPath, '?'); i != -1 {
+		relPath = relPath[:i]
+	}
+	_ = os.Remove(filepath.Join("web", "static", relPath))
 }
 
 func sniffImageExt(file multipart.File) (string, error) {
