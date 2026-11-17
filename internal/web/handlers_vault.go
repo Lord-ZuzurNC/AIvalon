@@ -192,7 +192,7 @@ func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		render(w, r, VaultListPageWithError(sessions, stored.PINSalt, "Wrong PIN — session stays in the vault."))
+		render(w, r, VaultListPageWithError(sessions, stored.PINSalt, "Wrong PIN — session stays in the vault.", id))
 		return
 	}
 	h.Gate.recordSuccess()

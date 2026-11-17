@@ -42,6 +42,16 @@ templ vaultPinHashScript() {
 				if (digitsField) {
 					digitsField.value = String(firstLen);
 				}
+				// Mark the enclosing dialog (if any) as "really
+				// submitting" before handing off to the real POST —
+				// so the dialog's own "close" listener (see
+				// pinPadScript) can tell a genuine submit apart from
+				// a cancel/backdrop-click/Escape dismissal, which is
+				// what should redirect away (see data-cancel-redirect).
+				var dialog = form.closest("dialog");
+				if (dialog) {
+					dialog.dataset.submitted = "true";
+				}
 				form.submit();
 			});
 		});
@@ -59,6 +69,19 @@ templ vaultPinHashScript() {
 // stays focused (digit clicks refocus it immediately after writing),
 // so "use the pad" and "type on the keyboard" are just two ways of
 // changing the same value, never a choice the markup has to branch on.
+//
+// It also owns every ".pin-pad-modal" dialog's open/close behavior:
+// dialogs marked data-autoopen="true" pop open via showModal() as soon
+// as the script runs (VaultUnlockPage's dialog is the whole point of
+// that page, and a re-rendered Unhide dialog after a wrong PIN needs
+// to come back up already open rather than making Lord re-click
+// "Unhide"); clicking the backdrop closes a dialog the same as
+// pressing Escape already does natively; and closing *without* having
+// actually submitted (tracked by vaultPinHashScript's submit handler
+// above) sends the browser to data-cancel-redirect if the dialog has
+// one — Lord's bug report: dismissing the Unlock pad without entering
+// a PIN used to strand him on a near-empty "Vault" page instead of
+// going back to Chat.
 templ pinPadScript() {
 	<script>
 		(function () {
@@ -133,6 +156,22 @@ templ pinPadScript() {
 					}
 				});
 			});
+
+			document.querySelectorAll("dialog.pin-pad-modal").forEach(function (dialog) {
+				if (dialog.dataset.autoopen === "true" && !dialog.open) {
+					dialog.showModal();
+				}
+				dialog.addEventListener("click", function (e) {
+					if (e.target === dialog) {
+						dialog.close();
+					}
+				});
+				dialog.addEventListener("close", function () {
+					if (dialog.dataset.cancelRedirect && dialog.dataset.submitted !== "true") {
+						window.location.href = dialog.dataset.cancelRedirect;
+					}
+				});
+			});
 		})();
 	</script>
 }
@@ -145,9 +184,16 @@ templ pinPadScript() {
 // used by callers that open this pad inside a <dialog> they control
 // themselves (the vault list's per-session "Unhide" pads); pass ""
 // when the pad is the only thing on the page (Unlock) and doesn't
-// need a close button.
-templ pinPad(hashField, placeholder, dialogID string) {
+// need a close button. errMsg renders inside the pad (and so inside
+// the enclosing <dialog>) — a <dialog> is in the browser's "top
+// layer" once opened via showModal(), so an error message left
+// outside it in the normal page flow ends up visually underneath it;
+// Lord caught "Wrong PIN" going invisible that way.
+templ pinPad(hashField, placeholder, dialogID, errMsg string) {
 	<div class="pin-pad" data-max-len="8">
+		if errMsg != "" {
+			<p class="danger-text">{ errMsg }</p>
+		}
 		<div class="pin-shapes" aria-hidden="true"></div>
 		<input
 			type="password"
@@ -214,14 +260,11 @@ templ VaultSetupPage(errMsg, salt string) {
 templ VaultUnlockPage(errMsg, salt string) {
 	@Layout("Vault", "Chat") {
 		<h1>Vault</h1>
-		if errMsg != "" {
-			<p class="danger-text">{ errMsg }</p>
-		}
-		<dialog open="open" class="pin-pad-modal">
+		<dialog class="pin-pad-modal" data-autoopen="true" data-cancel-redirect="/chat">
 			<form method="post" action="/vault/unlock" class="pin-form">
 				<input type="hidden" name="salt" value={ salt }/>
 				<input type="hidden" name="pin_hash"/>
-				@pinPad("pin_hash", "PIN", "")
+				@pinPad("pin_hash", "PIN", "", errMsg)
 			</form>
 		</dialog>
 		@vaultPinHashScript()
@@ -230,10 +273,15 @@ templ VaultUnlockPage(errMsg, salt string) {
 }
 
 templ VaultListPage(sessions []db.Session, salt string) {
-	@VaultListPageWithError(sessions, salt, "")
+	@VaultListPageWithError(sessions, salt, "", 0)
 }
 
-templ VaultListPageWithError(sessions []db.Session, salt, errMsg string) {
+// errSessionID identifies which vaulted session's own Unhide dialog a
+// wrong-PIN retry belongs to (0 means no error) — MoveOut re-renders
+// this whole page on failure, so only *that* session's dialog gets
+// reopened (data-autoopen) with the error message inside it; every
+// other session's dialog stays closed as normal.
+templ VaultListPageWithError(sessions []db.Session, salt, errMsg string, errSessionID int64) {
 	@Layout("Vault", "Chat") {
 		@BackLink("/chat", "Chat")
 		<div class="vault-heading">
@@ -244,23 +292,25 @@ templ VaultListPageWithError(sessions []db.Session, salt, errMsg string) {
 				</button>
 			</form>
 		</div>
-		if errMsg != "" {
-			<p class="danger-text">{ errMsg }</p>
-		}
 		if len(sessions) == 0 {
 			<p><em>Nothing in the vault — move a session here from its own options menu in Chat.</em></p>
 		} else {
 			<ul class="list-with-actions">
 				for _, s := range sessions {
 					{{ dialogID := fmt.Sprintf("unhide-modal-%d", s.ID) }}
+					{{ isErrTarget := s.ID == errSessionID }}
 					<li>
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						<button type="button" data-open-dialog={ dialogID }>Unhide</button>
-						<dialog id={ dialogID } class="pin-pad-modal">
+						<dialog id={ dialogID } class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", isErrTarget) }>
 							<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form pin-form">
 								<input type="hidden" name="salt" value={ salt }/>
 								<input type="hidden" name="pin_hash"/>
-								@pinPad("pin_hash", "PIN to unhide this session", dialogID)
+								if isErrTarget {
+									@pinPad("pin_hash", "PIN to unhide this session", dialogID, errMsg)
+								} else {
+									@pinPad("pin_hash", "PIN to unhide this session", dialogID, "")
+								}
 							</form>
 						</dialog>
 					</li>
