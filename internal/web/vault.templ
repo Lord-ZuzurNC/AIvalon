@@ -48,6 +48,143 @@ templ vaultPinHashScript() {
 	</script>
 }
 
+// pinPadScript wires up every ".pin-pad" numeric keypad on the page:
+// digit/backspace/clear buttons write into that pad's own hidden
+// input[data-pin] (dispatching a real "input" event so typing and
+// clicking are indistinguishable to any other listener — including
+// vaultPinHashScript above), and a per-pad random shape — one of five
+// soft/rounded icons, assigned once per keystroke and free to repeat
+// or recur back-to-back — stands in for the usual "•" per digit typed.
+// Physical keyboard input keeps working throughout: the real input
+// stays focused (digit clicks refocus it immediately after writing),
+// so "use the pad" and "type on the keyboard" are just two ways of
+// changing the same value, never a choice the markup has to branch on.
+templ pinPadScript() {
+	<script>
+		(function () {
+			var SHAPES = {
+				circle: '<circle cx="12" cy="12" r="8.5"/>',
+				square: '<rect x="3.5" y="3.5" width="17" height="17" rx="5"/>',
+				triangle: '<polygon points="12,3.5 20.5,19.5 3.5,19.5" stroke-linejoin="round" stroke-width="1" stroke="currentColor"/>',
+				heart: '<path d="M12 19.5s-7.3-4.4-9.3-8.7C1.3 7.6 3 4.5 6.2 4.5c2 0 3.4 1.1 5.8 4 2.4-2.9 3.8-4 5.8-4 3.2 0 4.9 3.1 3.5 6.3-2 4.3-9.3 8.7-9.3 8.7z"/>',
+				hexagon: '<polygon points="12,3.5 19.8,8 19.8,16.5 12,21 4.2,16.5 4.2,8" stroke-linejoin="round" stroke-width="1" stroke="currentColor"/>',
+			};
+			var NAMES = Object.keys(SHAPES);
+
+			function renderShapes(pad) {
+				var input = pad.querySelector("input[data-pin]");
+				var tray = pad.querySelector(".pin-shapes");
+				if (!input || !tray) {
+					return;
+				}
+				var len = input.value.length;
+				while (pad._pinShapeNames.length < len) {
+					pad._pinShapeNames.push(NAMES[Math.floor(Math.random() * NAMES.length)]);
+				}
+				pad._pinShapeNames.length = len;
+				tray.innerHTML = pad._pinShapeNames.map(function (name) {
+					return '<svg class="pin-shape" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' + SHAPES[name] + "</svg>";
+				}).join("");
+			}
+
+			document.querySelectorAll(".pin-pad").forEach(function (pad) {
+				pad._pinShapeNames = [];
+				var input = pad.querySelector("input[data-pin]");
+				if (!input) {
+					return;
+				}
+				var maxLen = parseInt(pad.dataset.maxLen || "8", 10);
+				input.addEventListener("input", function () {
+					renderShapes(pad);
+				});
+				pad.querySelectorAll("button[data-digit]").forEach(function (btn) {
+					btn.addEventListener("click", function () {
+						if (input.value.length >= maxLen) {
+							return;
+						}
+						input.value += btn.dataset.digit;
+						input.dispatchEvent(new Event("input", { bubbles: true }));
+						input.focus();
+					});
+				});
+				var backspace = pad.querySelector(".pin-pad-backspace");
+				if (backspace) {
+					backspace.addEventListener("click", function () {
+						input.value = input.value.slice(0, -1);
+						input.dispatchEvent(new Event("input", { bubbles: true }));
+						input.focus();
+					});
+				}
+			});
+
+			document.querySelectorAll("[data-open-dialog]").forEach(function (btn) {
+				btn.addEventListener("click", function () {
+					var dialog = document.getElementById(btn.dataset.openDialog);
+					if (dialog) {
+						dialog.showModal();
+					}
+				});
+			});
+			document.querySelectorAll("[data-close-dialog]").forEach(function (btn) {
+				btn.addEventListener("click", function () {
+					var dialog = btn.closest("dialog");
+					if (dialog) {
+						dialog.close();
+					}
+				});
+			});
+		})();
+	</script>
+}
+
+// pinPad renders a numeric keypad (1-9 in a 3x3 grid, then backspace /
+// 0 / validate — the validate button always ends up bottom-right, per
+// Lord's spec) plus the shape tray above it, wrapping a real
+// password-type input[data-pin] that stays in the DOM so keyboard
+// typing works alongside pad clicks (see pinPadScript). dialogID is
+// used by callers that open this pad inside a <dialog> they control
+// themselves (the vault list's per-session "Unhide" pads); pass ""
+// when the pad is the only thing on the page (Unlock) and doesn't
+// need a close button.
+templ pinPad(hashField, placeholder, dialogID string) {
+	<div class="pin-pad" data-max-len="8">
+		<div class="pin-shapes" aria-hidden="true"></div>
+		<input
+			type="password"
+			inputmode="numeric"
+			pattern="[0-9]*"
+			data-pin
+			data-hash-field={ hashField }
+			autocomplete="current-password"
+			autofocus="autofocus"
+			required="required"
+			class="pin-pad-real-input"
+			aria-label={ placeholder }
+		/>
+		<div class="pin-pad-grid">
+			for _, d := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"} {
+				<button type="button" data-digit={ d }>{ d }</button>
+			}
+			<button type="button" class="pin-pad-backspace" aria-label="Backspace">⌫</button>
+			<button type="button" data-digit="0">0</button>
+			<button type="submit" class="pin-pad-validate" aria-label="Validate">✓</button>
+		</div>
+		if dialogID != "" {
+			<button type="button" class="pin-pad-cancel" data-close-dialog="true">Cancel</button>
+		}
+	</div>
+}
+
+// lockIcon is a small closed-padlock SVG, colored like the app's other
+// destructive/guarded actions (the same red as .danger buttons) — sits
+// next to the "Vault" heading as the "lock it back up now" button,
+// replacing the old plain "Lock vault now" text button.
+templ lockIcon() {
+	<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true">
+		<path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm0 2a3 3 0 0 1 3 3v3H9V7a3 3 0 0 1 3-3zm0 10a1.75 1.75 0 0 1 1 3.2V19a1 1 0 1 1-2 0v-1.8A1.75 1.75 0 0 1 12 14z"/>
+	</svg>
+}
+
 templ VaultSetupPage(errMsg, salt string) {
 	@Layout("Vault", "Chat") {
 		<h1>Vault</h1>
@@ -80,16 +217,15 @@ templ VaultUnlockPage(errMsg, salt string) {
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
 		}
-		<form method="post" action="/vault/unlock" class="pin-form">
-			<input type="hidden" name="salt" value={ salt }/>
-			<input type="hidden" name="pin_hash"/>
-			<label>
-				PIN
-				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" autocomplete="current-password" autofocus="autofocus" required="required"/>
-			</label>
-			<button type="submit">Unlock</button>
-		</form>
+		<dialog open="open" class="pin-pad-modal">
+			<form method="post" action="/vault/unlock" class="pin-form">
+				<input type="hidden" name="salt" value={ salt }/>
+				<input type="hidden" name="pin_hash"/>
+				@pinPad("pin_hash", "PIN", "")
+			</form>
+		</dialog>
 		@vaultPinHashScript()
+		@pinPadScript()
 	}
 }
 
@@ -100,7 +236,14 @@ templ VaultListPage(sessions []db.Session, salt string) {
 templ VaultListPageWithError(sessions []db.Session, salt, errMsg string) {
 	@Layout("Vault", "Chat") {
 		@BackLink("/chat", "Chat")
-		<h1>Vault</h1>
+		<div class="vault-heading">
+			<h1>Vault</h1>
+			<form method="post" action="/vault/lock" class="vault-lock-form">
+				<button type="submit" class="icon-btn" aria-label="Lock vault now" title="Lock vault now">
+					@lockIcon()
+				</button>
+			</form>
+		</div>
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
 		}
@@ -109,21 +252,22 @@ templ VaultListPageWithError(sessions []db.Session, salt, errMsg string) {
 		} else {
 			<ul class="list-with-actions">
 				for _, s := range sessions {
+					{{ dialogID := fmt.Sprintf("unhide-modal-%d", s.ID) }}
 					<li>
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
-						<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form pin-form">
-							<input type="hidden" name="salt" value={ salt }/>
-							<input type="hidden" name="pin_hash"/>
-							<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" placeholder="PIN to remove" required="required"/>
-							<button type="submit">Remove from vault</button>
-						</form>
+						<button type="button" data-open-dialog={ dialogID }>Unhide</button>
+						<dialog id={ dialogID } class="pin-pad-modal">
+							<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form pin-form">
+								<input type="hidden" name="salt" value={ salt }/>
+								<input type="hidden" name="pin_hash"/>
+								@pinPad("pin_hash", "PIN to unhide this session", dialogID)
+							</form>
+						</dialog>
 					</li>
 				}
 			</ul>
 		}
-		<form method="post" action="/vault/lock">
-			<button type="submit">Lock vault now</button>
-		</form>
 		@vaultPinHashScript()
+		@pinPadScript()
 	}
 }

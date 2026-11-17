@@ -16,6 +16,10 @@ type Lorebook struct {
 	// ImagePath mirrors CharacterCard.ImagePath — relative to
 	// web/static, "" means no image uploaded.
 	ImagePath string
+	// EntryCount is populated by ListLorebooks only (a COUNT(*) join,
+	// not a stored column) — shown in World's list so "how big is this
+	// book" doesn't require opening it.
+	EntryCount int
 }
 
 // LorebookEntry.TriggerStrategy is "constant" (always included whenever
@@ -39,7 +43,12 @@ type LorebookEntry struct {
 }
 
 func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
-	rows, err := db.Query(`SELECT id, name, image_path FROM lorebooks ORDER BY name`)
+	rows, err := db.Query(`
+		SELECT l.id, l.name, l.image_path, COUNT(e.id)
+		FROM lorebooks l
+		LEFT JOIN lorebook_entries e ON e.lorebook_id = l.id
+		GROUP BY l.id, l.name, l.image_path
+		ORDER BY l.name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing lorebooks: %w", err)
 	}
@@ -48,7 +57,7 @@ func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
 	var books []Lorebook
 	for rows.Next() {
 		var l Lorebook
-		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount); err != nil {
 			return nil, fmt.Errorf("scanning lorebook: %w", err)
 		}
 		books = append(books, l)
