@@ -133,14 +133,22 @@ func TestMessageEditDeleteCascade(t *testing.T) {
 		t.Fatalf("expected only the user message to survive, got %+v", messages)
 	}
 
-	// DeleteMessage removes exactly one row, no cascade.
+	// DeleteMessagesFrom is also what the handler layer now uses for a
+	// plain "delete this message" action (ChatHandlers.DeleteMessage —
+	// Lord's call: deleting a message cascades to everything after it,
+	// not just that one row) — confirm deleting from an earlier point
+	// removes both it and a later message.
 	secondID, _ := CreateMessage(sqlDB, ChatMessage{SessionID: sessionID, Role: "narrator", Content: "more"})
-	if err := DeleteMessage(sqlDB, secondID); err != nil {
-		t.Fatalf("DeleteMessage: %v", err)
+	thirdID, _ := CreateMessage(sqlDB, ChatMessage{SessionID: sessionID, Role: "user", Content: "even more"})
+	if err := DeleteMessagesFrom(sqlDB, sessionID, secondID); err != nil {
+		t.Fatalf("DeleteMessagesFrom: %v", err)
 	}
 	messages, _ = ListMessages(sqlDB, sessionID)
 	if len(messages) != 1 || messages[0].ID != userID {
-		t.Fatalf("expected DeleteMessage to remove only its own row, got %+v", messages)
+		t.Fatalf("expected the cascade to remove both secondID and thirdID, got %+v", messages)
+	}
+	if _, err := GetMessage(sqlDB, thirdID); err == nil {
+		t.Fatalf("expected thirdID to be gone too (cascade), but GetMessage succeeded")
 	}
 }
 

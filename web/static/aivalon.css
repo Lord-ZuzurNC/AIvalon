@@ -59,6 +59,30 @@
 	--pico-button-hover-box-shadow: 0 0 1.1rem rgba(204, 159, 69, 0.3);
 }
 
+/* No underline anywhere — Pico's own default (set via this same
+   variable, see pico.classless.min.css) relies on it for every link in
+   the app: nav, session/lorebook/character names, back-links,
+   dropdown items. On a dark theme with a single rationed accent color,
+   color alone already marks a link; the underline just added visual
+   noise Lord asked to drop app-wide, not per-page. */
+a {
+	--pico-text-decoration: none;
+}
+
+/* Flat table reset: Pico's classless build gives every <td>/<th> its
+   own border-bottom plus a background-color (nominally the same as
+   the page background, but any striping/active theming makes it read
+   as a visible fill) — on Character/Settings/World's lists this showed
+   up as unwanted row/column lines and a solid block behind the table.
+   Letting the page's own background through and dropping the border
+   keeps the data readable without it looking like a spreadsheet. */
+table,
+td,
+th {
+	background: none;
+	border: none;
+}
+
 /* Atmosphere: three soft radial glows (warm gold top, cool violet
    lower-left, a second muted gold lower-right) over the base indigo —
    still pure CSS gradients, no image asset, fixed so it doesn't scroll
@@ -534,26 +558,36 @@ body.sidebar-collapsed #sidebar-toggle {
 	margin: 0;
 }
 
-/* Right-hand session info drawer (chat.templ's sessionPanel) — a fixed
-   off-canvas panel, same sliding pattern as the left nav but mirrored,
-   toggled by a plain class instead of htmx since there's nothing
-   server-side to fetch for it. */
+/* Right-hand session info panel (chat.templ's sessionPanel) — a
+   compact card pinned to the top-right corner of the viewport (fixed
+   positioning, so it stays there through any amount of scrolling in
+   a long session) rather than a full-height off-canvas drawer. Opacity
+   + a small translateY instead of sliding in from off-screen, since
+   there's no "off-screen track" to slide from any more once it's not
+   full height. */
 .session-panel {
 	position: fixed;
-	top: 0;
-	right: -20rem;
-	width: 20rem;
-	height: 100vh;
+	top: 4.5rem;
+	right: 1rem;
+	width: 18rem;
+	max-height: calc(100vh - 6rem);
 	overflow-y: auto;
-	background: var(--pico-background-color);
-	border-left: 1px solid var(--pico-muted-border-color);
+	background: var(--pico-card-background-color);
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--pico-border-radius, 0.5rem);
+	box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.4);
 	padding: 1rem;
-	transition: right 0.2s ease;
 	z-index: 20;
+	opacity: 0;
+	visibility: hidden;
+	transform: translateY(-0.5rem);
+	transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
 }
 
 .session-panel.open {
-	right: 0;
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
 }
 
 .session-panel-header {
@@ -648,19 +682,22 @@ body.sidebar-collapsed #sidebar-toggle {
 /* Stays in view while a long chat/lorebook page scrolls underneath it,
    same idea as the sidebar: sticky needs room to scroll past its normal
    position, which it has here since it's the first thing in <main> and
-   the page below it is usually much taller. A background stops the
-   scrolled-under content from showing through while it's pinned. */
+   the page below it is usually much taller. No background (Lord's
+   call: a full-width bar behind one short line of text read as an
+   unwanted block) — content scrolling underneath is an acceptable
+   trade for that, and it's a short label, not body text, so overlap is
+   brief and not actually hard to read in practice. */
 .back-link-bar {
 	position: sticky;
 	top: 0;
 	z-index: 1;
 	margin: 0 0 1rem 0;
 	padding: 0.5rem 0;
-	background: var(--pico-background-color);
 }
 
 /* Chat/World's own list of sessions/lorebooks: a plain <li><a> plus the
-   same "⋮" OptionsMenu used everywhere else. */
+   same "⋮" OptionsMenu used everywhere else. No row separator (same
+   "stop looking like a spreadsheet" call as the table reset above). */
 .list-with-actions {
 	list-style: none;
 	padding: 0;
@@ -672,5 +709,4 @@ body.sidebar-collapsed #sidebar-toggle {
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.4rem 0;
-	border-bottom: 1px solid var(--pico-muted-border-color);
 }
