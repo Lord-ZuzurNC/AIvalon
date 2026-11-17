@@ -136,6 +136,25 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 	}
 }
 
+// sendIcon/imageIcon are small authored line-art SVGs (same
+// stroke="currentColor" convention as navIcon in templates.templ) for
+// the two input-row actions — a paper plane for Send, a simple framed
+// landscape for Generate image. Neither is a vendored icon font or
+// emoji.
+templ sendIcon() {
+	<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M3 11l18-8-8 18-2.5-7.5L3 11z"></path>
+	</svg>
+}
+
+templ imageIcon() {
+	<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+		<rect x="3" y="4" width="18" height="16" rx="2"></rect>
+		<circle cx="9" cy="10" r="1.6" fill="currentColor" stroke="none"></circle>
+		<path d="M3 16l5-5 4 4 3-3 6 6"></path>
+	</svg>
+}
+
 templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption) {
 	@Layout(session.Title, "Chat") {
 		<div
@@ -167,10 +186,17 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 					hx-swap="beforeend"
 				></div>
 			}
-			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) }>
+			<div class="chat-input-toolbar">
+				<button type="button" class="icon-button" disabled title="Not built yet">
+					@imageIcon()
+					Generate image
+				</button>
+			</div>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) } class="chat-input-row">
 				<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
-				<button type="submit">Send</button>
-				<button type="button" disabled title="Not built yet">Generate image</button>
+				<button type="submit" class="send-button" aria-label="Send">
+					@sendIcon()
+				</button>
 			</form>
 		</div>
 		@sessionPanel(session, bgOptions)

@@ -354,6 +354,54 @@ body.sidebar-collapsed #sidebar-toggle {
 	flex-shrink: 0;
 }
 
+/* --- Chat input row: toolbar (small, left-aligned "Generate image")
+   above a single-line input+Send row, Send living inside that row
+   rather than stacked below it as its own full-width button. --- */
+.chat-input-toolbar {
+	display: flex;
+	justify-content: flex-start;
+	margin-bottom: 0.4rem;
+}
+
+.icon-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	width: auto;
+	margin: 0;
+	padding: 0.3rem 0.7rem;
+	font-size: 0.8rem;
+	background: transparent;
+	border-color: var(--pico-muted-border-color);
+	color: var(--pico-muted-color);
+}
+
+.chat-input-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0;
+}
+
+.chat-input-row input {
+	flex: 1 1 0%;
+	min-width: 0;
+	margin: 0;
+}
+
+.send-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 2.75rem;
+	width: 2.75rem;
+	height: 2.75rem;
+	flex-shrink: 0;
+	margin: 0;
+	padding: 0;
+	border-radius: 50%;
+}
+
 /* --- Page header with round create button ---
    Replaces the old full-width "Add a ..." button: the heading and a
    round "+" sit on the same row, "+" pinned to the right. */
