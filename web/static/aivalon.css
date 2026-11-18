@@ -440,27 +440,32 @@ body.sidebar-collapsed #sidebar-toggle {
 	margin: 0;
 }
 
+/* The group PageHeaderWithViewAndCreate pins to the right: the
+   List/Grid switch, 20px, then the round "+" — kept together so
+   .page-header's own space-between doesn't split them from each
+   other while still splitting them from the h1 on the left. */
+.page-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+}
+
 /* --- List/Grid view toggle (World, Character) ---
-   Two plain buttons, aria-pressed marking the active one; the actual
-   show/hide of [data-view-panel="list"/"grid"] is viewToggleScript's
-   job, not CSS (needs localStorage to remember the choice). */
+   Just the two emoji, no extra chrome — viewToggleScript marks the
+   active one "primary" and the inactive one "secondary" (Pico's own
+   button-color classes), and owns the actual show/hide of
+   [data-view-panel="list"/"grid"] (needs localStorage, not CSS). */
 .view-toggle {
 	display: flex;
 	gap: 0.4rem;
-	margin-bottom: 1rem;
 }
 
 .view-toggle-btn {
 	width: auto;
 	margin: 0;
-	padding: 0.3rem 0.7rem;
-	font-size: 0.85rem;
-	background: var(--pico-secondary-background);
-}
-
-.view-toggle-btn[aria-pressed="true"] {
-	background: var(--pico-primary);
-	color: var(--pico-primary-inverse);
+	padding: 0.3rem 0.6rem;
+	font-size: 1rem;
+	line-height: 1;
 }
 
 /* Portrait vignette grid: fixed-ish card width, wraps naturally.
@@ -475,12 +480,17 @@ body.sidebar-collapsed #sidebar-toggle {
 
 .vignette-card {
 	position: relative;
-	display: block;
 	aspect-ratio: 2 / 3;
 	border-radius: var(--pico-border-radius, 0.5rem);
 	overflow: hidden;
-	text-decoration: none;
 	background: var(--pico-card-background-color);
+}
+
+.vignette-card-link {
+	position: absolute;
+	inset: 0;
+	display: block;
+	text-decoration: none;
 }
 
 .vignette-image {
@@ -511,6 +521,37 @@ body.sidebar-collapsed #sidebar-toggle {
 	color: #fff;
 	background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
 	text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+	/* The link sits underneath at inset:0 — let clicks on the label
+	   text still reach it instead of eating them on an element that
+	   does nothing itself. */
+	pointer-events: none;
+}
+
+/* The trash icon sits above vignette-card-link (same stacking
+   context, declared after it in the DOM) so it's clickable even
+   though the link visually covers the whole card underneath it. */
+.vignette-delete {
+	position: absolute;
+	top: 0.4rem;
+	right: 0.4rem;
+	z-index: 1;
+}
+
+.vignette-delete button {
+	width: 1.8rem;
+	height: 1.8rem;
+	min-width: 1.8rem;
+	padding: 0;
+	margin: 0;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.9rem;
+	line-height: 1;
+	background: rgba(0, 0, 0, 0.55);
+	color: #e06c75;
+	border: none;
 }
 
 .create-button {
@@ -528,19 +569,31 @@ body.sidebar-collapsed #sidebar-toggle {
 	flex-shrink: 0;
 }
 
-/* Sits right below PageHeaderWithCreate's row (World/Character) — a
-   plain small secondary action, not meant to compete visually with
-   the round "+" create button above it. */
-.import-button {
-	width: auto;
+/* ImportJSONButton: just the "⤓" glyph in the primary color, not a
+   button — the real control is the file input it wraps (visually
+   hidden, standard accessible pattern), which the browser's own file
+   picker already handles. */
+.import-form {
+	display: inline-block;
 	margin: 0 0 1rem 0;
-	padding: 0.3rem 0.7rem;
-	font-size: 0.85rem;
-	background: var(--pico-secondary-background);
 }
 
-/* ImportCrossConfirmPage's Yes/No row — plain, big emoji buttons
-   rather than text, per Lord's call. */
+.import-trigger {
+	display: inline-flex;
+	cursor: pointer;
+	font-size: 1.3rem;
+	color: var(--pico-primary);
+}
+
+.import-trigger input[type="file"] {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	overflow: hidden;
+}
+
+/* ImportCrossConfirmPage's Yes/No row. */
 .import-confirm-actions {
 	display: flex;
 	gap: 1rem;
@@ -549,8 +602,6 @@ body.sidebar-collapsed #sidebar-toggle {
 .import-confirm-actions button,
 .import-confirm-actions a {
 	width: auto;
-	font-size: 1.5rem;
-	padding: 0.5rem 1.5rem;
 }
 
 /* --- Options menu ("⋮") ---

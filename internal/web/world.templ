@@ -8,13 +8,12 @@ import (
 
 templ WorldPage(books []db.Lorebook) {
 	@Layout("World", "World") {
-		@PageHeaderWithCreate("World", "lorebook-modal", "Add a lorebook")
-		@ImportJSONButton("lorebook-import-modal")
+		@PageHeaderWithViewAndCreate("World", "world", "lorebook-modal", "Add a lorebook")
+		@ImportJSONButton("/world/import")
 		<p>Lorebooks: world info the narrator can draw on. Attach one to a session in Chat.</p>
 		if len(books) == 0 {
 			<p><em>No lorebooks yet — add one above, then open it to add entries.</em></p>
 		} else {
-			@viewToggle("world")
 			<div data-view-panel="list">
 				<table>
 					<thead>
@@ -41,7 +40,7 @@ templ WorldPage(books []db.Lorebook) {
 			</div>
 			<div class="card-grid" data-view-panel="grid" hidden="hidden">
 				for _, b := range books {
-					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name)
+					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
 				}
 			</div>
 			@viewToggleScript()
@@ -63,7 +62,6 @@ templ WorldPage(books []db.Lorebook) {
 				</form>
 			</article>
 		</dialog>
-		@ImportJSONModal("lorebook-import-modal", "/world/import", "a lorebook", "Accepts a SillyTavern World Info export, or a Character Card V2/V3 file with an embedded lorebook. A name already in use gets a \"(n)\" suffix rather than being overwritten.")
 	}
 }
 
@@ -104,9 +102,9 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 							<td>{ fmt.Sprintf("%d", e.Probability) }</td>
 							<td>
 								if e.Enabled {
-									yes
+									✅
 								} else {
-									no
+									❌
 								}
 							</td>
 							<td>
