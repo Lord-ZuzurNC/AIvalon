@@ -189,6 +189,70 @@ templ Avatar(imagePath, name string) {
 	}
 }
 
+// vignetteCard is one item in a Grid-view listing (World/Character) —
+// a portrait rounded-corner card, the image filling it (or a flat
+// fallback matching Avatar's own "no image yet" treatment, just
+// bigger) and the name bolded over a bottom gradient so it stays
+// legible against any image. href is wherever the row's own link
+// normally goes (the lorebook or character edit page).
+templ vignetteCard(href, imagePath, name string) {
+	<a href={ templ.URL(href) } class="vignette-card">
+		if imagePath != "" {
+			<img class="vignette-image" src={ "/static/" + imagePath } alt=""/>
+		} else {
+			{{ initial := "" }}
+			if len(name) > 0 {
+				{{ initial = name[0:1] }}
+			}
+			<div class="vignette-image vignette-fallback" aria-hidden="true">{ initial }</div>
+		}
+		<span class="vignette-label">{ name }</span>
+	</a>
+}
+
+// viewToggle is the List/Grid switch sitting above a list page's own
+// content — viewKey must be unique per page ("world", "character")
+// since the choice is remembered in localStorage per key, not
+// globally (Lord might want one page as a grid and the other as a
+// list). The two panels it switches between are whatever the caller
+// wraps in data-view-panel="list"/"grid" right after it, inside the
+// same data-view-key container.
+templ viewToggle(viewKey string) {
+	<div class="view-toggle" data-view-key={ viewKey } role="group">
+		<button type="button" class="view-toggle-btn" data-view="list" aria-pressed="true">☰ List</button>
+		<button type="button" class="view-toggle-btn" data-view="grid" aria-pressed="false">⊞ Grid</button>
+	</div>
+}
+
+// viewToggleScript wires up every [data-view-key] container on the
+// page: clicking a .view-toggle-btn inside it shows the matching
+// [data-view-panel] and hides the other, and remembers the choice in
+// localStorage (keyed by data-view-key) so a reload doesn't reset it
+// back to List.
+templ viewToggleScript() {
+	<script>
+		document.querySelectorAll("[data-view-key]").forEach(function (toggle) {
+			var container = toggle.parentElement;
+			var key = "aivalon-view-" + toggle.dataset.viewKey;
+			function apply(view) {
+				container.querySelectorAll("[data-view-panel]").forEach(function (panel) {
+					panel.hidden = panel.dataset.viewPanel !== view;
+				});
+				toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
+					btn.setAttribute("aria-pressed", String(btn.dataset.view === view));
+				});
+			}
+			apply(localStorage.getItem(key) || "list");
+			toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
+				btn.addEventListener("click", function () {
+					localStorage.setItem(key, btn.dataset.view);
+					apply(btn.dataset.view);
+				});
+			});
+		});
+	</script>
+}
+
 // ImageField is the "Image" part of a character/lorebook create-or-edit
 // form: a collapsible <details> (closed by default on create, since
 // there's nothing to show yet) holding the current image at full modal

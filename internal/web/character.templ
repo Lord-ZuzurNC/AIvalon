@@ -26,28 +26,37 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
 		} else {
-			<table>
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Description</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, c := range cards {
+			@viewToggle("character")
+			<div data-view-panel="list">
+				<table>
+					<thead>
 						<tr>
-							<td>@Avatar(c.ImagePath, c.Name)<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a></td>
-							<td>{ truncate(c.Description, 120) }</td>
-							<td>
-								@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
-									{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
-								})
-							</td>
+							<th>Name</th>
+							<th>Description</th>
+							<th></th>
 						</tr>
-					}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						for _, c := range cards {
+							<tr>
+								<td>@Avatar(c.ImagePath, c.Name)<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a></td>
+								<td>{ truncate(c.Description, 120) }</td>
+								<td>
+									@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
+										{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
+									})
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="card-grid" data-view-panel="grid" hidden="hidden">
+				for _, c := range cards {
+					@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name)
+				}
+			</div>
+			@viewToggleScript()
 		}
 
 		<dialog id="character-modal" open?={ editing != nil }>

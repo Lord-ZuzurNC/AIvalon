@@ -14,28 +14,37 @@ templ WorldPage(books []db.Lorebook) {
 		if len(books) == 0 {
 			<p><em>No lorebooks yet — add one above, then open it to add entries.</em></p>
 		} else {
-			<table>
-				<thead>
-					<tr>
-						<th>Name</th>
-						<th>Entries</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, b := range books {
+			@viewToggle("world")
+			<div data-view-panel="list">
+				<table>
+					<thead>
 						<tr>
-							<td>@Avatar(b.ImagePath, b.Name)<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>{ b.Name }</a></td>
-							<td>{ fmt.Sprintf("%d", b.EntryCount) }</td>
-							<td>
-								@OptionsMenu(fmt.Sprintf("options-lorebook-%d", b.ID), []MenuAction{
-									{Label: "Delete", Action: fmt.Sprintf("/world/%d/delete", b.ID), Danger: true},
-								})
-							</td>
+							<th>Name</th>
+							<th>Entries</th>
+							<th></th>
 						</tr>
-					}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						for _, b := range books {
+							<tr>
+								<td>@Avatar(b.ImagePath, b.Name)<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>{ b.Name }</a></td>
+								<td>{ fmt.Sprintf("%d", b.EntryCount) }</td>
+								<td>
+									@OptionsMenu(fmt.Sprintf("options-lorebook-%d", b.ID), []MenuAction{
+										{Label: "Delete", Action: fmt.Sprintf("/world/%d/delete", b.ID), Danger: true},
+									})
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="card-grid" data-view-panel="grid" hidden="hidden">
+				for _, b := range books {
+					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name)
+				}
+			</div>
+			@viewToggleScript()
 		}
 
 		<dialog id="lorebook-modal">

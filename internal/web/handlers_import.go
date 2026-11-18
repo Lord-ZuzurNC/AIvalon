@@ -264,15 +264,50 @@ func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
 
 // ImportLorebookJSON (World) accepts an uploaded lorebook JSON in any
 // of the shapes parseLorebookJSON recognizes and creates a new
-// Lorebook plus all its entries.
+// Lorebook plus all its entries. If the upload actually parses as a
+// Character Card instead, it offers to finish the import in
+// Character rather than just failing (see ImportCrossConfirmPage).
 func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request) {
 	raw, filename, err := readUploadedJSON(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	h.importLorebookUpload(w, r, raw, filename)
+}
+
+// ResumeCharacterImport finishes, as a Character, an upload that was
+// first dropped into World's lorebook importer by mistake.
+func (h CharacterHandlers) ResumeCharacterImport(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	raw, filename, ok := h.Cache.Take(r.FormValue("token"))
+	if !ok {
+		http.Error(w, "this import link expired — upload the file again", http.StatusBadRequest)
+		return
+	}
+	h.importCharacterUpload(w, r, raw, filename)
+}
+
+func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
 	name, entries, ok := parseLorebookJSON(raw)
 	if !ok {
+		if card, _, charOK := parseCharacterJSON(raw); charOK {
+			token, err := h.Cache.Stash(raw, filename)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			who := card.Name
+			if who == "" {
+				who = nameFromUpload(filename)
+			}
+			render(w, r, ImportCrossConfirmPage(
+				"World",
+				fmt.Sprintf("This is a Character Card JSON (%q), not a Lorebook — import it in Character instead?", who),
+				"/characters/import/resume", "/world", token,
+			))
+			return
+		}
 		http.Error(w, "unrecognized lorebook JSON — expected a SillyTavern World Info export, or a Character Card V2/V3 file with an embedded character_book", http.StatusBadRequest)
 		return
 	}
@@ -297,15 +332,47 @@ func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request
 // embedded character_book, that's imported too as a separate
 // Lorebook (AIvalon has no "character's own book" link, so this just
 // makes both and leaves attaching the lorebook to a session as usual,
-// same as any other independently-created book).
+// same as any other independently-created book). If the upload
+// actually parses as a bare lorebook instead, it offers to finish the
+// import in World (see ImportCrossConfirmPage).
 func (h CharacterHandlers) ImportCharacterJSON(w http.ResponseWriter, r *http.Request) {
 	raw, filename, err := readUploadedJSON(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	h.importCharacterUpload(w, r, raw, filename)
+}
+
+// ResumeLorebookImport finishes, as a Lorebook, an upload that was
+// first dropped into Character's importer by mistake.
+func (h WorldHandlers) ResumeLorebookImport(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	raw, filename, ok := h.Cache.Take(r.FormValue("token"))
+	if !ok {
+		http.Error(w, "this import link expired — upload the file again", http.StatusBadRequest)
+		return
+	}
+	h.importLorebookUpload(w, r, raw, filename)
+}
+
+func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
 	card, book, ok := parseCharacterJSON(raw)
 	if !ok {
+		if _, entries, lbOK := parseLorebookJSON(raw); lbOK {
+			token, err := h.Cache.Stash(raw, filename)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			who := nameFromUpload(filename)
+			render(w, r, ImportCrossConfirmPage(
+				"Character",
+				fmt.Sprintf("This is a Lorebook JSON (%q, %d entries), not a Character Card — import it in World instead?", who, len(entries)),
+				"/world/import/resume", "/characters", token,
+			))
+			return
+		}
 		http.Error(w, "unrecognized character JSON — expected a Character Card V2/V3 file", http.StatusBadRequest)
 		return
 	}

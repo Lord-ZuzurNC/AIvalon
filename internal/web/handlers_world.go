@@ -11,7 +11,8 @@ import (
 )
 
 type WorldHandlers struct {
-	DB *sql.DB
+	DB    *sql.DB
+	Cache *ImportCache
 }
 
 func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {

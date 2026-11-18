@@ -10,7 +10,8 @@ import (
 )
 
 type CharacterHandlers struct {
-	DB *sql.DB
+	DB    *sql.DB
+	Cache *ImportCache
 }
 
 func (h CharacterHandlers) List(w http.ResponseWriter, r *http.Request) {
