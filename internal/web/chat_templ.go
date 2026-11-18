@@ -870,9 +870,9 @@ func sessionPanel(session db.Session, bgOptions []BackgroundOption, info Session
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var39 string
-				templ_7745c5c3_Var39, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/character/%d", c.ID))).ResolveURL(ctx)
+				templ_7745c5c3_Var39, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID))).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 320, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 320, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 				if templ_7745c5c3_Err != nil {
@@ -885,7 +885,7 @@ func sessionPanel(session db.Session, bgOptions []BackgroundOption, info Session
 				var templ_7745c5c3_Var40 string
 				templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(c.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 320, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/chat.templ`, Line: 320, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 				if templ_7745c5c3_Err != nil {
