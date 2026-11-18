@@ -1,0 +1,23 @@
+package web
+
+// ImportCrossConfirmPage is shown instead of a plain error when an
+// upload parses cleanly as the *other* kind of JSON (a Character Card
+// dropped into World's importer, or a bare lorebook dropped into
+// Character's) — Lord's call: guess what they meant and offer to
+// finish the import in the right place rather than just failing.
+// token is the ImportCache key the resume form sends back; cancelHref
+// just goes back to where they started, nothing is imported either
+// way until a button is actually clicked.
+templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token string) {
+	@Layout("Import?", active) {
+		<h1>Wrong importer</h1>
+		<p>{ message }</p>
+		<div class="import-confirm-actions">
+			<form method="post" action={ templ.URL(resumeAction) }>
+				<input type="hidden" name="token" value={ token }/>
+				<button type="submit" aria-label="Yes">✅</button>
+			</form>
+			<a href={ templ.URL(cancelHref) } role="button" class="secondary" aria-label="No">❌</a>
+		</div>
+	}
+}

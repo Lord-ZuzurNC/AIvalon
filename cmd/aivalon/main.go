@@ -58,6 +58,7 @@ func main() {
 func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux := http.NewServeMux()
 	vaultGate := web.NewVaultGate()
+	importCache := web.NewImportCache()
 
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(noListFileSystem{http.Dir("web/static")})))
 
@@ -65,10 +66,11 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	world := web.WorldHandlers{DB: sqlDB}
+	world := web.WorldHandlers{DB: sqlDB, Cache: importCache}
 	mux.HandleFunc("GET /world", world.List)
 	mux.HandleFunc("POST /world", world.Create)
 	mux.HandleFunc("POST /world/import", world.ImportLorebookJSON)
+	mux.HandleFunc("POST /world/import/resume", world.ResumeLorebookImport)
 	mux.HandleFunc("GET /world/{id}", world.Show)
 	mux.HandleFunc("POST /world/{id}", world.Update)
 	mux.HandleFunc("POST /world/{id}/delete", world.Delete)
@@ -90,10 +92,11 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /settings/system-prompt", settings.SystemPromptUpdate)
 	mux.HandleFunc("POST /settings/system-prompt/reset", settings.SystemPromptReset)
 
-	character := web.CharacterHandlers{DB: sqlDB}
+	character := web.CharacterHandlers{DB: sqlDB, Cache: importCache}
 	mux.HandleFunc("GET /characters", character.List)
 	mux.HandleFunc("POST /characters", character.Create)
 	mux.HandleFunc("POST /characters/import", character.ImportCharacterJSON)
+	mux.HandleFunc("POST /characters/import/resume", character.ResumeCharacterImport)
 	mux.HandleFunc("GET /characters/{id}/edit", character.EditForm)
 	mux.HandleFunc("POST /characters/{id}", character.Update)
 	mux.HandleFunc("POST /characters/{id}/delete", character.Delete)
