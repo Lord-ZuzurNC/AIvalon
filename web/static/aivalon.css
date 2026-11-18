@@ -799,9 +799,27 @@ body.sidebar-collapsed #sidebar-toggle {
    session — see ChatPage) needs its content to stay legible over
    whatever photo ends up behind it; .message already carries its own
    solid background, so only the page chrome around it needs a touch
-   more contrast here. */
+   more contrast here. It's also a column flexbox spanning at least
+   the viewport height so the input row (flex-shrink:0, last child)
+   always ends up at the bottom of the page — Lord's call: a short or
+   empty conversation used to leave it floating right under the last
+   message instead of anchored to the bottom, since it was just
+   whatever came next in normal block flow. #messages taking the
+   remaining space (flex:1) is what pushes it down there. */
 .chat-page-bg {
 	border-radius: var(--pico-border-radius, 0.25rem);
+	display: flex;
+	flex-direction: column;
+	min-height: 100vh;
+}
+
+#messages {
+	flex: 1 1 auto;
+}
+
+.chat-input-toolbar,
+.chat-input-row {
+	flex-shrink: 0;
 }
 
 .options-dropdown button.danger:hover,

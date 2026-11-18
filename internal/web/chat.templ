@@ -317,7 +317,7 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 						for _, c := range info.Characters {
 							<li>
 								@Avatar(c.ImagePath, c.Name)
-								<a href={ templ.URL(fmt.Sprintf("/character/%d", c.ID)) }>{ c.Name }</a>
+								<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a>
 							</li>
 						}
 					</ul>
