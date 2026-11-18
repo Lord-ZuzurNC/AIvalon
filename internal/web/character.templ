@@ -22,6 +22,7 @@ func truncate(s string, n int) string {
 templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
 	@Layout("Character", "Character") {
 		@PageHeaderWithCreate("Character", "character-modal", "Add a character")
+		@ImportJSONButton("character-import-modal")
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
 		} else {
@@ -67,6 +68,7 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 				}
 			</article>
 		</dialog>
+		@ImportJSONModal("character-import-modal", "/characters/import", "a character", "Accepts a Character Card V2/V3 JSON file. If it carries an embedded lorebook, that gets imported too as a separate World entry. A name already in use gets a \"(n)\" suffix rather than being overwritten.")
 	}
 }
 
