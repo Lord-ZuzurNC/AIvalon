@@ -233,11 +233,13 @@ templ vignetteCard(href, imagePath, name, deleteAction string) {
 // globally (Lord might want one page as a grid and the other as a
 // list). The two panels it switches between are whatever the caller
 // wraps in data-view-panel="list"/"grid" right after it, inside the
-// same data-view-key container.
+// same data-view-key container. Grid is the default (both buttons'
+// initial classes and viewToggleScript's fallback agree on that), so
+// mark grid primary/list secondary here to match.
 templ viewToggle(viewKey string) {
 	<div class="view-toggle" data-view-key={ viewKey } role="group">
-		<button type="button" class="view-toggle-btn primary" data-view="list" aria-label="List view">☰</button>
-		<button type="button" class="view-toggle-btn secondary" data-view="grid" aria-label="Grid view">⊞</button>
+		<button type="button" class="view-toggle-btn secondary" data-view="list" aria-label="List view">☰</button>
+		<button type="button" class="view-toggle-btn primary" data-view="grid" aria-label="Grid view">⊞</button>
 	</div>
 }
 
@@ -245,8 +247,9 @@ templ viewToggle(viewKey string) {
 // page: clicking a .view-toggle-btn inside it shows the matching
 // [data-view-panel] and hides the other, remembers the choice in
 // localStorage (keyed by data-view-key) so a reload doesn't reset it
-// back to List, and marks the active button "primary"/inactive one
-// "secondary" (Pico's own button-color classes, not custom CSS) —
+// back to Grid (the default — Lord's call, rather than List), and
+// marks the active button "primary"/inactive one "secondary" (Pico's
+// own button-color classes, not custom CSS) —
 // panels are looked up document-wide rather than via a shared parent
 // since the toggle now lives inside the page header, not directly
 // above the panels it switches.
@@ -264,7 +267,7 @@ templ viewToggleScript() {
 					btn.classList.toggle("secondary", !active);
 				});
 			}
-			apply(localStorage.getItem(key) || "list");
+			apply(localStorage.getItem(key) || "grid");
 			toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
 				btn.addEventListener("click", function () {
 					localStorage.setItem(key, btn.dataset.view);
@@ -344,27 +347,29 @@ templ PageHeaderWithCreate(title, modalID, label string) {
 
 // PageHeaderWithViewAndCreate is World/Character's title row: heading
 // on the left, then — grouped together on the right, 20px apart per
-// Lord's layout — the List/Grid view switch and the round "+" create
-// button (see viewToggle/viewToggleScript for the switch itself).
-templ PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) {
+// Lord's layout — the import "⤓" trigger, the List/Grid view switch,
+// and the round "+" create button (see ImportJSONButton,
+// viewToggle/viewToggleScript for those two pieces themselves).
+templ PageHeaderWithViewAndCreate(title, viewKey, importAction, modalID, label string) {
 	<div class="page-header">
 		<h1>{ title }</h1>
 		<div class="page-header-actions">
+			@ImportJSONButton(importAction)
 			@viewToggle(viewKey)
 			<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
 		</div>
 	</div>
 }
 
-// ImportJSONButton is a compact "⤓" trigger meant to sit next to
-// PageHeaderWithViewAndCreate — no modal, no visible file input:
-// clicking it opens the native file picker directly (a <label>
-// wrapping a hidden <input type=file> is the standard accessible way
-// to do that without JS) and picking a file submits right away.
-// Accepts .json today; .png is listed too since a Character Card PNG
-// carries the same JSON as metadata, but that extraction isn't wired
-// up server-side yet — picking one today will just fail the format
-// sniff in handlers_import.go until that lands.
+// ImportJSONButton is a compact "⤓" trigger sitting in
+// PageHeaderWithViewAndCreate's right-hand action group — no modal,
+// no visible file input: clicking it opens the native file picker
+// directly (a <label> wrapping a hidden <input type=file> is the
+// standard accessible way to do that without JS) and picking a file
+// submits right away. Accepts both .json and a Character Card .png
+// (the same JSON, carried as a base64 text chunk — see
+// png_extract.go) — one control, extension-sniffed server-side,
+// rather than a separate button per format.
 templ ImportJSONButton(action string) {
 	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data" class="import-form">
 		<label class="import-trigger" title="Import from JSON or PNG" aria-label="Import from JSON or PNG">

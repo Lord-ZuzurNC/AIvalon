@@ -21,12 +21,16 @@ func truncate(s string, n int) string {
 
 templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
 	@Layout("Character", "Character") {
-		@PageHeaderWithViewAndCreate("Character", "character", "character-modal", "Add a character")
-		@ImportJSONButton("/characters/import")
+		@PageHeaderWithViewAndCreate("Character", "character", "/characters/import", "character-modal", "Add a character")
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
 		} else {
-			<div data-view-panel="list">
+			<div data-view-panel="grid" class="card-grid">
+				for _, c := range cards {
+					@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID))
+				}
+			</div>
+			<div data-view-panel="list" hidden="hidden">
 				<table>
 					<thead>
 						<tr>
@@ -49,11 +53,6 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 						}
 					</tbody>
 				</table>
-			</div>
-			<div class="card-grid" data-view-panel="grid" hidden="hidden">
-				for _, c := range cards {
-					@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID))
-				}
 			</div>
 			@viewToggleScript()
 		}

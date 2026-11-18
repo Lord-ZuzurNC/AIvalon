@@ -69,6 +69,28 @@ a {
 	--pico-text-decoration: none;
 }
 
+/* The "classless" Pico build only styles bare tags — it has no
+   .secondary/.primary modifier classes at all, so every
+   class="secondary" in this app (the view-toggle's inactive button,
+   ImportCrossConfirmPage's "No") was silently doing nothing and
+   rendering identical to a plain, already-gold-by-default button.
+   Styling the modifier ourselves from Pico's own variables fixes
+   every one of those at once instead of a one-off per component. */
+button.secondary,
+[role="button"].secondary {
+	background: var(--pico-secondary-background);
+	border-color: var(--pico-secondary-border);
+	color: var(--pico-secondary-inverse);
+}
+
+button.secondary:hover,
+button.secondary:focus,
+[role="button"].secondary:hover,
+[role="button"].secondary:focus {
+	background: var(--pico-secondary-hover-background);
+	border-color: var(--pico-secondary-hover-background);
+}
+
 /* Flat table reset: Pico's classless build gives every <td>/<th> its
    own border-bottom plus a background-color (nominally the same as
    the page background, but any striping/active theming makes it read
@@ -572,10 +594,11 @@ body.sidebar-collapsed #sidebar-toggle {
 /* ImportJSONButton: just the "⤓" glyph in the primary color, not a
    button — the real control is the file input it wraps (visually
    hidden, standard accessible pattern), which the browser's own file
-   picker already handles. */
+   picker already handles. Sits inside .page-header-actions now, so
+   no margin of its own — that flex row's gap already spaces it. */
 .import-form {
-	display: inline-block;
-	margin: 0 0 1rem 0;
+	display: inline-flex;
+	align-items: center;
 }
 
 .import-trigger {

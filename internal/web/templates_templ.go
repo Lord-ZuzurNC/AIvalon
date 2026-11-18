@@ -568,7 +568,9 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 // globally (Lord might want one page as a grid and the other as a
 // list). The two panels it switches between are whatever the caller
 // wraps in data-view-panel="list"/"grid" right after it, inside the
-// same data-view-key container.
+// same data-view-key container. Grid is the default (both buttons'
+// initial classes and viewToggleScript's fallback agree on that), so
+// mark grid primary/list secondary here to match.
 func viewToggle(viewKey string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -593,13 +595,13 @@ func viewToggle(viewKey string) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templruntime.NewAttributeExpression(viewKey).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 238, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 240, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" role=\"group\"><button type=\"button\" class=\"view-toggle-btn primary\" data-view=\"list\" aria-label=\"List view\">☰</button> <button type=\"button\" class=\"view-toggle-btn secondary\" data-view=\"grid\" aria-label=\"Grid view\">⊞</button></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\" role=\"group\"><button type=\"button\" class=\"view-toggle-btn secondary\" data-view=\"list\" aria-label=\"List view\">☰</button> <button type=\"button\" class=\"view-toggle-btn primary\" data-view=\"grid\" aria-label=\"Grid view\">⊞</button></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -611,8 +613,9 @@ func viewToggle(viewKey string) templ.Component {
 // page: clicking a .view-toggle-btn inside it shows the matching
 // [data-view-panel] and hides the other, remembers the choice in
 // localStorage (keyed by data-view-key) so a reload doesn't reset it
-// back to List, and marks the active button "primary"/inactive one
-// "secondary" (Pico's own button-color classes, not custom CSS) —
+// back to Grid (the default — Lord's call, rather than List), and
+// marks the active button "primary"/inactive one "secondary" (Pico's
+// own button-color classes, not custom CSS) —
 // panels are looked up document-wide rather than via a shared parent
 // since the toggle now lives inside the page header, not directly
 // above the panels it switches.
@@ -633,7 +636,7 @@ func viewToggleScript() templ.Component {
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<script>\n\t\tdocument.querySelectorAll(\"[data-view-key]\").forEach(function (toggle) {\n\t\t\tvar key = \"aivalon-view-\" + toggle.dataset.viewKey;\n\t\t\tfunction apply(view) {\n\t\t\t\tdocument.querySelectorAll(\"[data-view-panel]\").forEach(function (panel) {\n\t\t\t\t\tpanel.hidden = panel.dataset.viewPanel !== view;\n\t\t\t\t});\n\t\t\t\ttoggle.querySelectorAll(\".view-toggle-btn\").forEach(function (btn) {\n\t\t\t\t\tvar active = btn.dataset.view === view;\n\t\t\t\t\tbtn.classList.toggle(\"primary\", active);\n\t\t\t\t\tbtn.classList.toggle(\"secondary\", !active);\n\t\t\t\t});\n\t\t\t}\n\t\t\tapply(localStorage.getItem(key) || \"list\");\n\t\t\ttoggle.querySelectorAll(\".view-toggle-btn\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tlocalStorage.setItem(key, btn.dataset.view);\n\t\t\t\t\tapply(btn.dataset.view);\n\t\t\t\t});\n\t\t\t});\n\t\t});\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<script>\n\t\tdocument.querySelectorAll(\"[data-view-key]\").forEach(function (toggle) {\n\t\t\tvar key = \"aivalon-view-\" + toggle.dataset.viewKey;\n\t\t\tfunction apply(view) {\n\t\t\t\tdocument.querySelectorAll(\"[data-view-panel]\").forEach(function (panel) {\n\t\t\t\t\tpanel.hidden = panel.dataset.viewPanel !== view;\n\t\t\t\t});\n\t\t\t\ttoggle.querySelectorAll(\".view-toggle-btn\").forEach(function (btn) {\n\t\t\t\t\tvar active = btn.dataset.view === view;\n\t\t\t\t\tbtn.classList.toggle(\"primary\", active);\n\t\t\t\t\tbtn.classList.toggle(\"secondary\", !active);\n\t\t\t\t});\n\t\t\t}\n\t\t\tapply(localStorage.getItem(key) || \"grid\");\n\t\t\ttoggle.querySelectorAll(\".view-toggle-btn\").forEach(function (btn) {\n\t\t\t\tbtn.addEventListener(\"click\", function () {\n\t\t\t\t\tlocalStorage.setItem(key, btn.dataset.view);\n\t\t\t\t\tapply(btn.dataset.view);\n\t\t\t\t});\n\t\t\t});\n\t\t});\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -686,7 +689,7 @@ func ImageField(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.NewAttributeExpression("/static/" + imagePath).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 288, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 291, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
@@ -699,7 +702,7 @@ func ImageField(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.NewAttributeExpression(name).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 288, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 291, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -760,7 +763,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.NewAttributeExpression(menuID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 314, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 317, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -773,7 +776,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.NewAttributeExpression(menuID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 315, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 318, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -792,7 +795,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Href)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 318, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 321, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 				if templ_7745c5c3_Err != nil {
@@ -805,7 +808,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 318, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 321, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -823,7 +826,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Action)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 320, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 323, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 				if templ_7745c5c3_Err != nil {
@@ -836,7 +839,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var39 string
 				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 321, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 324, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 				if templ_7745c5c3_Err != nil {
@@ -854,7 +857,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var40 string
 				templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Action)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 324, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 327, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 				if templ_7745c5c3_Err != nil {
@@ -867,7 +870,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 325, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 328, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -916,7 +919,7 @@ func PageHeaderWithCreate(title, modalID, label string) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 340, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 343, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -929,7 +932,7 @@ func PageHeaderWithCreate(title, modalID, label string) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 341, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 344, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
@@ -942,7 +945,7 @@ func PageHeaderWithCreate(title, modalID, label string) templ.Component {
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 341, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 344, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
@@ -955,7 +958,7 @@ func PageHeaderWithCreate(title, modalID, label string) templ.Component {
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templruntime.NewAttributeExpression(modalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 341, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 344, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -971,9 +974,10 @@ func PageHeaderWithCreate(title, modalID, label string) templ.Component {
 
 // PageHeaderWithViewAndCreate is World/Character's title row: heading
 // on the left, then — grouped together on the right, 20px apart per
-// Lord's layout — the List/Grid view switch and the round "+" create
-// button (see viewToggle/viewToggleScript for the switch itself).
-func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Component {
+// Lord's layout — the import "⤓" trigger, the List/Grid view switch,
+// and the round "+" create button (see ImportJSONButton,
+// viewToggle/viewToggleScript for those two pieces themselves).
+func PageHeaderWithViewAndCreate(title, viewKey, importAction, modalID, label string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -997,13 +1001,17 @@ func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Co
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 351, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 355, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</h1><div class=\"page-header-actions\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = ImportJSONButton(importAction).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1018,7 +1026,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Co
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 354, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 359, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -1031,7 +1039,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Co
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 354, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 359, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
@@ -1044,7 +1052,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Co
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templruntime.NewAttributeExpression(modalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 354, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 359, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
@@ -1058,15 +1066,15 @@ func PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) templ.Co
 	})
 }
 
-// ImportJSONButton is a compact "⤓" trigger meant to sit next to
-// PageHeaderWithViewAndCreate — no modal, no visible file input:
-// clicking it opens the native file picker directly (a <label>
-// wrapping a hidden <input type=file> is the standard accessible way
-// to do that without JS) and picking a file submits right away.
-// Accepts .json today; .png is listed too since a Character Card PNG
-// carries the same JSON as metadata, but that extraction isn't wired
-// up server-side yet — picking one today will just fail the format
-// sniff in handlers_import.go until that lands.
+// ImportJSONButton is a compact "⤓" trigger sitting in
+// PageHeaderWithViewAndCreate's right-hand action group — no modal,
+// no visible file input: clicking it opens the native file picker
+// directly (a <label> wrapping a hidden <input type=file> is the
+// standard accessible way to do that without JS) and picking a file
+// submits right away. Accepts both .json and a Character Card .png
+// (the same JSON, carried as a base64 text chunk — see
+// png_extract.go) — one control, extension-sniffed server-side,
+// rather than a separate button per format.
 func ImportJSONButton(action string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -1091,7 +1099,7 @@ func ImportJSONButton(action string) templ.Component {
 		var templ_7745c5c3_Var53 string
 		templ_7745c5c3_Var53, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(action)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 369, Col: 47}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 374, Col: 47}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 		if templ_7745c5c3_Err != nil {

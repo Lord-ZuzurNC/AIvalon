@@ -289,6 +289,11 @@ func (h CharacterHandlers) ResumeCharacterImport(w http.ResponseWriter, r *http.
 }
 
 func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+	raw, err := extractJSONFromUpload(raw)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	name, entries, ok := parseLorebookJSON(raw)
 	if !ok {
 		if card, _, charOK := parseCharacterJSON(raw); charOK {
@@ -357,6 +362,11 @@ func (h WorldHandlers) ResumeLorebookImport(w http.ResponseWriter, r *http.Reque
 }
 
 func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+	raw, err := extractJSONFromUpload(raw)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	card, book, ok := parseCharacterJSON(raw)
 	if !ok {
 		if _, entries, lbOK := parseLorebookJSON(raw); lbOK {

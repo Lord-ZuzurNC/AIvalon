@@ -8,13 +8,17 @@ import (
 
 templ WorldPage(books []db.Lorebook) {
 	@Layout("World", "World") {
-		@PageHeaderWithViewAndCreate("World", "world", "lorebook-modal", "Add a lorebook")
-		@ImportJSONButton("/world/import")
+		@PageHeaderWithViewAndCreate("World", "world", "/world/import", "lorebook-modal", "Add a lorebook")
 		<p>Lorebooks: world info the narrator can draw on. Attach one to a session in Chat.</p>
 		if len(books) == 0 {
 			<p><em>No lorebooks yet — add one above, then open it to add entries.</em></p>
 		} else {
-			<div data-view-panel="list">
+			<div data-view-panel="grid" class="card-grid">
+				for _, b := range books {
+					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
+				}
+			</div>
+			<div data-view-panel="list" hidden="hidden">
 				<table>
 					<thead>
 						<tr>
@@ -37,11 +41,6 @@ templ WorldPage(books []db.Lorebook) {
 						}
 					</tbody>
 				</table>
-			</div>
-			<div class="card-grid" data-view-panel="grid" hidden="hidden">
-				for _, b := range books {
-					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
-				}
 			</div>
 			@viewToggleScript()
 		}
