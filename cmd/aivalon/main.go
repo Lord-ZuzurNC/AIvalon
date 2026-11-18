@@ -68,6 +68,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	world := web.WorldHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /world", world.List)
 	mux.HandleFunc("POST /world", world.Create)
+	mux.HandleFunc("POST /world/import", world.ImportLorebookJSON)
 	mux.HandleFunc("GET /world/{id}", world.Show)
 	mux.HandleFunc("POST /world/{id}", world.Update)
 	mux.HandleFunc("POST /world/{id}/delete", world.Delete)
@@ -92,6 +93,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	character := web.CharacterHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /characters", character.List)
 	mux.HandleFunc("POST /characters", character.Create)
+	mux.HandleFunc("POST /characters/import", character.ImportCharacterJSON)
 	mux.HandleFunc("GET /characters/{id}/edit", character.EditForm)
 	mux.HandleFunc("POST /characters/{id}", character.Update)
 	mux.HandleFunc("POST /characters/{id}/delete", character.Delete)

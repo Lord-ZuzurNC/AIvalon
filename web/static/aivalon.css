@@ -455,6 +455,17 @@ body.sidebar-collapsed #sidebar-toggle {
 	flex-shrink: 0;
 }
 
+/* Sits right below PageHeaderWithCreate's row (World/Character) — a
+   plain small secondary action, not meant to compete visually with
+   the round "+" create button above it. */
+.import-button {
+	width: auto;
+	margin: 0 0 1rem 0;
+	padding: 0.3rem 0.7rem;
+	font-size: 0.85rem;
+	background: var(--pico-secondary-background);
+}
+
 /* --- Options menu ("⋮") ---
    Replaces per-row Edit/Delete/Open buttons everywhere (Chat sessions,
    World lorebooks/entries, Character cards, Settings profiles/personas)

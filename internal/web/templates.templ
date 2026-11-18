@@ -256,6 +256,35 @@ templ PageHeaderWithCreate(title, modalID, label string) {
 	</div>
 }
 
+// ImportJSONButton is a plain small button meant to sit right after
+// PageHeaderWithCreate — opens importModalID (its own <dialog>, same
+// toggle pattern as the "+" button) rather than inventing a second
+// kind of trigger control.
+templ ImportJSONButton(importModalID string) {
+	<button type="button" class="import-button" data-modal-id={ importModalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">Import JSON</button>
+}
+
+// ImportJSONModal is the <dialog> ImportJSONButton opens: one file
+// input, posted as multipart/form-data to action. kind/hint are just
+// the heading and description text — the actual format sniffing (which
+// of the several incompatible "lorebook JSON" shapes this is) happens
+// server-side, see handlers_import.go.
+templ ImportJSONModal(modalID, action, kind, hint string) {
+	<dialog id={ modalID }>
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>Import { kind } from JSON</strong>
+			</header>
+			<p><small>{ hint }</small></p>
+			<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
+				<input type="file" name="file" accept=".json,application/json" required="required"/>
+				<button type="submit">Import</button>
+			</form>
+		</article>
+	</dialog>
+}
+
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is
 // what the four routes render today.
