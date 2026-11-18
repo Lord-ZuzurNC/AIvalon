@@ -21,12 +21,11 @@ func truncate(s string, n int) string {
 
 templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
 	@Layout("Character", "Character") {
-		@PageHeaderWithCreate("Character", "character-modal", "Add a character")
-		@ImportJSONButton("character-import-modal")
+		@PageHeaderWithViewAndCreate("Character", "character", "character-modal", "Add a character")
+		@ImportJSONButton("/characters/import")
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
 		} else {
-			@viewToggle("character")
 			<div data-view-panel="list">
 				<table>
 					<thead>
@@ -53,7 +52,7 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 			</div>
 			<div class="card-grid" data-view-panel="grid" hidden="hidden">
 				for _, c := range cards {
-					@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name)
+					@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID))
 				}
 			</div>
 			@viewToggleScript()
@@ -77,7 +76,6 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 				}
 			</article>
 		</dialog>
-		@ImportJSONModal("character-import-modal", "/characters/import", "a character", "Accepts a Character Card V2/V3 JSON file. If it carries an embedded lorebook, that gets imported too as a separate World entry. A name already in use gets a \"(n)\" suffix rather than being overwritten.")
 	}
 }
 

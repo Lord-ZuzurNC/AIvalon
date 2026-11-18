@@ -15,9 +15,9 @@ templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token st
 		<div class="import-confirm-actions">
 			<form method="post" action={ templ.URL(resumeAction) }>
 				<input type="hidden" name="token" value={ token }/>
-				<button type="submit" aria-label="Yes">✅</button>
+				<button type="submit">Yes</button>
 			</form>
-			<a href={ templ.URL(cancelHref) } role="button" class="secondary" aria-label="No">❌</a>
+			<a href={ templ.URL(cancelHref) } role="button" class="secondary">No</a>
 		</div>
 	}
 }

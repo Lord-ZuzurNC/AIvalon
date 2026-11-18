@@ -194,20 +194,37 @@ templ Avatar(imagePath, name string) {
 // fallback matching Avatar's own "no image yet" treatment, just
 // bigger) and the name bolded over a bottom gradient so it stays
 // legible against any image. href is wherever the row's own link
-// normally goes (the lorebook or character edit page).
-templ vignetteCard(href, imagePath, name string) {
-	<a href={ templ.URL(href) } class="vignette-card">
-		if imagePath != "" {
-			<img class="vignette-image" src={ "/static/" + imagePath } alt=""/>
-		} else {
-			{{ initial := "" }}
-			if len(name) > 0 {
-				{{ initial = name[0:1] }}
+// normally goes (the lorebook or character edit page); deleteAction
+// is the same POST target the List view's "Delete" row already uses
+// — the <a> and the delete <form> are siblings (not nested — a form
+// inside an anchor is invalid HTML) so the trash icon stays clickable
+// on top of the full-card link underneath it.
+templ vignetteCard(href, imagePath, name, deleteAction string) {
+	<div class="vignette-card">
+		<a href={ templ.URL(href) } class="vignette-card-link">
+			if imagePath != "" {
+				<img class="vignette-image" src={ "/static/" + imagePath } alt=""/>
+			} else {
+				{{ initial := "" }}
+				if len(name) > 0 {
+					{{ initial = name[0:1] }}
+				}
+				<div class="vignette-image vignette-fallback" aria-hidden="true">{ initial }</div>
 			}
-			<div class="vignette-image vignette-fallback" aria-hidden="true">{ initial }</div>
-		}
-		<span class="vignette-label">{ name }</span>
-	</a>
+			<span class="vignette-label">{ name }</span>
+		</a>
+		<form method="post" action={ templ.URL(deleteAction) } class="vignette-delete">
+			<button type="submit" aria-label="Delete">
+				<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+					<path d="M4 7h16"></path>
+					<path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+					<path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"></path>
+					<path d="M10 11v6"></path>
+					<path d="M14 11v6"></path>
+				</svg>
+			</button>
+		</form>
+	</div>
 }
 
 // viewToggle is the List/Grid switch sitting above a list page's own
@@ -219,27 +236,32 @@ templ vignetteCard(href, imagePath, name string) {
 // same data-view-key container.
 templ viewToggle(viewKey string) {
 	<div class="view-toggle" data-view-key={ viewKey } role="group">
-		<button type="button" class="view-toggle-btn" data-view="list" aria-pressed="true">☰ List</button>
-		<button type="button" class="view-toggle-btn" data-view="grid" aria-pressed="false">⊞ Grid</button>
+		<button type="button" class="view-toggle-btn primary" data-view="list" aria-label="List view">☰</button>
+		<button type="button" class="view-toggle-btn secondary" data-view="grid" aria-label="Grid view">⊞</button>
 	</div>
 }
 
 // viewToggleScript wires up every [data-view-key] container on the
 // page: clicking a .view-toggle-btn inside it shows the matching
-// [data-view-panel] and hides the other, and remembers the choice in
+// [data-view-panel] and hides the other, remembers the choice in
 // localStorage (keyed by data-view-key) so a reload doesn't reset it
-// back to List.
+// back to List, and marks the active button "primary"/inactive one
+// "secondary" (Pico's own button-color classes, not custom CSS) —
+// panels are looked up document-wide rather than via a shared parent
+// since the toggle now lives inside the page header, not directly
+// above the panels it switches.
 templ viewToggleScript() {
 	<script>
 		document.querySelectorAll("[data-view-key]").forEach(function (toggle) {
-			var container = toggle.parentElement;
 			var key = "aivalon-view-" + toggle.dataset.viewKey;
 			function apply(view) {
-				container.querySelectorAll("[data-view-panel]").forEach(function (panel) {
+				document.querySelectorAll("[data-view-panel]").forEach(function (panel) {
 					panel.hidden = panel.dataset.viewPanel !== view;
 				});
 				toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
-					btn.setAttribute("aria-pressed", String(btn.dataset.view === view));
+					var active = btn.dataset.view === view;
+					btn.classList.toggle("primary", active);
+					btn.classList.toggle("secondary", !active);
 				});
 			}
 			apply(localStorage.getItem(key) || "list");
@@ -320,34 +342,38 @@ templ PageHeaderWithCreate(title, modalID, label string) {
 	</div>
 }
 
-// ImportJSONButton is a plain small button meant to sit right after
-// PageHeaderWithCreate — opens importModalID (its own <dialog>, same
-// toggle pattern as the "+" button) rather than inventing a second
-// kind of trigger control.
-templ ImportJSONButton(importModalID string) {
-	<button type="button" class="import-button" data-modal-id={ importModalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">Import JSON</button>
+// PageHeaderWithViewAndCreate is World/Character's title row: heading
+// on the left, then — grouped together on the right, 20px apart per
+// Lord's layout — the List/Grid view switch and the round "+" create
+// button (see viewToggle/viewToggleScript for the switch itself).
+templ PageHeaderWithViewAndCreate(title, viewKey, modalID, label string) {
+	<div class="page-header">
+		<h1>{ title }</h1>
+		<div class="page-header-actions">
+			@viewToggle(viewKey)
+			<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+		</div>
+	</div>
 }
 
-// ImportJSONModal is the <dialog> ImportJSONButton opens: one file
-// input, posted as multipart/form-data to action. kind/hint are just
-// the heading and description text — the actual format sniffing (which
-// of the several incompatible "lorebook JSON" shapes this is) happens
-// server-side, see handlers_import.go.
-templ ImportJSONModal(modalID, action, kind, hint string) {
-	<dialog id={ modalID }>
-		<article>
-			<header>
-				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
-				<strong>Import { kind } from JSON</strong>
-			</header>
-			<p><small>{ hint }</small></p>
-			<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
-				<input type="file" name="file" accept=".json,application/json" required="required"/>
-				<button type="submit">Import</button>
-			</form>
-		</article>
-	</dialog>
+// ImportJSONButton is a compact "⤓" trigger meant to sit next to
+// PageHeaderWithViewAndCreate — no modal, no visible file input:
+// clicking it opens the native file picker directly (a <label>
+// wrapping a hidden <input type=file> is the standard accessible way
+// to do that without JS) and picking a file submits right away.
+// Accepts .json today; .png is listed too since a Character Card PNG
+// carries the same JSON as metadata, but that extraction isn't wired
+// up server-side yet — picking one today will just fail the format
+// sniff in handlers_import.go until that lands.
+templ ImportJSONButton(action string) {
+	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data" class="import-form">
+		<label class="import-trigger" title="Import from JSON or PNG" aria-label="Import from JSON or PNG">
+			⤓
+			<input type="file" name="file" accept=".json,application/json,.png,image/png" onchange="this.form.submit()"/>
+		</label>
+	</form>
 }
+
 
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is
