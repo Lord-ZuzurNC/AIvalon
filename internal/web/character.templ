@@ -87,10 +87,26 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 // already what ImageField above shows as the main portrait, and
 // deleting your only image from here instead of via a fresh upload
 // would leave the card pointing at nothing without an obvious way back.
+// otherImageCount counts images that aren't the current primary —
+// what characterImageGallery's loop actually renders. images itself
+// includes the primary (it's "every image on the card", not just the
+// secondaries), so len(images) overcounts by exactly one whenever a
+// primary is set: "Other images (1)" with nothing inside the
+// gallery to show for it.
+func otherImageCount(images []db.CharacterCardImage, primaryPath string) int {
+	n := 0
+	for _, img := range images {
+		if img.ImagePath != primaryPath {
+			n++
+		}
+	}
+	return n
+}
+
 templ characterImageGallery(characterID int64, primaryPath string, images []db.CharacterCardImage) {
 	<details>
-		<summary>Other images ({ fmt.Sprintf("%d", len(images)) })</summary>
-		if len(images) == 0 {
+		<summary>Other images ({ fmt.Sprintf("%d", otherImageCount(images, primaryPath)) })</summary>
+		if otherImageCount(images, primaryPath) == 0 {
 			<p><em>No other images yet — upload one above; it joins the gallery here until you make it primary.</em></p>
 		} else {
 			<div class="image-gallery">
