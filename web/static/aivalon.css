@@ -195,6 +195,16 @@ body > header {
 body > main {
 	flex: 1 1 auto;
 	min-width: 0;
+	/* Pico's own breakpoints (576/768/1024px) zero this padding out
+	   from 576px up, trusting ITS OWN narrower max-width values plus
+	   margin:auto to supply the outer whitespace instead. Our wider
+	   860px override above doesn't match those tiers, so on any
+	   viewport narrower than ~860px (an unfolded foldable's ~700-900px
+	   inner screen, a tablet, a narrow laptop window) Pico's zeroed
+	   padding left content touching both edges outright. Own the
+	   padding unconditionally instead of depending on which of
+	   Pico's tiers happens to be active. */
+	padding: 1.5rem;
 }
 
 .sidebar-header {
@@ -1155,60 +1165,38 @@ body.sidebar-collapsed #sidebar-toggle {
 /* ============================================================
    MOBILE — phone-width layout.
    The sidebar (a 220px always-full-height rail, built for a
-   desktop window) is the one piece that doesn't degrade on its
-   own below ~640px: it'd eat most of a 360-390px phone screen.
+   desktop window) is too wide for a 360-390px phone screen, but
+   Lord's call: keep it a left-hand rail, just narrow — the same
+   icon-only look the desktop collapse toggle already produces —
+   rather than flattening it into a horizontal top bar. Reusing
+   that look means no new component, just applying it
+   unconditionally below this width.
    Everything else here is mostly just "stop assuming there's
    room" for things sized for a desktop window (the fixed-width
-   session panel, multi-column tables).
+   session panel, multi-column tables, portrait vignettes).
    ============================================================ */
 @media (max-width: 640px) {
-	/* Sidebar becomes a slim horizontal top bar instead of a
-	   full-height left rail — same nav links, laid out in a row,
-	   icon-only (reusing .nav-initial/.nav-label from the desktop
-	   collapse feature) since there's no room for text labels
-	   next to four icons at this width either. */
-	body {
-		flex-direction: column;
-	}
-
+	/* Same narrow rail as body.sidebar-collapsed > header on
+	   desktop — width only, position/height/border stay as set
+	   in the unconditional rule above (sticky, full height, right
+	   border) so it still reads as a left-hand rail, not a bar. */
 	body > header {
-		flex: 0 0 auto;
-		max-width: none;
-		width: 100%;
-		height: auto;
-		position: sticky;
-		top: 0;
-		z-index: 30;
-		padding: 0.5rem 0.75rem;
-		border-right: none;
-		border-bottom: 1px solid var(--pico-muted-border-color);
+		flex: 0 0 56px;
+		max-width: 56px;
+		padding: 1rem 0.4rem;
 	}
 
 	.sidebar-header {
-		margin-bottom: 0;
-	}
-
-	.sidebar-header .brand {
-		font-size: 1rem;
+		justify-content: center;
+		margin-bottom: 1rem;
 	}
 
 	/* #sidebar-toggle's whole point (collapse to icons on a wide
-	   desktop window) doesn't apply once the sidebar is already a
-	   slim top bar — nothing left to collapse further. */
+	   desktop window) doesn't apply once the rail is already at
+	   its narrowest, icon-only width — nothing left to collapse
+	   further. */
 	#sidebar-toggle {
 		display: none;
-	}
-
-	body > header nav ul {
-		flex-direction: row;
-		justify-content: space-between;
-		gap: 0.25rem;
-	}
-
-	body > header nav a {
-		flex: 1 1 auto;
-		justify-content: center;
-		padding: 0.5rem 0.25rem;
 	}
 
 	.nav-label {
@@ -1244,11 +1232,13 @@ body.sidebar-collapsed #sidebar-toggle {
 		left: 1rem;
 	}
 
-	/* Two vignette cards comfortably fit a 360px-wide phone at
-	   8rem each (desktop's 10rem minimum doesn't, once gap and
-	   page padding are accounted for). */
+	/* Smaller than desktop's 10rem minimum: at 56px now permanently
+	   taken by the rail, a 360px phone has even less room than it
+	   did when the sidebar could still collapse to 0. Three columns
+	   at 6rem fit where two at 8rem used to be the ceiling. */
 	.card-grid {
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr));
+		gap: 0.6rem;
 	}
 
 	/* PageHeaderWithViewAndCreate's right-hand group (import/view
