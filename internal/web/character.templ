@@ -21,7 +21,7 @@ func truncate(s string, n int) string {
 
 templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
 	@Layout("Character", "Character") {
-		@PageHeaderWithViewAndCreate("Character", "character", "/characters/import", "character-modal", "Add a character")
+		@PageHeaderWithViewAndCreate("Character", "character", "character-import-modal", "character-modal", "Add a character")
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
 		} else {
@@ -75,6 +75,8 @@ templ CharacterPage(cards []db.CharacterCard, editing *db.CharacterCard, editing
 				}
 			</article>
 		</dialog>
+		@ImportModal("character-import-modal", "/characters/import")
+		@tabsScript()
 	}
 }
 

@@ -17,9 +17,9 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 	<h1>Settings</h1>
 	<div class="tabs">
 		<div role="tablist" class="tab-list">
-			<button type="button" class="tab-btn" data-tab-target="profiles" aria-selected="true" onclick="switchSettingsTab(this)">Backend profiles</button>
-			<button type="button" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchSettingsTab(this)">Your persona</button>
-			<button type="button" class="tab-btn" data-tab-target="prompt" aria-selected="false" onclick="switchSettingsTab(this)">System prompt</button>
+			<button type="button" class="tab-btn" data-tab-target="profiles" aria-selected="true" onclick="switchTabs(this)">Backend profiles</button>
+			<button type="button" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchTabs(this)">Your persona</button>
+			<button type="button" class="tab-btn" data-tab-target="prompt" aria-selected="false" onclick="switchTabs(this)">System prompt</button>
 		</div>
 
 		<div data-tab-panel="profiles">
@@ -29,6 +29,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				<table>
 					<thead>
 						<tr>
+							<th></th>
 							<th>Name</th>
 							<th>Kind</th>
 							<th>Base URL</th>
@@ -39,6 +40,9 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 					<tbody>
 						for _, p := range profiles {
 							<tr>
+								<td hx-get={ fmt.Sprintf("/settings/backend-profiles/%d/ping", p.ID) } hx-trigger="load, every 5s" hx-swap="innerHTML">
+									@PingDot(false)
+								</td>
 								<td><a href={ templ.URL(fmt.Sprintf("/settings/backend-profiles/%d/edit", p.ID)) }>{ p.Name }</a></td>
 								<td>{ p.Kind }</td>
 								<td>{ p.BaseURL }</td>
@@ -89,7 +93,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 					<tbody>
 						for _, p := range personas {
 							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>{ p.Name }</a></td>
+								<td>@Avatar(p.ImagePath, p.Name)<a href={ templ.URL(fmt.Sprintf("/settings/personas/%d/edit", p.ID)) }>{ p.Name }</a></td>
 								<td>{ p.Description }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-persona-%d", p.ID), []MenuAction{
@@ -134,19 +138,11 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 	</div>
 	<script>
 		// Settings tabs: plain [hidden] + aria-selected toggling, no
-		// framework — if editing or persona modals open server-side
-		// (GET .../edit re-renders this page with editing != nil), the
-		// relevant tab is switched to automatically so the opened
-		// dialog isn't hidden behind the wrong panel.
-		function switchSettingsTab(button) {
-			var target = button.dataset.tabTarget;
-			button.parentElement.querySelectorAll(".tab-btn").forEach(function (btn) {
-				btn.setAttribute("aria-selected", String(btn === button));
-			});
-			button.closest(".tabs").querySelectorAll("[data-tab-panel]").forEach(function (panel) {
-				panel.hidden = panel.dataset.tabPanel !== target;
-			});
-		}
+		// framework — see templates.templ's tabsScript() for the shared
+		// switchTabs() function. If editing or persona modals open
+		// server-side (GET .../edit re-renders this page with editing
+		// != nil), the relevant tab is switched to automatically so
+		// the opened dialog isn't hidden behind the wrong panel.
 		(function () {
 			var openDialog = document.querySelector(".tabs dialog[open]");
 			if (openDialog) {
@@ -154,12 +150,13 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				if (panel) {
 					var btn = document.querySelector('.tab-btn[data-tab-target="' + panel.dataset.tabPanel + '"]');
 					if (btn) {
-						switchSettingsTab(btn);
+						switchTabs(btn);
 					}
 				}
 			}
 		})();
 	</script>
+	@tabsScript()
 }
 
 templ systemPromptForm(template string) {
@@ -175,11 +172,12 @@ templ systemPromptForm(template string) {
 templ backendProfileForm(editing *db.BackendProfile) {
 	{{
 	action := "/settings/backend-profiles"
-	name, baseURL, model := "", "", ""
+	idStr, name, baseURL, model := "", "", "", ""
 	hasKey := false
 	temperature, topP := "", ""
 	if editing != nil {
 		action = fmt.Sprintf("/settings/backend-profiles/%d", editing.ID)
+		idStr = fmt.Sprintf("%d", editing.ID)
 		name, baseURL, model = editing.Name, editing.BaseURL, editing.Model
 		hasKey = editing.APIKey != ""
 		if v, ok := editing.ModelParams["temperature"]; ok {
@@ -191,6 +189,7 @@ templ backendProfileForm(editing *db.BackendProfile) {
 	}
 	}}
 	<form method="post" action={ templ.URL(action) }>
+		<input type="hidden" name="id" value={ idStr }/>
 		<label>
 			Name
 			<input type="text" name="name" value={ name } required="required"/>
@@ -219,6 +218,11 @@ templ backendProfileForm(editing *db.BackendProfile) {
 			Top P
 			<input type="number" name="top_p" value={ topP } step="0.01" min="0" max="1"/>
 		</label>
+		<div class="test-row">
+			<button type="button" class="secondary" hx-post="/settings/backend-profiles/test" hx-include="closest form" hx-target="#test-result" hx-swap="innerHTML" hx-indicator="#test-spinner">Test connection</button>
+			<span id="test-spinner" class="htmx-indicator">Testing…</span>
+		</div>
+		<div id="test-result"></div>
 		<button type="submit">
 			if editing != nil {
 				Save
@@ -232,13 +236,13 @@ templ backendProfileForm(editing *db.BackendProfile) {
 templ personaForm(editing *db.Persona) {
 	{{
 	action := "/settings/personas"
-	name, description := "", ""
+	name, description, imagePath := "", "", ""
 	if editing != nil {
 		action = fmt.Sprintf("/settings/personas/%d", editing.ID)
-		name, description = editing.Name, editing.Description
+		name, description, imagePath = editing.Name, editing.Description, editing.ImagePath
 	}
 	}}
-	<form method="post" action={ templ.URL(action) }>
+	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
 		<label>
 			Name
 			<input type="text" name="name" value={ name } required="required"/>
@@ -247,6 +251,7 @@ templ personaForm(editing *db.Persona) {
 			Description
 			<textarea name="description">{ description }</textarea>
 		</label>
+		@ImageField(imagePath, name)
 		<button type="submit">
 			if editing != nil {
 				Save
@@ -255,4 +260,30 @@ templ personaForm(editing *db.Persona) {
 			}
 		</button>
 	</form>
+}
+
+// PingDot is the recurring healthcheck fragment — htmx re-fetches
+// this every 5s (see its hx-trigger in the profile list row) and
+// swaps it in place, so the dot's color always reflects the latest
+// poll without a page reload.
+templ PingDot(reachable bool) {
+	if reachable {
+		<span class="ping-dot ping-ok" title="Reachable (TCP)">●</span>
+	} else {
+		<span class="ping-dot ping-down" title="Unreachable (TCP)">●</span>
+	}
+}
+
+// TestResult is the Test button's own fragment — a real HTTP
+// exercise of the backend's /models endpoint, not just the socket
+// pingBackend checks every 5s, so this can fail on auth/path issues
+// pingBackend wouldn't catch.
+templ TestResult(err error, modelCount int) {
+	if err != nil {
+		<p class="test-result test-fail">❌ { err.Error() }</p>
+	} else if modelCount > 0 {
+		<p class="test-result test-ok">✅ Reachable — { fmt.Sprintf("%d model(s) listed", modelCount) }</p>
+	} else {
+		<p class="test-result test-ok">✅ Reachable</p>
+	}
 }

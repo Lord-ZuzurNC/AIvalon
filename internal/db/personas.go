@@ -13,13 +13,14 @@ type Persona struct {
 	ID          int64
 	Name        string
 	Description string
+	ImagePath   string
 }
 
 // DefaultPersona is used when a session has no persona_id set.
 var DefaultPersona = Persona{Name: "User", Description: ""}
 
 func ListPersonas(db *sql.DB) ([]Persona, error) {
-	rows, err := db.Query(`SELECT id, name, description FROM personas ORDER BY name`)
+	rows, err := db.Query(`SELECT id, name, description, image_path FROM personas ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing personas: %w", err)
 	}
@@ -28,7 +29,7 @@ func ListPersonas(db *sql.DB) ([]Persona, error) {
 	var personas []Persona
 	for rows.Next() {
 		var p Persona
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.ImagePath); err != nil {
 			return nil, fmt.Errorf("scanning persona: %w", err)
 		}
 		personas = append(personas, p)
@@ -38,7 +39,7 @@ func ListPersonas(db *sql.DB) ([]Persona, error) {
 
 func GetPersona(db *sql.DB, id int64) (Persona, error) {
 	var p Persona
-	err := db.QueryRow(`SELECT id, name, description FROM personas WHERE id = ?`, id).Scan(&p.ID, &p.Name, &p.Description)
+	err := db.QueryRow(`SELECT id, name, description, image_path FROM personas WHERE id = ?`, id).Scan(&p.ID, &p.Name, &p.Description, &p.ImagePath)
 	if err != nil {
 		return Persona{}, fmt.Errorf("getting persona %d: %w", id, err)
 	}
@@ -60,6 +61,18 @@ func UpdatePersona(db *sql.DB, p Persona) error {
 	)
 	if err != nil {
 		return fmt.Errorf("updating persona %d: %w", p.ID, err)
+	}
+	return nil
+}
+
+// UpdatePersonaImagePath is separate from UpdatePersona for the same
+// reason as the character/lorebook equivalents: an image upload is
+// handled by its own code path (see internal/web/image_upload.go),
+// not folded into the plain-fields form update.
+func UpdatePersonaImagePath(db *sql.DB, id int64, imagePath string) error {
+	_, err := db.Exec(`UPDATE personas SET image_path = ? WHERE id = ?`, imagePath, id)
+	if err != nil {
+		return fmt.Errorf("updating persona %d image: %w", id, err)
 	}
 	return nil
 }

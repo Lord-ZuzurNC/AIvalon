@@ -114,6 +114,38 @@ func (h CharacterHandlers) saveImage(w http.ResponseWriter, r *http.Request, id 
 	return nil
 }
 
+// saveImageFromBytes mirrors saveImage's gallery mechanics (first
+// image auto-becomes primary) for an image that didn't arrive as a
+// multipart form field — the PNG an import uploaded, reused as the
+// new character's own portrait rather than leaving it blank just
+// because the bytes came from a Character Card PNG, not a plain
+// <input type=file name=image> post. Any failure here is logged and
+// swallowed by the caller: the character record it's filling in a
+// picture for already imported successfully, and that shouldn't be
+// undone over a secondary nice-to-have.
+func (h CharacterHandlers) saveImageFromBytes(raw []byte, id int64) error {
+	imageID, err := db.CreateCharacterCardImage(h.DB, id, "")
+	if err != nil {
+		return err
+	}
+	imagePath, err := saveImageBytes(raw, "characters", imageID)
+	if err != nil {
+		_ = db.DeleteCharacterCardImage(h.DB, imageID)
+		return err
+	}
+	if err := db.UpdateCharacterCardImagePath(h.DB, imageID, imagePath); err != nil {
+		return err
+	}
+	hasPrimary, err := db.HasPrimaryImage(h.DB, id)
+	if err != nil {
+		return err
+	}
+	if !hasPrimary {
+		return db.SetPrimaryCharacterCardImage(h.DB, id, imageID)
+	}
+	return nil
+}
+
 // PromoteImage makes an existing gallery image the character's primary
 // — a pointer swap, no files touched.
 func (h CharacterHandlers) PromoteImage(w http.ResponseWriter, r *http.Request) {

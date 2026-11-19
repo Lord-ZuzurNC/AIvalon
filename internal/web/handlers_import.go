@@ -1,18 +1,27 @@
 package web
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
+
+// importURLTimeout bounds the "From URL" tab's server-side fetch —
+// generous enough for a slow host, short enough that a stalled or
+// hanging remote doesn't tie up the request indefinitely.
+const importURLTimeout = 20 * time.Second
 
 // uniqueName appends " (n)" (n starting at 2) until name isn't already
 // in taken — Lord's call: importing the same character/lorebook twice
@@ -198,23 +207,71 @@ func parseCharacterJSON(raw []byte) (card db.CharacterCard, book *characterBookJ
 	return card, chara.Data.CharacterBook, true
 }
 
-// readUploadedJSON pulls the "file" field out of a multipart POST,
-// capped at maxUploadSize like every other upload in this app.
-func readUploadedJSON(w http.ResponseWriter, r *http.Request) (raw []byte, filename string, err error) {
+// readUploadOrURL accepts either tab of ImportModal: a multipart
+// "file" field (the "From your Computer" tab, capped at
+// maxUploadSize like every other upload in this app), or a plain
+// "url" field (the "From URL" tab) that gets fetched server-side —
+// see fetchImportURL. Either way the caller gets the same (raw,
+// filename) shape back and never needs to know which tab was used.
+func readUploadOrURL(w http.ResponseWriter, r *http.Request) (raw []byte, filename string, err error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		return nil, "", fmt.Errorf("file too large or not a valid upload")
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+			return nil, "", fmt.Errorf("file too large or not a valid upload")
+		}
+		if file, header, ferr := r.FormFile("file"); ferr == nil {
+			defer file.Close()
+			raw, err = io.ReadAll(file)
+			if err != nil {
+				return nil, "", err
+			}
+			return raw, header.Filename, nil
+		}
+		// A multipart POST without a "file" field falls through to
+		// the "url" field below rather than failing outright — lets
+		// both of ImportModal's tabs genuinely share one <form
+		// enctype> if a future tweak ever merges them.
+	} else if err := r.ParseForm(); err != nil {
+		return nil, "", fmt.Errorf("invalid form")
 	}
-	file, header, err := r.FormFile("file")
+	rawURL := strings.TrimSpace(r.FormValue("url"))
+	if rawURL == "" {
+		return nil, "", fmt.Errorf("no file uploaded and no URL given")
+	}
+	return fetchImportURL(rawURL)
+}
+
+// fetchImportURL downloads rawURL server-side for the "From URL" tab
+// — it must point directly at a .json or a Character Card .png
+// (same formats readUploadOrURL's other branch accepts), not a page
+// that merely links to one; nothing here follows links or scrapes
+// HTML.
+func fetchImportURL(rawURL string) (raw []byte, filename string, err error) {
+	u, err := url.Parse(rawURL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return nil, "", fmt.Errorf("invalid URL — must be http(s) and point directly to a .json or .png file")
+	}
+	client := &http.Client{Timeout: importURLTimeout}
+	resp, err := client.Get(rawURL)
 	if err != nil {
-		return nil, "", fmt.Errorf("no file uploaded")
+		return nil, "", fmt.Errorf("fetching URL: %w", err)
 	}
-	defer file.Close()
-	raw, err = io.ReadAll(file)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("URL returned HTTP %d", resp.StatusCode)
+	}
+	raw, err = io.ReadAll(io.LimitReader(resp.Body, maxUploadSize+1))
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("reading URL response: %w", err)
 	}
-	return raw, header.Filename, nil
+	if len(raw) > maxUploadSize {
+		return nil, "", fmt.Errorf("file at URL is too large (over %d MiB)", maxUploadSize>>20)
+	}
+	filename = path.Base(u.Path)
+	if filename == "" || filename == "/" || filename == "." {
+		filename = "import"
+	}
+	return raw, filename, nil
 }
 
 // createLorebookWithEntries is shared by both importers: makes the
@@ -268,7 +325,7 @@ func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
 // Character Card instead, it offers to finish the import in
 // Character rather than just failing (see ImportCrossConfirmPage).
 func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request) {
-	raw, filename, err := readUploadedJSON(w, r)
+	raw, filename, err := readUploadOrURL(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -289,6 +346,7 @@ func (h CharacterHandlers) ResumeCharacterImport(w http.ResponseWriter, r *http.
 }
 
 func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+	originalRaw := raw // kept in case it's a PNG — reused as the lorebook's own cover, see below
 	raw, err := extractJSONFromUpload(raw)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -297,7 +355,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 	name, entries, ok := parseLorebookJSON(raw)
 	if !ok {
 		if card, _, charOK := parseCharacterJSON(raw); charOK {
-			token, err := h.Cache.Stash(raw, filename)
+			token, err := h.Cache.Stash(originalRaw, filename)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -329,6 +387,12 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if bytes.HasPrefix(originalRaw, pngSignature) {
+		// The source PNG is itself the card's own art — use it as the
+		// lorebook's cover too. A failure here doesn't undo the import
+		// that already succeeded; the lorebook just keeps no image.
+		_ = h.saveImageFromBytes(originalRaw, id)
+	}
 	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)
 }
 
@@ -341,7 +405,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 // actually parses as a bare lorebook instead, it offers to finish the
 // import in World (see ImportCrossConfirmPage).
 func (h CharacterHandlers) ImportCharacterJSON(w http.ResponseWriter, r *http.Request) {
-	raw, filename, err := readUploadedJSON(w, r)
+	raw, filename, err := readUploadOrURL(w, r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -362,6 +426,7 @@ func (h WorldHandlers) ResumeLorebookImport(w http.ResponseWriter, r *http.Reque
 }
 
 func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+	originalRaw := raw // kept in case it's a PNG — reused as the character's (and its embedded lorebook's) own image, see below
 	raw, err := extractJSONFromUpload(raw)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -370,7 +435,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 	card, book, ok := parseCharacterJSON(raw)
 	if !ok {
 		if _, entries, lbOK := parseLorebookJSON(raw); lbOK {
-			token, err := h.Cache.Stash(raw, filename)
+			token, err := h.Cache.Stash(originalRaw, filename)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -400,6 +465,14 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	isPNG := bytes.HasPrefix(originalRaw, pngSignature)
+	if isPNG {
+		// The source PNG is itself the card's own art — use it as the
+		// character's portrait too. A failure here doesn't undo the
+		// import that already succeeded; the character just keeps no
+		// picture.
+		_ = h.saveImageFromBytes(originalRaw, charID)
+	}
 	if book != nil && len(book.Entries) > 0 {
 		bookName := book.Name
 		if bookName == "" {
@@ -410,9 +483,18 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if _, err := createLorebookWithEntries(h.DB, uniqueName(bookName, taken), lorebookEntriesFromCharacterBook(*book)); err != nil {
+		lorebookID, err := createLorebookWithEntries(h.DB, uniqueName(bookName, taken), lorebookEntriesFromCharacterBook(*book))
+		if err != nil {
 			http.Error(w, fmt.Sprintf("imported character %q but its embedded lorebook failed: %v", card.Name, err), http.StatusInternalServerError)
 			return
+		}
+		if isPNG {
+			// Same source PNG, same art — the embedded lorebook gets
+			// a cover too rather than only the character it came
+			// bundled with.
+			if imagePath, err := saveImageBytes(originalRaw, "lorebooks", lorebookID); err == nil {
+				_ = db.UpdateLorebookImagePath(h.DB, lorebookID, imagePath)
+			}
 		}
 	}
 	http.Redirect(w, r, fmt.Sprintf("/characters/%d/edit", charID), http.StatusSeeOther)

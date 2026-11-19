@@ -81,6 +81,48 @@ func (h SettingsHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
+// ProfilePing is the recurring healthcheck — a bare TCP dial to the
+// profile's own host:port, re-polled every 5s by htmx
+// (hx-trigger="load, every 5s" in settings.templ's list row) rather
+// than a hand-rolled JS interval, since htmx is already the app's
+// one SSE/polling dependency. Returns just the ●/● dot fragment, not
+// a full page.
+func (h SettingsHandlers) ProfilePing(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	profile, err := db.GetBackendProfile(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	render(w, r, PingDot(pingBackend(profile.BaseURL) == nil))
+}
+
+// ProfileTest is the on-demand "Test" button inside the add/edit
+// form — it reads the form's OWN current fields (not the stored
+// profile) so testing works before a new profile has ever been
+// saved, and falls back to the stored API key when the field was
+// left blank with an existing id, same "blank means keep it" rule
+// Update already applies.
+func (h SettingsHandlers) ProfileTest(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	profile := db.BackendProfile{BaseURL: r.FormValue("base_url"), APIKey: r.FormValue("api_key")}
+	if profile.APIKey == "" {
+		if idStr := r.FormValue("id"); idStr != "" {
+			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+				if existing, err := db.GetBackendProfile(h.DB, id); err == nil {
+					profile.APIKey = existing.APIKey
+				}
+			}
+		}
+	}
+	modelCount, err := testBackendConnection(profile)
+	render(w, r, TestResult(err, modelCount))
+}
+
 func (h SettingsHandlers) PersonaEditForm(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -96,10 +138,16 @@ func (h SettingsHandlers) PersonaEditForm(w http.ResponseWriter, r *http.Request
 }
 
 func (h SettingsHandlers) PersonaCreate(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	r.ParseMultipartForm(maxUploadSize)
 	p := db.Persona{Name: r.FormValue("name"), Description: r.FormValue("description")}
-	if _, err := db.CreatePersona(h.DB, p); err != nil {
+	id, err := db.CreatePersona(h.DB, p)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := h.savePersonaImage(w, r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
@@ -111,13 +159,35 @@ func (h SettingsHandlers) PersonaUpdate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	r.ParseForm()
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	r.ParseMultipartForm(maxUploadSize)
 	p := db.Persona{ID: id, Name: r.FormValue("name"), Description: r.FormValue("description")}
 	if err := db.UpdatePersona(h.DB, p); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := h.savePersonaImage(w, r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
+}
+
+// savePersonaImage is a no-op (no error, no write) when the form's
+// "image" field was left empty — see saveUploadedImage. One image per
+// persona, like Lorebook's own single-cover pattern, not a gallery
+// (Character's is the only multi-image case, since swapping between
+// several portraits of the same AI-played character is the one place
+// that's actually come up).
+func (h SettingsHandlers) savePersonaImage(w http.ResponseWriter, r *http.Request, id int64) error {
+	imagePath, err := saveUploadedImage(w, r, "image", "personas", id)
+	if err != nil {
+		return err
+	}
+	if imagePath == "" {
+		return nil
+	}
+	return db.UpdatePersonaImagePath(h.DB, id, imagePath)
 }
 
 func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) {
@@ -126,10 +196,16 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	persona, err := db.GetPersona(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	if err := db.DeletePersona(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	removeUploadedFile(persona.ImagePath)
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 

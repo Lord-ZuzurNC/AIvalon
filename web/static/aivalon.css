@@ -496,7 +496,13 @@ body.sidebar-collapsed #sidebar-toggle {
    of distorting). */
 .card-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+	/* auto-fit (not auto-fill): with few items, auto-fill still
+	   reserves empty tracks at their minimum width, so a lone card
+	   sits pinned to minmax's floor instead of growing — confirmed
+	   on a one-lorebook page, not just a mobile-only quirk. auto-fit
+	   collapses those empty tracks so real items actually fill the
+	   row. */
+	grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 	gap: 1rem;
 }
 
@@ -591,35 +597,89 @@ body.sidebar-collapsed #sidebar-toggle {
 	flex-shrink: 0;
 }
 
-/* ImportJSONButton: just the "⤓" glyph in the primary color, not a
-   button — the real control is the file input it wraps (visually
-   hidden, standard accessible pattern), which the browser's own file
-   picker already handles. Sits inside .page-header-actions now, so
-   no margin of its own — that flex row's gap already spaces it. */
-.import-form {
-	display: inline-flex;
-	align-items: center;
-}
-
+/* The "⤓" import trigger (PageHeaderWithViewAndCreate) now just
+   opens ImportModal, same round-button-less pattern as the view
+   toggle's own glyphs — no background/border, matching the gold
+   accent color so it reads as a peer of the ☰/⊞/+ controls beside
+   it rather than a different kind of control. */
 .import-trigger {
-	display: inline-flex;
-	cursor: pointer;
+	width: auto;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
 	font-size: 1.3rem;
+	line-height: 1;
 	color: var(--pico-primary);
-}
-
-.import-trigger input[type="file"] {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	opacity: 0;
-	overflow: hidden;
+	cursor: pointer;
 }
 
 /* ImportCrossConfirmPage's Yes/No row. */
 .import-confirm-actions {
 	display: flex;
 	gap: 1rem;
+}
+
+/* Settings > Backend profiles: the recurring TCP healthcheck dot
+   (PingDot, re-polled every 5s by htmx) and the Test button's own
+   result line (TestResult) inside the add/edit form. */
+.ping-dot {
+	font-size: 0.8rem;
+}
+
+.ping-dot.ping-ok {
+	color: #7fd88f;
+}
+
+.ping-dot.ping-down {
+	color: #e06c75;
+}
+
+.test-row {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	margin: 0.5rem 0;
+}
+
+.htmx-indicator {
+	opacity: 0;
+	font-size: 0.85rem;
+	color: var(--pico-muted-color);
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+	opacity: 1;
+}
+
+.test-result.test-ok {
+	color: #7fd88f;
+}
+
+.test-result.test-fail {
+	color: #e06c75;
+}
+
+/* The ✅/❌ cell in LorebookPage's entries table is the toggle itself
+   now — a bare emoji button, no button chrome, so it reads as a
+   clickable status icon rather than a form control. */
+.enabled-toggle {
+	display: inline-block;
+	margin: 0;
+}
+
+.enabled-toggle button {
+	width: auto;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+	font-size: 1rem;
+	line-height: 1;
+	cursor: pointer;
 }
 
 .import-confirm-actions button,
@@ -1090,4 +1150,111 @@ body.sidebar-collapsed #sidebar-toggle {
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.4rem 0;
+}
+
+/* ============================================================
+   MOBILE — phone-width layout.
+   The sidebar (a 220px always-full-height rail, built for a
+   desktop window) is the one piece that doesn't degrade on its
+   own below ~640px: it'd eat most of a 360-390px phone screen.
+   Everything else here is mostly just "stop assuming there's
+   room" for things sized for a desktop window (the fixed-width
+   session panel, multi-column tables).
+   ============================================================ */
+@media (max-width: 640px) {
+	/* Sidebar becomes a slim horizontal top bar instead of a
+	   full-height left rail — same nav links, laid out in a row,
+	   icon-only (reusing .nav-initial/.nav-label from the desktop
+	   collapse feature) since there's no room for text labels
+	   next to four icons at this width either. */
+	body {
+		flex-direction: column;
+	}
+
+	body > header {
+		flex: 0 0 auto;
+		max-width: none;
+		width: 100%;
+		height: auto;
+		position: sticky;
+		top: 0;
+		z-index: 30;
+		padding: 0.5rem 0.75rem;
+		border-right: none;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+
+	.sidebar-header {
+		margin-bottom: 0;
+	}
+
+	.sidebar-header .brand {
+		font-size: 1rem;
+	}
+
+	/* #sidebar-toggle's whole point (collapse to icons on a wide
+	   desktop window) doesn't apply once the sidebar is already a
+	   slim top bar — nothing left to collapse further. */
+	#sidebar-toggle {
+		display: none;
+	}
+
+	body > header nav ul {
+		flex-direction: row;
+		justify-content: space-between;
+		gap: 0.25rem;
+	}
+
+	body > header nav a {
+		flex: 1 1 auto;
+		justify-content: center;
+		padding: 0.5rem 0.25rem;
+	}
+
+	.nav-label {
+		display: none;
+	}
+
+	.nav-initial {
+		display: flex;
+	}
+
+	body > main {
+		max-width: 100%;
+		padding: 1rem;
+	}
+
+	/* A table sized for a desktop window (World/Character/Settings'
+	   lists) just scrolls horizontally rather than squeezing every
+	   column unreadably thin — the standard no-JS responsive-table
+	   fallback. */
+	table {
+		display: block;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+
+	/* The 22rem fixed width (session-panel) is wider than most
+	   phone screens outright; let it fill the viewport instead
+	   (minus a consistent 1rem gutter) rather than overflowing or
+	   getting clipped against the right edge. */
+	.session-panel {
+		width: calc(100vw - 2rem);
+		right: 1rem;
+		left: 1rem;
+	}
+
+	/* Two vignette cards comfortably fit a 360px-wide phone at
+	   8rem each (desktop's 10rem minimum doesn't, once gap and
+	   page padding are accounted for). */
+	.card-grid {
+		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+	}
+
+	/* PageHeaderWithViewAndCreate's right-hand group (import/view
+	   toggle/create) can wrap under the title rather than forcing
+	   it to shrink or overflow next to a long page title. */
+	.page-header {
+		flex-wrap: wrap;
+	}
 }
