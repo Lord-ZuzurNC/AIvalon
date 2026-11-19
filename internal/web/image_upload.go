@@ -1,9 +1,9 @@
 package web
 
 import (
+	"bytes"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,20 +27,6 @@ var allowedImageExt = map[string]string{
 	"image/webp": ".webp",
 }
 
-// saveUploadedImage reads formField from r (an already-multipart POST),
-// validates it's actually image bytes, and writes it to
-// web/static/uploads/<subdir>/<entityID><ext>, overwriting any previous
-// upload for that entity (one image per card/lorebook, not a gallery).
-// Returns the path relative to web/static plus a cache-busting query
-// string — e.g. "uploads/characters/3.png?v=1700000000000000000" —
-// ready to store directly in the image_path column and to prefix with
-// "/static/" for an <img src>. The query string matters: re-uploading
-// onto the same entity ID keeps the same filename, so without it the
-// browser's HTTP cache serves the OLD image forever after a replace —
-// what looked like "nothing happened" when swapping a character's
-// portrait was this, not a save failure (confirmed: the file on disk
-// did change). Returns ("", nil), not an error, when the field was left
-// empty — uploading an image is always optional.
 func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir string, entityID int64) (string, error) {
 	// ParseMultipartForm's own maxMemory argument only bounds how much
 	// gets buffered in RAM before spilling to a temp file — it does
@@ -61,8 +47,36 @@ func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir
 		return "", fmt.Errorf("reading upload: %w", err)
 	}
 	defer file.Close()
+	_ = header // filename itself is untrusted/unused — ext comes from sniffing, name from entityID
+	return writeImageToDisk(file, subdir, entityID)
+}
 
-	ext, err := sniffImageExt(file)
+// saveImageBytes is saveUploadedImage's counterpart for an image that
+// didn't arrive as a multipart form field — specifically, the PNG an
+// import uploaded, reused as the new character/lorebook's own image
+// (see handlers_import.go) rather than leaving it unset just because
+// the bytes came from a Character Card PNG instead of a plain
+// <input type=file name=image> post.
+func saveImageBytes(raw []byte, subdir string, entityID int64) (string, error) {
+	return writeImageToDisk(bytes.NewReader(raw), subdir, entityID)
+}
+
+// writeImageToDisk sniffs src's real content type, rejects anything
+// that isn't an allowed image format, and writes it to
+// web/static/uploads/<subdir>/<entityID><ext>, overwriting any
+// previous upload for that entity (one image per card/lorebook, not
+// a gallery). Returns the path relative to web/static plus a
+// cache-busting query string — e.g.
+// "uploads/characters/3.png?v=1700000000000000000" — ready to store
+// directly in the image_path column and to prefix with "/static/"
+// for an <img src>. The query string matters: re-uploading onto the
+// same entity ID keeps the same filename, so without it the
+// browser's HTTP cache serves the OLD image forever after a replace
+// — what looked like "nothing happened" when swapping a character's
+// portrait was this, not a save failure (confirmed: the file on disk
+// did change).
+func writeImageToDisk(src io.ReadSeeker, subdir string, entityID int64) (string, error) {
+	ext, err := sniffImageExt(src)
 	if err != nil {
 		return "", err
 	}
@@ -85,14 +99,13 @@ func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir
 	}
 	defer out.Close()
 
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
+	if _, err := src.Seek(0, io.SeekStart); err != nil {
 		return "", fmt.Errorf("rewinding upload: %w", err)
 	}
-	if _, err := io.Copy(out, file); err != nil {
+	if _, err := io.Copy(out, src); err != nil {
 		return "", fmt.Errorf("writing %s: %w", diskPath, err)
 	}
 
-	_ = header // filename itself is untrusted/unused — ext comes from sniffing, name from entityID
 	relPath := filepath.ToSlash(filepath.Join("uploads", subdir, fmt.Sprintf("%d%s", entityID, ext)))
 	return fmt.Sprintf("%s?v=%d", relPath, time.Now().UnixNano()), nil
 }
@@ -123,7 +136,7 @@ func removeUploadedFile(relPath string) {
 	_ = os.Remove(filepath.Join("web", "static", relPath))
 }
 
-func sniffImageExt(file multipart.File) (string, error) {
+func sniffImageExt(file io.ReadSeeker) (string, error) {
 	head := make([]byte, 512)
 	n, err := file.Read(head)
 	if err != nil && err != io.EOF {

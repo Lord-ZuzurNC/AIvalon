@@ -78,6 +78,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /world/{id}/entries/{entryID}/edit", world.EntryEditForm)
 	mux.HandleFunc("POST /world/{id}/entries/{entryID}", world.EntryUpdate)
 	mux.HandleFunc("POST /world/{id}/entries/{entryID}/delete", world.EntryDelete)
+	mux.HandleFunc("POST /world/{id}/entries/{entryID}/toggle", world.EntryToggleEnabled)
 
 	settings := web.SettingsHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /settings", settings.List)
@@ -85,6 +86,8 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("GET /settings/backend-profiles/{id}/edit", settings.EditForm)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}", settings.Update)
 	mux.HandleFunc("POST /settings/backend-profiles/{id}/delete", settings.Delete)
+	mux.HandleFunc("GET /settings/backend-profiles/{id}/ping", settings.ProfilePing)
+	mux.HandleFunc("POST /settings/backend-profiles/test", settings.ProfileTest)
 	mux.HandleFunc("POST /settings/personas", settings.PersonaCreate)
 	mux.HandleFunc("GET /settings/personas/{id}/edit", settings.PersonaEditForm)
 	mux.HandleFunc("POST /settings/personas/{id}", settings.PersonaUpdate)

@@ -348,37 +348,81 @@ templ PageHeaderWithCreate(title, modalID, label string) {
 // PageHeaderWithViewAndCreate is World/Character's title row: heading
 // on the left, then — grouped together on the right, 20px apart per
 // Lord's layout — the import "⤓" trigger, the List/Grid view switch,
-// and the round "+" create button (see ImportJSONButton,
+// and the round "+" create button (see ImportButton/ImportModal,
 // viewToggle/viewToggleScript for those two pieces themselves).
-templ PageHeaderWithViewAndCreate(title, viewKey, importAction, modalID, label string) {
+// importModalID must be unique per page since World and Character
+// each get their own <dialog>.
+templ PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label string) {
 	<div class="page-header">
 		<h1>{ title }</h1>
 		<div class="page-header-actions">
-			@ImportJSONButton(importAction)
+			<button type="button" class="import-trigger" aria-label="Import from your computer or a URL" title="Import from your computer or a URL" data-modal-id={ importModalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">⤓</button>
 			@viewToggle(viewKey)
 			<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
 		</div>
 	</div>
 }
 
-// ImportJSONButton is a compact "⤓" trigger sitting in
-// PageHeaderWithViewAndCreate's right-hand action group — no modal,
-// no visible file input: clicking it opens the native file picker
-// directly (a <label> wrapping a hidden <input type=file> is the
-// standard accessible way to do that without JS) and picking a file
-// submits right away. Accepts both .json and a Character Card .png
-// (the same JSON, carried as a base64 text chunk — see
-// png_extract.go) — one control, extension-sniffed server-side,
-// rather than a separate button per format.
-templ ImportJSONButton(action string) {
-	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data" class="import-form">
-		<label class="import-trigger" title="Import from JSON or PNG" aria-label="Import from JSON or PNG">
-			⤓
-			<input type="file" name="file" accept=".json,application/json,.png,image/png" onchange="this.form.submit()"/>
-		</label>
-	</form>
+// tabsScript defines switchTabs(button) once, shared by every
+// .tabs-based UI in the app (Settings' own three tabs, ImportModal's
+// two) — plain [hidden] + aria-selected toggling, scoped to the
+// button's own closest ".tabs" ancestor so two independent tab
+// groups on the same page (unlikely today, but cheap to keep correct)
+// don't cross-toggle each other's panels.
+templ tabsScript() {
+	<script>
+		function switchTabs(button) {
+			var target = button.dataset.tabTarget;
+			button.parentElement.querySelectorAll(".tab-btn").forEach(function (btn) {
+				btn.setAttribute("aria-selected", String(btn === button));
+			});
+			button.closest(".tabs").querySelectorAll("[data-tab-panel]").forEach(function (panel) {
+				panel.hidden = panel.dataset.tabPanel !== target;
+			});
+		}
+	</script>
 }
 
+// ImportModal is the dialog PageHeaderWithViewAndCreate's "⤓" trigger
+// opens — two tabs sharing one destination: "From your Computer" is
+// the plain file input (JSON or a Character Card PNG, same as
+// before), "From URL" posts a direct link instead and
+// handlers_import.go's readUploadOrURL fetches it server-side. Both
+// tabs post to the same action, so the cross-import confirmation and
+// every other bit of handlers_import.go's pipeline apply identically
+// regardless of which tab was used.
+templ ImportModal(modalID, action string) {
+	<dialog id={ modalID }>
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>Import</strong>
+			</header>
+			<div class="tabs">
+				<div role="tablist" class="tab-list">
+					<button type="button" class="tab-btn" data-tab-target="computer" aria-selected="true" onclick="switchTabs(this)">From your Computer</button>
+					<button type="button" class="tab-btn" data-tab-target="url" aria-selected="false" onclick="switchTabs(this)">From URL</button>
+				</div>
+				<div data-tab-panel="computer">
+					<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
+						<input type="file" name="file" accept=".json,application/json,.png,image/png" required="required"/>
+						<button type="submit">Import</button>
+					</form>
+				</div>
+				<div data-tab-panel="url" hidden="hidden">
+					<form method="post" action={ templ.URL(action) }>
+						<label>
+							URL
+							<input type="url" name="url" placeholder="https://example.com/card.json or .png" required="required"/>
+							<small>Must point directly to a .json or .png file — not a page that merely links to one.</small>
+						</label>
+						<button type="submit">Import</button>
+					</form>
+				</div>
+			</div>
+		</article>
+	</dialog>
+}
 
 // Page composes the layout with a placeholder body for a given section.
 // Each section gets its own real component once its feature lands; this is

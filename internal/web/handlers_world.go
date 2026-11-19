@@ -80,6 +80,19 @@ func (h WorldHandlers) saveImage(w http.ResponseWriter, r *http.Request, id int6
 	return db.UpdateLorebookImagePath(h.DB, id, imagePath)
 }
 
+// saveImageFromBytes is saveImage's counterpart for an image that
+// didn't arrive as a multipart form field — the PNG a lorebook import
+// uploaded, reused as its own cover rather than leaving it blank just
+// because the bytes came from a Character Card PNG with an embedded
+// character_book, not a plain <input type=file name=image> post.
+func (h WorldHandlers) saveImageFromBytes(raw []byte, id int64) error {
+	imagePath, err := saveImageBytes(raw, "lorebooks", id)
+	if err != nil {
+		return err
+	}
+	return db.UpdateLorebookImagePath(h.DB, id, imagePath)
+}
+
 func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -155,6 +168,38 @@ func (h WorldHandlers) EntryUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entry := entryFromForm(r, db.LorebookEntry{ID: entryID, LorebookID: bookID})
+	if err := db.UpdateLorebookEntry(h.DB, entry); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/world/%d", bookID), http.StatusSeeOther)
+}
+
+// EntryToggleEnabled flips an entry's Enabled flag in place — the
+// ✅/❌ cell in LorebookPage's table is itself the toggle now (Lord's
+// ask), rather than needing the full edit modal just to switch a key
+// on or off.
+func (h WorldHandlers) EntryToggleEnabled(w http.ResponseWriter, r *http.Request) {
+	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	entryID, err := strconv.ParseInt(r.PathValue("entryID"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid entry id", http.StatusBadRequest)
+		return
+	}
+	entry, err := db.GetLorebookEntry(h.DB, entryID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if entry.LorebookID != bookID {
+		http.Error(w, "entry does not belong to this lorebook", http.StatusBadRequest)
+		return
+	}
+	entry.Enabled = !entry.Enabled
 	if err := db.UpdateLorebookEntry(h.DB, entry); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
