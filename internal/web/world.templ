@@ -115,7 +115,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 							<td>{ fmt.Sprintf("%d", e.InsertionOrder) }</td>
 							<td>{ fmt.Sprintf("%d", e.Probability) }</td>
 							<td>
-								<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/toggle", book.ID, e.ID)) } class="enabled-toggle">
+								<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/toggle?page=%d", book.ID, e.ID, pager.Page)) } class="enabled-toggle">
 									if e.Enabled {
 										<button type="submit" aria-label="Disable this entry" title="Disable this entry">✅</button>
 									} else {
@@ -125,7 +125,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 							</td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-entry-%d", e.ID), []MenuAction{
-									{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID), Danger: true},
+									{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete?page=%d", book.ID, e.ID, pager.Page), Danger: true},
 								})
 							</td>
 						</tr>
@@ -151,7 +151,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 						}
 					</strong>
 				</header>
-				@lorebookEntryForm(book, editingEntry)
+				@lorebookEntryForm(book, editingEntry, pager.Page)
 			</article>
 		</dialog>
 	}
@@ -207,14 +207,14 @@ templ lorebookKeysScript() {
 	</script>
 }
 
-templ lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) {
+templ lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry, page int) {
 	{{
-	action := fmt.Sprintf("/world/%d/entries", book.ID)
+	action := fmt.Sprintf("/world/%d/entries?page=%d", book.ID, page)
 	keys, content, triggerStrategy := "", "", "selective"
 	insertionOrder, probability := "0", "100"
 	enabled := true
 	if editing != nil {
-		action = fmt.Sprintf("/world/%d/entries/%d", book.ID, editing.ID)
+		action = fmt.Sprintf("/world/%d/entries/%d?page=%d", book.ID, editing.ID, page)
 		keys = joinKeys(editing.Keys)
 		content = editing.Content
 		triggerStrategy = editing.TriggerStrategy

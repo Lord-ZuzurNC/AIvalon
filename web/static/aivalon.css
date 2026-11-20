@@ -224,6 +224,14 @@ body > header {
 	overflow-x: hidden;
 	border-right: 1px solid var(--pico-muted-border-color);
 	transition: flex-basis 150ms ease-out, max-width 150ms ease-out, padding 150ms ease-out;
+	/* .nav-footer (the "About" link) sits at the very bottom of the
+	   rail — .nav-main taking flex:1 below is what pushes it there. */
+	display: flex;
+	flex-direction: column;
+}
+
+.nav-main {
+	flex: 1 1 auto;
 }
 
 body > main {
@@ -548,6 +556,18 @@ html.sidebar-collapsed #sidebar-toggle {
 	margin: -0.25rem 0 1rem 0;
 	color: var(--pico-muted-color);
 	font-size: 0.85rem;
+}
+
+/* AboutPage's version/source/license/authorship block — a definition
+   list reads better than prose for "label: value" pairs like this. */
+.about-list dt {
+	color: var(--pico-muted-color);
+	font-size: 0.8rem;
+	margin-top: 1rem;
+}
+
+.about-list dd {
+	margin: 0.15rem 0 0 0;
 }
 
 /* The group PageHeaderWithViewAndCreate pins to the right: the
@@ -1122,9 +1142,8 @@ html.sidebar-collapsed #sidebar-toggle {
 
 /* The chat page's own background-image wrapper (set inline per
    session — see ChatPage) needs its content to stay legible over
-   whatever photo ends up behind it; .message already carries its own
-   solid background, so only the page chrome around it needs a touch
-   more contrast here. It's also a column flexbox spanning at least
+   whatever photo ends up behind it — the .has-bg-image glass rules at
+   the end of this file handle the messages themselves. It's also a column flexbox spanning at least
    the viewport height so the input row (flex-shrink:0, last child)
    always ends up at the bottom of the page — Lord's call: a short or
    empty conversation used to leave it floating right under the last
@@ -1382,4 +1401,124 @@ html.sidebar-collapsed #sidebar-toggle {
 
 .context-trim-notice:empty {
 	display: none;
+}
+
+/* characterPickerStrip (chat.templ): New-session modal's character
+   picker. One row that scrolls sideways, never wraps (also on mobile).
+   Padding leaves room for the selected glow, which overflow-x:auto
+   would otherwise clip. */
+.character-picker {
+	display: flex;
+	gap: 0.6rem;
+	overflow-x: auto;
+	padding: 0.6rem;
+	margin: 0 -0.6rem;
+}
+
+/* .vignette-card supplies the 2:3 portrait shape; this just strips
+   Pico's button chrome off it. */
+.character-pick {
+	flex: 0 0 7rem;
+	width: 7rem;
+	margin: 0;
+	padding: 0;
+	border: 2px solid transparent;
+	box-shadow: none;
+	text-align: left;
+}
+
+/* Same glow as .pin-shapes — the app's established "this is active". */
+.character-pick[aria-pressed="true"] {
+	border-color: var(--pico-primary);
+	box-shadow: 0 0 0.9rem rgba(204, 159, 69, 0.55);
+}
+
+.character-pick:focus-visible {
+	outline: 2px solid var(--pico-primary-hover);
+	outline-offset: 2px;
+}
+
+/* --- Chat layout toggle (ChatPage's .chat-layout-toggle) ---
+   In-flow at the header's end; margin-right clears the fixed ☰
+   (.session-panel-toggle) that sits over the same corner on narrow
+   screens. */
+.chat-layout-toggle {
+	margin-left: auto;
+	margin-right: 3rem;
+	font-size: 0.9rem;
+	flex-shrink: 0;
+}
+
+/* Bubble layout: narrator left, user right. #live holds the streaming
+   reply and then its final MessageBlock (SSE out-of-band swap), so it
+   gets the same column treatment. */
+.chat-bubbles #messages,
+.chat-bubbles #live {
+	display: flex;
+	flex-direction: column;
+}
+
+.chat-bubbles .message {
+	max-width: min(75%, 34rem);
+	padding: 0.55rem 0.85rem;
+	border: none;
+	border-radius: 1rem;
+	background: var(--pico-card-background-color);
+}
+
+/* Flatter corner on the speaker's own side; the accent stripe moves
+   to that side too. */
+.chat-bubbles .message-narrator {
+	align-self: flex-start;
+	border-bottom-left-radius: 0.25rem;
+	border-left: 2px solid rgba(204, 159, 69, 0.45);
+}
+
+.chat-bubbles .message-user {
+	align-self: flex-end;
+	border-bottom-right-radius: 0.25rem;
+	border-right: 2px solid var(--pico-secondary-background);
+	background: var(--pico-card-sectioning-background-color);
+}
+
+/* A short bubble is content-sized; give the edit textarea room. */
+.chat-bubbles .message.editing {
+	width: min(75%, 34rem);
+}
+
+/* Glass backdrop, both layouts, only on sessions with a background
+   image (.has-bg-image is set server-side in ChatPage). Dark, not
+   light: a dark translucent layer stays readable over both an
+   all-white and an all-black image; a light one fails on white.
+   The second selector covers the raw streaming text in #live before
+   its final .message lands. */
+.has-bg-image .message,
+.has-bg-image #live:not(:empty):not(:has(.message)) {
+	padding: 0.55rem 0.85rem;
+	border-bottom: none;
+	border-radius: var(--pico-border-radius, 0.5rem);
+	background: rgba(18, 16, 32, 0.68);
+	-webkit-backdrop-filter: blur(8px);
+	backdrop-filter: blur(8px);
+}
+
+.chat-bubbles.has-bg-image .message {
+	border-radius: 1rem;
+}
+
+.chat-bubbles.has-bg-image .message-narrator {
+	border-bottom-left-radius: 0.25rem;
+}
+
+.chat-bubbles.has-bg-image .message-user {
+	border-bottom-right-radius: 0.25rem;
+	background: rgba(29, 26, 48, 0.72);
+}
+
+/* backdrop-filter makes each .message its own stacking context, which
+   would trap an open "⋮" dropdown under the next message — lift the
+   one whose menu is open. */
+.has-bg-image .message:has(.options-dropdown:not([hidden])) {
+	position: relative;
+	z-index: 11;
 }
