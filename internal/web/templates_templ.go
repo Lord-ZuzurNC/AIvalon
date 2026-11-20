@@ -27,14 +27,14 @@ func Layout(title string, active string) templ.Component {
 		ctx = templ.InitializeContext(ctx)
 		templ_7745c5c3_Var1 := templ.GetChildren(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" data-theme=\"dark\"><head><!-- Sidebar-collapsed state must be known before the very\n\t\t\t     first paint — reading it later (even \"DOMContentLoaded\"-\n\t\t\t     early) means the header paints expanded for one frame\n\t\t\t     then snaps to its collapsed width, visible as a flash on\n\t\t\t     every full-page navigation (every link in this app is a\n\t\t\t     plain <a>, there's no SPA route to skip it). A classless\n\t\t\t     render-blocking script, first thing in <head>, runs\n\t\t\t     before the browser has anything to paint yet — the class\n\t\t\t     goes on <html> (not <body>) because body doesn't exist\n\t\t\t     as a DOM node this early in parsing. --><script>\n\t\t\t\t(function () {\n\t\t\t\t\ttry {\n\t\t\t\t\t\tif (localStorage.getItem(\"aivalon-sidebar-collapsed\") === \"1\") {\n\t\t\t\t\t\t\tdocument.documentElement.classList.add(\"sidebar-collapsed\");\n\t\t\t\t\t\t}\n\t\t\t\t\t} catch (e) {}\n\t\t\t\t})();\n\t\t\t</script><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 9, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 28, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -68,7 +68,7 @@ func Layout(title string, active string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main><script>\n\t\t\t\t// Sidebar collapse: a plain class toggle on <body>, persisted so\n\t\t\t\t// it survives a full-page navigation (every link here is a\n\t\t\t\t// regular <a>, not an SPA route) instead of snapping back open\n\t\t\t\t// on the very next click.\n\t\t\t\t(function () {\n\t\t\t\t\tvar STORAGE_KEY = \"aivalon-sidebar-collapsed\";\n\t\t\t\t\tvar toggle = document.getElementById(\"sidebar-toggle\");\n\n\t\t\t\t\tfunction apply(collapsed) {\n\t\t\t\t\t\tdocument.body.classList.toggle(\"sidebar-collapsed\", collapsed);\n\t\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\t\ttoggle.setAttribute(\"aria-expanded\", String(!collapsed));\n\t\t\t\t\t\t\ttoggle.textContent = collapsed ? \"»\" : \"«\";\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tapply(localStorage.getItem(STORAGE_KEY) === \"1\");\n\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\ttoggle.addEventListener(\"click\", function () {\n\t\t\t\t\t\t\tvar collapsed = !document.body.classList.contains(\"sidebar-collapsed\");\n\t\t\t\t\t\t\tapply(collapsed);\n\t\t\t\t\t\t\tlocalStorage.setItem(STORAGE_KEY, collapsed ? \"1\" : \"0\");\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t})();\n\t\t\t</script><script>\n\t\t\t\t// Click-to-dismiss on the backdrop for every <dialog> on the\n\t\t\t\t// page (create/edit modals): these are opened by toggling the\n\t\t\t\t// plain `open` attribute (set server-side for \"edit\", or by\n\t\t\t\t// the \"Add\" button's onclick for \"create\"), not\n\t\t\t\t// showModal() — so there's no native top-layer/backdrop\n\t\t\t\t// click-to-close behavior to rely on. A click lands with\n\t\t\t\t// e.target === the <dialog> element itself only when it hits\n\t\t\t\t// the dialog's own padding/overlay area; a click on the\n\t\t\t\t// <article> card inside bubbles from that inner element\n\t\t\t\t// instead, so this never closes the dialog from a click\n\t\t\t\t// meant for its content.\n\t\t\t\tdocument.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (e.target.tagName === \"DIALOG\") {\n\t\t\t\t\t\te.target.removeAttribute(\"open\");\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script><script>\n\t\t\t\t// Every row's \"⋮\" options dropdown (OptionsMenu, see\n\t\t\t\t// templates.templ) shares this one toggle: close every\n\t\t\t\t// other open dropdown first (only one makes sense open at\n\t\t\t\t// a time), then flip the clicked one. A document-level\n\t\t\t\t// click handler closes whatever's open when the click\n\t\t\t\t// lands outside any .options-menu — otherwise a stray\n\t\t\t\t// dropdown stays open after the user clicks elsewhere.\n\t\t\t\tfunction toggleOptionsMenu(id) {\n\t\t\t\t\tvar menu = document.getElementById(id);\n\t\t\t\t\tvar wasOpen = !menu.hidden;\n\t\t\t\t\tdocument.querySelectorAll(\".options-dropdown\").forEach(function (m) {\n\t\t\t\t\t\tm.hidden = true;\n\t\t\t\t\t});\n\t\t\t\t\tmenu.hidden = wasOpen;\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (!e.target.closest(\".options-menu\")) {\n\t\t\t\t\t\tdocument.querySelectorAll(\".options-dropdown\").forEach(function (m) {\n\t\t\t\t\t\t\tm.hidden = true;\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main><script>\n\t\t\t\t// The <head> script above already set the class before\n\t\t\t\t// first paint — this just syncs the toggle button's own\n\t\t\t\t// aria-expanded/glyph to match on load, then wires up the\n\t\t\t\t// click handler. Deliberately NOT re-applying the class\n\t\t\t\t// here: doing so a second time is harmless on its own,\n\t\t\t\t// but keeping \"decide the class\" in exactly one place\n\t\t\t\t// (the head script) avoids the two ever disagreeing if\n\t\t\t\t// one gets edited later and not the other.\n\t\t\t\t(function () {\n\t\t\t\t\tvar STORAGE_KEY = \"aivalon-sidebar-collapsed\";\n\t\t\t\t\tvar toggle = document.getElementById(\"sidebar-toggle\");\n\t\t\t\t\tvar root = document.documentElement;\n\n\t\t\t\t\tfunction syncToggleButton() {\n\t\t\t\t\t\tvar collapsed = root.classList.contains(\"sidebar-collapsed\");\n\t\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\t\ttoggle.setAttribute(\"aria-expanded\", String(!collapsed));\n\t\t\t\t\t\t\ttoggle.textContent = collapsed ? \"»\" : \"«\";\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\n\t\t\t\t\tsyncToggleButton();\n\t\t\t\t\tif (toggle) {\n\t\t\t\t\t\ttoggle.addEventListener(\"click\", function () {\n\t\t\t\t\t\t\tvar collapsed = !root.classList.contains(\"sidebar-collapsed\");\n\t\t\t\t\t\t\troot.classList.toggle(\"sidebar-collapsed\", collapsed);\n\t\t\t\t\t\t\tsyncToggleButton();\n\t\t\t\t\t\t\tlocalStorage.setItem(STORAGE_KEY, collapsed ? \"1\" : \"0\");\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t})();\n\t\t\t</script><script>\n\t\t\t\t// Click-to-dismiss on the backdrop for every <dialog> on the\n\t\t\t\t// page (create/edit modals): these are opened by toggling the\n\t\t\t\t// plain `open` attribute (set server-side for \"edit\", or by\n\t\t\t\t// the \"Add\" button's onclick for \"create\"), not\n\t\t\t\t// showModal() — so there's no native top-layer/backdrop\n\t\t\t\t// click-to-close behavior to rely on. A click lands with\n\t\t\t\t// e.target === the <dialog> element itself only when it hits\n\t\t\t\t// the dialog's own padding/overlay area; a click on the\n\t\t\t\t// <article> card inside bubbles from that inner element\n\t\t\t\t// instead, so this never closes the dialog from a click\n\t\t\t\t// meant for its content.\n\t\t\t\tdocument.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (e.target.tagName === \"DIALOG\") {\n\t\t\t\t\t\te.target.removeAttribute(\"open\");\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script><script>\n\t\t\t\t// Every row's \"⋮\" options dropdown (OptionsMenu, see\n\t\t\t\t// templates.templ) shares this one toggle: close every\n\t\t\t\t// other open dropdown first (only one makes sense open at\n\t\t\t\t// a time), then flip the clicked one. A document-level\n\t\t\t\t// click handler closes whatever's open when the click\n\t\t\t\t// lands outside any .options-menu — otherwise a stray\n\t\t\t\t// dropdown stays open after the user clicks elsewhere.\n\t\t\t\tfunction toggleOptionsMenu(id) {\n\t\t\t\t\tvar menu = document.getElementById(id);\n\t\t\t\t\tvar wasOpen = !menu.hidden;\n\t\t\t\t\tdocument.querySelectorAll(\".options-dropdown\").forEach(function (m) {\n\t\t\t\t\t\tm.hidden = true;\n\t\t\t\t\t});\n\t\t\t\t\tmenu.hidden = wasOpen;\n\t\t\t\t}\n\t\t\t\tdocument.addEventListener(\"click\", function (e) {\n\t\t\t\t\tif (!e.target.closest(\".options-menu\")) {\n\t\t\t\t\t\tdocument.querySelectorAll(\".options-dropdown\").forEach(function (m) {\n\t\t\t\t\t\t\tm.hidden = true;\n\t\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -101,7 +101,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(href)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 109, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 134, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -114,7 +114,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 109, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 134, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -127,7 +127,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 110, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 135, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -153,7 +153,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(href)).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 116, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 141, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 			if templ_7745c5c3_Err != nil {
@@ -166,7 +166,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 116, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 141, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
@@ -179,7 +179,7 @@ func navLink(href, label, active string) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 117, Col: 35}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 142, Col: 35}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 			if templ_7745c5c3_Err != nil {
@@ -259,7 +259,7 @@ func navIcon(label string) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(initial)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 158, Col: 12}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 183, Col: 12}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -294,7 +294,7 @@ func Placeholder(section string) templ.Component {
 		var templ_7745c5c3_Var13 string
 		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(section)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 163, Col: 14}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 188, Col: 14}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 		if templ_7745c5c3_Err != nil {
@@ -335,7 +335,7 @@ func BackLink(href, label string) templ.Component {
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 171, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 196, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 		if templ_7745c5c3_Err != nil {
@@ -348,7 +348,7 @@ func BackLink(href, label string) templ.Component {
 		var templ_7745c5c3_Var16 string
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 171, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 196, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
@@ -393,7 +393,7 @@ func Avatar(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templruntime.NewAttributeExpression("/static/" + imagePath).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 182, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 207, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -406,7 +406,7 @@ func Avatar(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templruntime.NewAttributeExpression(name).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 182, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 207, Col: 63}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 			if templ_7745c5c3_Err != nil {
@@ -428,7 +428,7 @@ func Avatar(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(initial)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 188, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 213, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -477,7 +477,7 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(href)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 204, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 229, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
@@ -495,7 +495,7 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templruntime.NewAttributeExpression("/static/" + imagePath).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 206, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 231, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 			if templ_7745c5c3_Err != nil {
@@ -517,7 +517,7 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 			var templ_7745c5c3_Var24 string
 			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(initial)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 212, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 237, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -535,7 +535,7 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 214, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 239, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -548,7 +548,7 @@ func vignetteCard(href, imagePath, name, deleteAction string) templ.Component {
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(deleteAction)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 216, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 241, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 		if templ_7745c5c3_Err != nil {
@@ -600,7 +600,7 @@ func viewToggle(viewKey string) templ.Component {
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templruntime.NewAttributeExpression(viewKey).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 245, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 270, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
@@ -692,7 +692,7 @@ func ImageField(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templruntime.NewAttributeExpression("/static/" + imagePath).ResolveURL(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 291, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 316, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
@@ -705,7 +705,7 @@ func ImageField(imagePath, name string) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templruntime.NewAttributeExpression(name).Resolve(ctx)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 291, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 316, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 			if templ_7745c5c3_Err != nil {
@@ -766,7 +766,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templruntime.NewAttributeExpression(menuID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 317, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 342, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -779,7 +779,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templruntime.NewAttributeExpression(menuID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 318, Col: 18}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 343, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 		if templ_7745c5c3_Err != nil {
@@ -798,7 +798,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Href)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 321, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 346, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var36)
 				if templ_7745c5c3_Err != nil {
@@ -811,7 +811,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 321, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 346, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -829,7 +829,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Action)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 323, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 348, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 				if templ_7745c5c3_Err != nil {
@@ -842,7 +842,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var39 string
 				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 324, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 349, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 				if templ_7745c5c3_Err != nil {
@@ -860,7 +860,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var40 string
 				templ_7745c5c3_Var40, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(a.Action)).ResolveURL(ctx)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 327, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 352, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 				if templ_7745c5c3_Err != nil {
@@ -873,7 +873,7 @@ func OptionsMenu(menuID string, actions []MenuAction) templ.Component {
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(a.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 328, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 353, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -925,7 +925,7 @@ func PageHeaderWithVaultAndCreate(title, modalID, label string) templ.Component 
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 346, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 371, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -938,7 +938,7 @@ func PageHeaderWithVaultAndCreate(title, modalID, label string) templ.Component 
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 349, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 374, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
@@ -951,7 +951,7 @@ func PageHeaderWithVaultAndCreate(title, modalID, label string) templ.Component 
 		var templ_7745c5c3_Var45 string
 		templ_7745c5c3_Var45, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 349, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 374, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 		if templ_7745c5c3_Err != nil {
@@ -964,7 +964,7 @@ func PageHeaderWithVaultAndCreate(title, modalID, label string) templ.Component 
 		var templ_7745c5c3_Var46 string
 		templ_7745c5c3_Var46, templ_7745c5c3_Err = templruntime.NewAttributeExpression(modalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 349, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 374, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var46)
 		if templ_7745c5c3_Err != nil {
@@ -1009,7 +1009,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label s
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 363, Col: 13}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 388, Col: 13}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1022,7 +1022,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label s
 		var templ_7745c5c3_Var49 string
 		templ_7745c5c3_Var49, templ_7745c5c3_Err = templruntime.NewAttributeExpression(importModalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 365, Col: 168}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 390, Col: 168}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 		if templ_7745c5c3_Err != nil {
@@ -1043,7 +1043,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label s
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 367, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 392, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 		if templ_7745c5c3_Err != nil {
@@ -1056,7 +1056,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label s
 		var templ_7745c5c3_Var51 string
 		templ_7745c5c3_Var51, templ_7745c5c3_Err = templruntime.NewAttributeExpression(label).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 367, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 392, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var51)
 		if templ_7745c5c3_Err != nil {
@@ -1069,7 +1069,7 @@ func PageHeaderWithViewAndCreate(title, viewKey, importModalID, modalID, label s
 		var templ_7745c5c3_Var52 string
 		templ_7745c5c3_Var52, templ_7745c5c3_Err = templruntime.NewAttributeExpression(modalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 367, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 392, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 		if templ_7745c5c3_Err != nil {
@@ -1146,7 +1146,7 @@ func ImportModal(modalID, action string) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templruntime.NewAttributeExpression(modalID).Resolve(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 401, Col: 21}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 426, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var55)
 		if templ_7745c5c3_Err != nil {
@@ -1159,7 +1159,7 @@ func ImportModal(modalID, action string) templ.Component {
 		var templ_7745c5c3_Var56 string
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(action)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 413, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 438, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var56)
 		if templ_7745c5c3_Err != nil {
@@ -1172,7 +1172,7 @@ func ImportModal(modalID, action string) templ.Component {
 		var templ_7745c5c3_Var57 string
 		templ_7745c5c3_Var57, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(action)).ResolveURL(ctx)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 419, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/templates.templ`, Line: 444, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var57)
 		if templ_7745c5c3_Err != nil {

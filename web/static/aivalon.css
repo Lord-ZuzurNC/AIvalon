@@ -69,6 +69,22 @@ a {
 	--pico-text-decoration: none;
 }
 
+/* Pico's own hover/focus/active/aria-current state rule re-sets
+   --pico-text-decoration back to "underline" regardless of the base
+   rule above — it's wrapped in :where() (zero specificity) but its
+   :is(:hover,:active,:focus,[aria-current]) part still carries more
+   specificity than a plain `a:hover` override here would, so without
+   this every hovered link — nav items, vignette cards, chat/lorebook/
+   character rows, the view-toggle glyph — flashed back to underlined.
+   !important sidesteps the specificity fight entirely rather than
+   trying to out-select Pico's own rule. */
+a:hover,
+a:focus,
+a:active,
+a[aria-current] {
+	text-decoration: none !important;
+}
+
 /* The "classless" Pico build only styles bare tags — it has no
    .secondary/.primary modifier classes at all, so every
    class="secondary" in this app (the view-toggle's inactive button,
@@ -279,26 +295,30 @@ body > header nav a:not([aria-current="page"]):hover {
 	flex-shrink: 0;
 }
 
-body.sidebar-collapsed > header {
+/* The class now lives on <html> (set by a render-blocking head
+   script, before first paint — see Layout) rather than <body>: these
+   selectors target html.sidebar-collapsed and reach down to the
+   actual elements instead of matching on body directly. */
+html.sidebar-collapsed > body > header {
 	flex-basis: 56px;
 	max-width: 56px;
 	padding-right: 0.5rem;
 	padding-left: 0.5rem;
 }
 
-body.sidebar-collapsed .sidebar-header {
+html.sidebar-collapsed .sidebar-header {
 	justify-content: center;
 }
 
-body.sidebar-collapsed .nav-label {
+html.sidebar-collapsed .nav-label {
 	display: none;
 }
 
-body.sidebar-collapsed .nav-initial {
+html.sidebar-collapsed .nav-initial {
 	display: flex;
 }
 
-body.sidebar-collapsed #sidebar-toggle {
+html.sidebar-collapsed #sidebar-toggle {
 	padding: 0.25rem 0.4rem;
 }
 
@@ -496,10 +516,20 @@ body.sidebar-collapsed #sidebar-toggle {
 	align-items: center;
 	justify-content: space-between;
 	gap: 1rem;
+	margin-bottom: 1.25rem;
 }
 
 .page-header h1 {
 	margin: 0;
+}
+
+/* LorebookPage's own entry count, right under its <h1> — see
+   entryCountLabel. Muted/small so it reads as metadata, not a second
+   heading. */
+.entry-count-sub {
+	margin: -0.25rem 0 1rem 0;
+	color: var(--pico-muted-color);
+	font-size: 0.85rem;
 }
 
 /* The group PageHeaderWithViewAndCreate pins to the right: the
@@ -1211,7 +1241,7 @@ body.sidebar-collapsed #sidebar-toggle {
    session panel, multi-column tables, portrait vignettes).
    ============================================================ */
 @media (max-width: 640px) {
-	/* Same narrow rail as body.sidebar-collapsed > header on
+	/* Same narrow rail as html.sidebar-collapsed > body > header on
 	   desktop — width only, position/height/border stay as set
 	   in the unconditional rule above (sticky, full height, right
 	   border) so it still reads as a left-hand rail, not a bar. */
