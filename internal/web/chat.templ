@@ -56,11 +56,13 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
 	@Layout("Chat", "Chat") {
 		if len(profiles) == 0 {
-			<h1>Chat</h1>
+			<div class="page-header">
+				<h1>Chat</h1>
+				<a href="/vault" class="vault-trigger" aria-label="Vault" title="Vault">🔒</a>
+			</div>
 		} else {
-			@PageHeaderWithCreate("Chat", "session-modal", "New session")
+			@PageHeaderWithVaultAndCreate("Chat", "session-modal", "New session")
 		}
-		<p><a href="/vault">🔒 Vault</a></p>
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
 		} else {

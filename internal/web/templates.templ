@@ -231,48 +231,48 @@ templ vignetteCard(href, imagePath, name, deleteAction string) {
 // content — viewKey must be unique per page ("world", "character")
 // since the choice is remembered in localStorage per key, not
 // globally (Lord might want one page as a grid and the other as a
-// list). The two panels it switches between are whatever the caller
-// wraps in data-view-panel="list"/"grid" right after it, inside the
-// same data-view-key container. Grid is the default (both buttons'
-// initial classes and viewToggleScript's fallback agree on that), so
-// mark grid primary/list secondary here to match.
+// list). The panel it switches to is whatever the caller wraps in
+// data-view-panel="list"/"grid" right after it, inside the same
+// data-view-key container. One button, not two: it shows the glyph
+// for the CURRENT view and a tap flips to the other — Lord's call,
+// to save space in the header's action row and because two buttons
+// side by side (one always "active"-styled) read as if World and
+// Character responded differently when really it was just each
+// page's own independently-remembered last choice. Grid is the
+// default (viewToggleScript's own fallback agrees), so the glyph
+// starts on ⊞.
 templ viewToggle(viewKey string) {
-	<div class="view-toggle" data-view-key={ viewKey } role="group">
-		<button type="button" class="view-toggle-btn secondary" data-view="list" aria-label="List view">☰</button>
-		<button type="button" class="view-toggle-btn primary" data-view="grid" aria-label="Grid view">⊞</button>
-	</div>
+	<button type="button" class="view-toggle-btn" data-view-key={ viewKey } aria-label="Grid view — tap to switch to list" title="Grid view — tap to switch to list">⊞</button>
 }
 
-// viewToggleScript wires up every [data-view-key] container on the
-// page: clicking a .view-toggle-btn inside it shows the matching
-// [data-view-panel] and hides the other, remembers the choice in
-// localStorage (keyed by data-view-key) so a reload doesn't reset it
-// back to Grid (the default — Lord's call, rather than List), and
-// marks the active button "primary"/inactive one "secondary" (Pico's
-// own button-color classes, not custom CSS) —
-// panels are looked up document-wide rather than via a shared parent
-// since the toggle now lives inside the page header, not directly
+// viewToggleScript wires up every [data-view-key] button on the
+// page: a click shows the matching [data-view-panel] and hides the
+// other, remembers the choice in localStorage (keyed by data-view-key)
+// so a reload doesn't reset it back to Grid (the default), and swaps
+// the button's own glyph/label to match whichever view is now active
+// — panels are looked up document-wide rather than via a shared
+// parent since the toggle lives inside the page header, not directly
 // above the panels it switches.
 templ viewToggleScript() {
 	<script>
 		document.querySelectorAll("[data-view-key]").forEach(function (toggle) {
 			var key = "aivalon-view-" + toggle.dataset.viewKey;
+			var GLYPH = { grid: "⊞", list: "☰" };
+			var LABEL = { grid: "Grid view — tap to switch to list", list: "List view — tap to switch to grid" };
 			function apply(view) {
 				document.querySelectorAll("[data-view-panel]").forEach(function (panel) {
 					panel.hidden = panel.dataset.viewPanel !== view;
 				});
-				toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
-					var active = btn.dataset.view === view;
-					btn.classList.toggle("primary", active);
-					btn.classList.toggle("secondary", !active);
-				});
+				toggle.textContent = GLYPH[view];
+				toggle.setAttribute("aria-label", LABEL[view]);
+				toggle.setAttribute("title", LABEL[view]);
+				toggle.dataset.view = view;
 			}
 			apply(localStorage.getItem(key) || "grid");
-			toggle.querySelectorAll(".view-toggle-btn").forEach(function (btn) {
-				btn.addEventListener("click", function () {
-					localStorage.setItem(key, btn.dataset.view);
-					apply(btn.dataset.view);
-				});
+			toggle.addEventListener("click", function () {
+				var next = toggle.dataset.view === "grid" ? "list" : "grid";
+				localStorage.setItem(key, next);
+				apply(next);
 			});
 		});
 	</script>
@@ -333,15 +333,21 @@ templ OptionsMenu(menuID string, actions []MenuAction) {
 	</div>
 }
 
-// PageHeaderWithCreate is a list page's title row: the heading on the
-// left, a round "+" button on the right that opens modalID (an existing
-// <dialog>) — replacing the old full-width "Add a ..." button, per
-// Lord's ask for a consistent create affordance across Chat/World/
-// Character instead of a different button per page.
-templ PageHeaderWithCreate(title, modalID, label string) {
+// PageHeaderWithVaultAndCreate is Chat's own title row: heading on the
+// left, then the Vault icon and the round "+" together on the right
+// (Lord's ask — previously a separate "🔒 Vault" text line under the
+// header; now just the lock glyph grouped with "+" like World/
+// Character's own action row). The link goes straight to GET /vault,
+// which already renders the PIN entry (or first-time setup) directly
+// — see VaultHandlers.Show — so there's no extra step between the tap
+// and the PIN pad.
+templ PageHeaderWithVaultAndCreate(title, modalID, label string) {
 	<div class="page-header">
 		<h1>{ title }</h1>
-		<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+		<div class="page-header-actions">
+			<a href="/vault" class="vault-trigger" aria-label="Vault" title="Vault">🔒</a>
+			<button type="button" class="create-button" aria-label={ label } title={ label } data-modal-id={ modalID } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+		</div>
 	</div>
 }
 

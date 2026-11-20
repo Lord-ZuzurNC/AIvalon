@@ -274,6 +274,25 @@ func joinKeys(keys []string) string {
 	return strings.Join(keys, ", ")
 }
 
+// keyCountLabel is the entries table's "N keys" badge — Lord's ask,
+// so a long key list (easily dozens on an imported card) is sized at
+// a glance without having to read or expand it.
+func keyCountLabel(n int) string {
+	if n == 1 {
+		return "1 key"
+	}
+	return fmt.Sprintf("%d keys", n)
+}
+
+// previewKeys returns at most n keys — the collapsed state's preview
+// before lorebookKeysCell's "show all" toggle expands to the rest.
+func previewKeys(keys []string, n int) []string {
+	if len(keys) <= n {
+		return keys
+	}
+	return keys[:n]
+}
+
 func splitKeys(s string) []string {
 	var keys []string
 	for _, part := range strings.Split(s, ",") {

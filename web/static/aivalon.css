@@ -396,6 +396,36 @@ body.sidebar-collapsed #sidebar-toggle {
 	font-size: 0.75rem;
 }
 
+/* Lorebook entries table's Keys cell (see lorebookKeysCell,
+   world.templ) — only shown once a key list is long enough to
+   collapse (2 or fewer keys just render as a plain link, no wrapper
+   needed). The bottom toggle mirrors the top one so collapsing a
+   long key list doesn't require scrolling back up to find the
+   control that expanded it. */
+.keys-cell {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	align-items: flex-start;
+}
+
+.keys-toggle {
+	width: auto;
+	margin: 0;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+	font-size: 0.75rem;
+	color: var(--pico-muted-color);
+	cursor: pointer;
+}
+
+.keys-toggle:hover,
+.keys-toggle:focus {
+	color: var(--pico-color);
+}
+
 .chat-header {
 	display: flex;
 	align-items: center;
@@ -483,21 +513,22 @@ body.sidebar-collapsed #sidebar-toggle {
 }
 
 /* --- List/Grid view toggle (World, Character) ---
-   Just the two emoji, no extra chrome — viewToggleScript marks the
-   active one "primary" and the inactive one "secondary" (Pico's own
-   button-color classes), and owns the actual show/hide of
-   [data-view-panel="list"/"grid"] (needs localStorage, not CSS). */
-.view-toggle {
-	display: flex;
-	gap: 0.4rem;
-}
-
+   A single icon button (see viewToggle/viewToggleScript) showing the
+   current view's own glyph — flat, no button chrome, same visual
+   weight as .import-trigger/.vault-trigger beside it in
+   .page-header-actions rather than a filled Pico button standing out
+   among flat icons. */
 .view-toggle-btn {
 	width: auto;
 	margin: 0;
-	padding: 0.3rem 0.6rem;
-	font-size: 1rem;
+	padding: 0;
+	background: none;
+	border: none;
+	box-shadow: none;
+	font-size: 1.3rem;
 	line-height: 1;
+	color: var(--pico-primary);
+	cursor: pointer;
 }
 
 /* Portrait vignette grid: fixed-ish card width, wraps naturally.
@@ -611,8 +642,12 @@ body.sidebar-collapsed #sidebar-toggle {
    opens ImportModal, same round-button-less pattern as the view
    toggle's own glyphs — no background/border, matching the gold
    accent color so it reads as a peer of the ☰/⊞/+ controls beside
-   it rather than a different kind of control. */
-.import-trigger {
+   it rather than a different kind of control. .vault-trigger (Chat's
+   own header — see PageHeaderWithVaultAndCreate) is the same look on
+   an <a> instead of a <button>, so it shares the rule rather than
+   duplicating it. */
+.import-trigger,
+.vault-trigger {
 	width: auto;
 	margin: 0;
 	padding: 0;

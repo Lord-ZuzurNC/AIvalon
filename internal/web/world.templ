@@ -97,7 +97,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 				<tbody>
 					for _, e := range entries {
 						<tr>
-							<td><a href={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", book.ID, e.ID)) }>{ joinKeys(e.Keys) }</a></td>
+							<td>@lorebookKeysCell(book.ID, e.ID, e.Keys)</td>
 							<td>{ e.TriggerStrategy }</td>
 							<td>{ fmt.Sprintf("%d", e.InsertionOrder) }</td>
 							<td>{ fmt.Sprintf("%d", e.Probability) }</td>
@@ -119,6 +119,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 					}
 				</tbody>
 			</table>
+			@lorebookKeysScript()
 		}
 
 		<button type="button" class="create-button" aria-label="Add an entry" title="Add an entry" onclick="document.getElementById('entry-modal').setAttribute('open','')">+</button>
@@ -139,6 +140,53 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 			</article>
 		</dialog>
 	}
+}
+
+// lorebookKeysCell shows an entry's trigger keys plus a count badge
+// (Lord's ask — an imported card's lorebook can carry dozens of keys
+// per entry, no way to size that at a glance before this). Two or
+// fewer keys just render in full, same as before; past that, only
+// the first two show plus a "▾ N keys" toggle above AND a mirrored
+// "▴ Collapse" below the now-expanded list — so collapsing a long
+// list back down doesn't mean scrolling back up to find the control
+// that opened it. The <a> still goes straight to editing the entry;
+// the toggles are separate siblings, not nested inside it, so they
+// don't also trigger that navigation.
+templ lorebookKeysCell(bookID, entryID int64, keys []string) {
+	{{ editHref := templ.URL(fmt.Sprintf("/world/%d/entries/%d/edit", bookID, entryID)) }}
+	if len(keys) <= 2 {
+		<a href={ editHref }>{ joinKeys(keys) }</a>
+	} else {
+		{{ preview := joinKeys(previewKeys(keys, 2)) + "…" }}
+		{{ full := joinKeys(keys) }}
+		<div class="keys-cell">
+			<button type="button" class="keys-toggle" aria-label="Show all keys" data-expand-label={ "▾ " + keyCountLabel(len(keys)) } data-collapse-label="▴ Collapse" onclick="toggleLorebookKeys(this)">{ "▾ " + keyCountLabel(len(keys)) }</button>
+			<a href={ editHref } class="keys-list" data-preview={ preview } data-full={ full }>{ preview }</a>
+			<button type="button" class="keys-toggle keys-toggle-bottom" hidden aria-label="Collapse keys" onclick="toggleLorebookKeys(this)">▴ Collapse</button>
+		</div>
+	}
+}
+
+// lorebookKeysScript drives lorebookKeysCell's expand/collapse — both
+// toggles in a cell (top and bottom) flip the same state together, so
+// either one works regardless of how far the user scrolled. State
+// lives in the bottom toggle's own hidden attribute (visible = "the
+// list below is expanded") rather than being re-derived from text
+// content, so a label with "…" or odd characters in it can't confuse
+// the check.
+templ lorebookKeysScript() {
+	<script>
+		function toggleLorebookKeys(btn) {
+			var cell = btn.closest(".keys-cell");
+			var top = cell.querySelector(".keys-toggle:not(.keys-toggle-bottom)");
+			var bottom = cell.querySelector(".keys-toggle-bottom");
+			var link = cell.querySelector(".keys-list");
+			var expanding = bottom.hidden;
+			link.textContent = expanding ? link.dataset.full : link.dataset.preview;
+			top.textContent = expanding ? top.dataset.collapseLabel : top.dataset.expandLabel;
+			bottom.hidden = !expanding;
+		}
+	</script>
 }
 
 templ lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) {
