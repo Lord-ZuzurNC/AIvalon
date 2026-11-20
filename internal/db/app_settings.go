@@ -3,13 +3,27 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 // AppSettings holds small global settings not tied to any one backend
 // profile or session. Backed by the single row in app_settings (id=1,
 // seeded by migration 00002) — there's exactly one of these per install.
+//
+// UpdateAppSettings writes every field, so a handler changing one of
+// them must GetAppSettings first and modify that, not build a fresh
+// struct — otherwise the other fields get zeroed.
 type AppSettings struct {
 	SystemPromptTemplate string
+	// PNGImportWhitelist: hostnames (lowercase, no port) the "From URL"
+	// import may fetch Character Card PNGs from, beyond loopback. Stored
+	// one per line (migration 00010).
+	PNGImportWhitelist []string
+	// ContextBudgetChars caps system prompt + history sent per reply, in
+	// characters (~4 chars/token is the rough rule — a character count,
+	// not a real token count, since tokenizers differ per backend/model).
+	// 0 means no limit. Migration 00011, default 24000.
+	ContextBudgetChars int
 }
 
 // DefaultSystemPromptTemplate mirrors the seed/migration-updated value in
@@ -40,17 +54,45 @@ If {{persona_name}} asks one character to relay something to another and report 
 
 func GetAppSettings(db *sql.DB) (AppSettings, error) {
 	var s AppSettings
-	err := db.QueryRow(`SELECT system_prompt_template FROM app_settings WHERE id = 1`).Scan(&s.SystemPromptTemplate)
+	var whitelist string
+	err := db.QueryRow(`SELECT system_prompt_template, png_import_whitelist, context_budget_chars FROM app_settings WHERE id = 1`).
+		Scan(&s.SystemPromptTemplate, &whitelist, &s.ContextBudgetChars)
 	if err != nil {
 		return AppSettings{}, fmt.Errorf("getting app settings: %w", err)
 	}
+	s.PNGImportWhitelist = SplitHostList(whitelist)
 	return s, nil
 }
 
 func UpdateAppSettings(db *sql.DB, s AppSettings) error {
-	_, err := db.Exec(`UPDATE app_settings SET system_prompt_template = ? WHERE id = 1`, s.SystemPromptTemplate)
+	_, err := db.Exec(`UPDATE app_settings SET system_prompt_template = ?, png_import_whitelist = ?, context_budget_chars = ? WHERE id = 1`,
+		s.SystemPromptTemplate, JoinHostList(s.PNGImportWhitelist), s.ContextBudgetChars)
 	if err != nil {
 		return fmt.Errorf("updating app settings: %w", err)
 	}
 	return nil
+}
+
+// SplitHostList/JoinHostList convert between the whitelist's stored /
+// textarea form (one hostname per line) and the []string the rest of
+// the app uses — same shape as web's splitKeys/joinKeys for lorebook
+// keys, but newline-separated since that's how a textarea reads.
+// Commas and spaces are accepted as separators too (a pasted
+// "a.com, b.com" shouldn't become one bogus host), entries are
+// lowercased, and blanks/duplicates dropped.
+func SplitHostList(s string) []string {
+	var hosts []string
+	seen := map[string]bool{}
+	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' || r == ',' || r == ' ' || r == '\t' }) {
+		h := strings.ToLower(strings.TrimSpace(part))
+		if h != "" && !seen[h] {
+			seen[h] = true
+			hosts = append(hosts, h)
+		}
+	}
+	return hosts
+}
+
+func JoinHostList(hosts []string) string {
+	return strings.Join(hosts, "\n")
 }

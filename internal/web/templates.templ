@@ -1,5 +1,7 @@
 package web
 
+import "fmt"
+
 templ Layout(title string, active string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="dark">
@@ -108,24 +110,186 @@ templ Layout(title string, active string) {
 				// click handler closes whatever's open when the click
 				// lands outside any .options-menu — otherwise a stray
 				// dropdown stays open after the user clicks elsewhere.
-				function toggleOptionsMenu(id) {
-					var menu = document.getElementById(id);
-					var wasOpen = !menu.hidden;
+				// aria-expanded on every trigger is kept in sync here, the
+				// one place that opens/closes dropdowns, so a screen reader
+				// always hears the real state.
+				function closeOptionsMenus() {
 					document.querySelectorAll(".options-dropdown").forEach(function (m) {
 						m.hidden = true;
 					});
+					document.querySelectorAll(".options-trigger").forEach(function (t) {
+						t.setAttribute("aria-expanded", "false");
+					});
+				}
+				function toggleOptionsMenu(id) {
+					var menu = document.getElementById(id);
+					var wasOpen = !menu.hidden;
+					closeOptionsMenus();
 					menu.hidden = wasOpen;
+					if (!wasOpen) {
+						var trigger = document.querySelector('.options-trigger[data-menu-id="' + id + '"]');
+						if (trigger) {
+							trigger.setAttribute("aria-expanded", "true");
+						}
+						// Standard menu-button pattern: focus moves into
+						// the menu so arrows/Escape (see a11yScript) work
+						// straight away from the keyboard.
+						var first = menu.querySelector('[role="menuitem"]');
+						if (first) {
+							first.focus();
+						}
+					}
 				}
 				document.addEventListener("click", function (e) {
 					if (!e.target.closest(".options-menu")) {
-						document.querySelectorAll(".options-dropdown").forEach(function (m) {
-							m.hidden = true;
-						});
+						closeOptionsMenus();
 					}
 				});
 			</script>
+			@a11yScript()
 		</body>
 	</html>
+}
+
+// a11yScript is the keyboard/screen-reader layer every page gets from
+// Layout, written once so every <dialog> and "⋮" OptionsMenu inherits
+// it:
+//   - attribute-toggled dialogs (the create/edit/import modals — opened
+//     via setAttribute('open'), NOT showModal(), see the click-to-dismiss
+//     script above) get what a modal dialog gives for free: focus moves
+//     in on open, Tab/Shift+Tab cycle inside it, Escape closes it, and
+//     focus returns to whatever opened it on close. A MutationObserver
+//     on the `open` attribute catches every way a dialog opens/closes
+//     (button onclick, ✕, backdrop click, Escape) without each caller
+//     having to remember to call a helper.
+//   - showModal() dialogs (Vault's PIN pads) are skipped — the browser
+//     already traps focus, handles Escape and restores focus for those.
+//   - an open .options-dropdown closes on Escape (focus back to its ⋮
+//     trigger) and Up/Down move between its menu items.
+templ a11yScript() {
+	<script>
+		(function () {
+			var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+			function focusables(root) {
+				return Array.prototype.filter.call(root.querySelectorAll(FOCUSABLE), function (el) {
+					return el.getClientRects().length > 0;
+				});
+			}
+			function isManaged(dialog) {
+				return dialog.open && !dialog.matches(":modal");
+			}
+			function topDialog() {
+				var open = Array.prototype.filter.call(document.querySelectorAll("dialog[open]"), isManaged);
+				return open.length ? open[open.length - 1] : null;
+			}
+
+			function onOpen(dialog) {
+				var active = document.activeElement;
+				dialog._opener = active && !dialog.contains(active) ? active : null;
+				// Skip the header's ✕ (rel="prev") when there's a real
+				// field to land on — the first thing a user wants to do
+				// in an "Add …" modal is type, not close it again.
+				var items = focusables(dialog);
+				var target = items.filter(function (el) { return el.getAttribute("rel") !== "prev"; })[0] || items[0];
+				if (!target) {
+					dialog.setAttribute("tabindex", "-1");
+					target = dialog;
+				}
+				target.focus();
+			}
+			function onClose(dialog) {
+				var opener = dialog._opener;
+				dialog._opener = null;
+				if (opener && document.contains(opener)) {
+					opener.focus();
+				}
+			}
+
+			new MutationObserver(function (mutations) {
+				mutations.forEach(function (m) {
+					var dialog = m.target;
+					if (dialog.tagName !== "DIALOG" || dialog.matches(":modal")) {
+						return;
+					}
+					if (dialog.open) {
+						onOpen(dialog);
+					} else {
+						onClose(dialog);
+					}
+				});
+			}).observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
+
+			// Dialogs the server rendered already open (an "edit" URL)
+			// never trigger the observer — focus into them on load.
+			document.querySelectorAll("dialog[open]").forEach(function (dialog) {
+				if (isManaged(dialog)) {
+					onOpen(dialog);
+				}
+			});
+
+			document.addEventListener("keydown", function (e) {
+				var dropdown = document.activeElement && document.activeElement.closest(".options-dropdown:not([hidden])");
+				if (!dropdown) {
+					dropdown = document.querySelector(".options-dropdown:not([hidden])");
+				}
+				if (dropdown) {
+					var trigger = document.querySelector('.options-trigger[data-menu-id="' + dropdown.id + '"]');
+					if (e.key === "Escape") {
+						e.preventDefault();
+						closeOptionsMenus();
+						if (trigger) {
+							trigger.focus();
+						}
+						return;
+					}
+					if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+						var menuItems = Array.prototype.slice.call(dropdown.querySelectorAll('[role="menuitem"]'));
+						if (menuItems.length) {
+							e.preventDefault();
+							var i = menuItems.indexOf(document.activeElement);
+							var step = e.key === "ArrowDown" ? 1 : -1;
+							menuItems[(i + step + menuItems.length) % menuItems.length].focus();
+						}
+						return;
+					}
+					if (e.key === "Tab") {
+						// Tabbing away from an open menu closes it, so a
+						// stray dropdown never lingers behind the focus.
+						closeOptionsMenus();
+					}
+				}
+
+				var dialog = topDialog();
+				if (!dialog) {
+					return;
+				}
+				if (e.key === "Escape") {
+					e.preventDefault();
+					dialog.removeAttribute("open");
+					return;
+				}
+				if (e.key === "Tab") {
+					var items = focusables(dialog);
+					if (!items.length) {
+						e.preventDefault();
+						dialog.focus();
+						return;
+					}
+					var first = items[0];
+					var last = items[items.length - 1];
+					var inside = dialog.contains(document.activeElement);
+					if (e.shiftKey && (!inside || document.activeElement === first || document.activeElement === dialog)) {
+						e.preventDefault();
+						last.focus();
+					} else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+						e.preventDefault();
+						first.focus();
+					}
+				}
+			});
+		})();
+	</script>
 }
 
 templ navLink(href, label, active string) {
@@ -225,7 +389,7 @@ templ Avatar(imagePath, name string) {
 // inside an anchor is invalid HTML) so the trash icon stays clickable
 // on top of the full-card link underneath it.
 templ vignetteCard(href, imagePath, name, deleteAction string) {
-	<div class="vignette-card">
+	<div class="vignette-card" data-search-name={ name }>
 		<a href={ templ.URL(href) } class="vignette-card-link">
 			if imagePath != "" {
 				<img class="vignette-image" src={ "/static/" + imagePath } alt=""/>
@@ -239,7 +403,7 @@ templ vignetteCard(href, imagePath, name, deleteAction string) {
 			<span class="vignette-label">{ name }</span>
 		</a>
 		<form method="post" action={ templ.URL(deleteAction) } class="vignette-delete">
-			<button type="submit" aria-label="Delete">
+			<button type="submit" aria-label={ "Delete " + name } title={ "Delete " + name }>
 				<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
 					<path d="M4 7h16"></path>
 					<path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
@@ -292,6 +456,10 @@ templ viewToggleScript() {
 				toggle.setAttribute("aria-label", LABEL[view]);
 				toggle.setAttribute("title", LABEL[view]);
 				toggle.dataset.view = view;
+				// Mirrored into a cookie so the server can size the
+				// page to the view (24 cards per Grid page, 50 rows per
+				// List page — see viewPageSize in pagination.go).
+				document.cookie = key + "=" + view + "; path=/; max-age=31536000; SameSite=Lax";
 			}
 			apply(localStorage.getItem(key) || "grid");
 			toggle.addEventListener("click", function () {
@@ -339,18 +507,18 @@ type MenuAction struct {
 // one first.
 templ OptionsMenu(menuID string, actions []MenuAction) {
 	<div class="options-menu">
-		<button type="button" class="options-trigger" aria-label="Options" data-menu-id={ menuID } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
-		<div id={ menuID } class="options-dropdown" hidden>
+		<button type="button" class="options-trigger" aria-label="Options" aria-haspopup="true" aria-expanded="false" aria-controls={ menuID } data-menu-id={ menuID } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
+		<div id={ menuID } class="options-dropdown" role="menu" hidden>
 			for _, a := range actions {
 				if a.Href != "" {
-					<a href={ templ.URL(a.Href) }>{ a.Label }</a>
+					<a href={ templ.URL(a.Href) } role="menuitem">{ a.Label }</a>
 				} else if a.Danger {
 					<form method="post" action={ templ.URL(a.Action) }>
-						<button type="submit" class="danger">{ a.Label }</button>
+						<button type="submit" class="danger" role="menuitem">{ a.Label }</button>
 					</form>
 				} else {
 					<form method="post" action={ templ.URL(a.Action) }>
-						<button type="submit">{ a.Label }</button>
+						<button type="submit" role="menuitem">{ a.Label }</button>
 					</form>
 				}
 			}
@@ -431,8 +599,8 @@ templ ImportModal(modalID, action string) {
 			</header>
 			<div class="tabs">
 				<div role="tablist" class="tab-list">
-					<button type="button" class="tab-btn" data-tab-target="computer" aria-selected="true" onclick="switchTabs(this)">From your Computer</button>
-					<button type="button" class="tab-btn" data-tab-target="url" aria-selected="false" onclick="switchTabs(this)">From URL</button>
+					<button type="button" role="tab" class="tab-btn" data-tab-target="computer" aria-selected="true" onclick="switchTabs(this)">From your Computer</button>
+					<button type="button" role="tab" class="tab-btn" data-tab-target="url" aria-selected="false" onclick="switchTabs(this)">From URL</button>
 				</div>
 				<div data-tab-panel="computer">
 					<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
@@ -445,7 +613,7 @@ templ ImportModal(modalID, action string) {
 						<label>
 							URL
 							<input type="url" name="url" placeholder="https://example.com/card.json or .png" required="required"/>
-							<small>Must point directly to a .json or .png file — not a page that merely links to one.</small>
+							<small>Must point directly to a .json or .png file — not a page that merely links to one. JSON only from 127.0.0.1; Character Card PNGs also from the domains allowed in Settings → Imports.</small>
 						</label>
 						<button type="submit">Import</button>
 					</form>
@@ -462,4 +630,77 @@ templ Page(title string, active string) {
 	@Layout(title, active) {
 		@Placeholder(active)
 	}
+}
+
+// pagerNav is the Prev / "Page N of M" / Next row under every
+// server-side-paginated list (see Pager, pagination.go). Renders
+// nothing when everything fits on one page. Empty spans hold Prev/Next's
+// slots on the first/last page so the status text doesn't jump sideways.
+templ pagerNav(p Pager) {
+	if p.TotalPages > 1 {
+		<nav class="pager" aria-label="Pagination">
+			if p.Page > 1 {
+				<a href={ templ.URL(p.Href(p.Page - 1)) } rel="prev">← Prev</a>
+			} else {
+				<span></span>
+			}
+			<span class="pager-status">{ fmt.Sprintf("Page %d of %d", p.Page, p.TotalPages) }</span>
+			if p.Page < p.TotalPages {
+				<a href={ templ.URL(p.Href(p.Page + 1)) } rel="next">Next →</a>
+			} else {
+				<span></span>
+			}
+		</nav>
+	}
+}
+
+// searchFilterInput is the instant name filter above a list page's
+// content (Chat, World, Character). key pairs it with the matching
+// data-search-scope container; every filterable item inside that
+// container carries data-search-name (vignetteCard does it itself;
+// table rows / list items set it inline). One input per page, not one
+// per Grid/List panel: both panels render the same items, so filtering
+// both at once keeps them in sync by construction. See
+// searchFilterScript for the behavior.
+templ searchFilterInput(key string) {
+	<input type="search" class="search-filter" data-search-key={ key } placeholder="Filter by name…" aria-label="Filter by name" autocomplete="off"/>
+	<p class="search-no-matches" data-search-empty={ key } role="status" hidden><em>No matches on this page.</em></p>
+}
+
+// searchFilterScript wires every searchFilterInput on the page:
+// case-insensitive substring match against each item's
+// data-search-name, hiding non-matches via [hidden].
+//
+// Page-local by design (v1): pagination is server-side, so this only
+// filters the items on the page currently loaded — the "No matches"
+// text says "on this page" for exactly that reason. A cross-page search
+// would need a server-side ?q= on the List queries instead.
+templ searchFilterScript() {
+	<script>
+		document.querySelectorAll("input[data-search-key]").forEach(function (input) {
+			var key = input.dataset.searchKey;
+			var empty = document.querySelector('[data-search-empty="' + key + '"]');
+			function apply() {
+				var q = input.value.trim().toLowerCase();
+				var items = document.querySelectorAll('[data-search-scope="' + key + '"] [data-search-name]');
+				var shown = 0;
+				items.forEach(function (item) {
+					var match = item.dataset.searchName.toLowerCase().indexOf(q) !== -1;
+					item.hidden = !match;
+					if (match) {
+						shown++;
+					}
+				});
+				if (empty) {
+					empty.hidden = !(items.length > 0 && shown === 0);
+				}
+			}
+			input.addEventListener("input", apply);
+			// A browser restoring the field's text on Back must also
+			// restore the filtering it implies.
+			if (input.value) {
+				apply();
+			}
+		});
+	</script>
 }

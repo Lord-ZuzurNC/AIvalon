@@ -16,12 +16,18 @@ type WorldHandlers struct {
 }
 
 func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
-	books, err := db.ListLorebooks(h.DB)
+	total, err := db.CountLorebooks(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, WorldPage(books))
+	pager := newPager(r, "/world", total, viewPageSize(r, "world"))
+	books, err := db.ListLorebooks(h.DB, pager.Size, pager.Offset())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, WorldPage(books, pager))
 }
 
 func (h WorldHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +51,7 @@ func (h WorldHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	render(w, r, LorebookPage(book, entries, nil))
+	render(w, r, LorebookPage(book, entries, nil, newPager(r, fmt.Sprintf("/world/%d", book.ID), len(entries), listPageSize)))
 }
 
 func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +138,17 @@ func (h WorldHandlers) EntryEditForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "entry does not belong to this lorebook", http.StatusBadRequest)
 		return
 	}
-	render(w, r, LorebookPage(book, entries, &entry))
+	// The edit URL carries no ?page=, so land on whichever page the
+	// entry being edited lives on — the table behind the modal then
+	// shows the row being edited rather than always page 1.
+	pager := newPager(r, fmt.Sprintf("/world/%d", book.ID), len(entries), listPageSize)
+	for i, e := range entries {
+		if e.ID == entry.ID {
+			pager.Page = i/listPageSize + 1
+			break
+		}
+	}
+	render(w, r, LorebookPage(book, entries, &entry, pager))
 }
 
 func (h WorldHandlers) EntryCreate(w http.ResponseWriter, r *http.Request) {

@@ -32,12 +32,15 @@ type CharacterCard struct {
 	ImagePath string
 }
 
-func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
+// ListCharacterCards returns one page of cards, ordered by name. limit < 0
+// means "no limit" — see ListLorebooks.
+func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) {
 	rows, err := db.Query(`
 		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, '')
 		FROM character_cards cc
 		LEFT JOIN character_card_images cci ON cci.id = cc.primary_image_id
-		ORDER BY cc.name`)
+		ORDER BY cc.name, cc.id
+		LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("listing character cards: %w", err)
 	}
@@ -52,6 +55,14 @@ func ListCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 		cards = append(cards, c)
 	}
 	return cards, rows.Err()
+}
+
+func CountCharacterCards(db *sql.DB) (int, error) {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM character_cards`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting character cards: %w", err)
+	}
+	return n, nil
 }
 
 func GetCharacterCard(db *sql.DB, id int64) (CharacterCard, error) {

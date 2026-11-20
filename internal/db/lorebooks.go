@@ -42,13 +42,17 @@ type LorebookEntry struct {
 	Enabled         bool
 }
 
-func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
+// ListLorebooks returns one page of lorebooks, ordered by name. limit < 0
+// means "no limit" (SQLite's own LIMIT -1), for callers that need every
+// row (name de-duplication on import, the new-session picker).
+func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
 	rows, err := db.Query(`
 		SELECT l.id, l.name, l.image_path, COUNT(e.id)
 		FROM lorebooks l
 		LEFT JOIN lorebook_entries e ON e.lorebook_id = l.id
 		GROUP BY l.id, l.name, l.image_path
-		ORDER BY l.name`)
+		ORDER BY l.name, l.id
+		LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("listing lorebooks: %w", err)
 	}
@@ -63,6 +67,14 @@ func ListLorebooks(db *sql.DB) ([]Lorebook, error) {
 		books = append(books, l)
 	}
 	return books, rows.Err()
+}
+
+func CountLorebooks(db *sql.DB) (int, error) {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM lorebooks`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting lorebooks: %w", err)
+	}
+	return n, nil
 }
 
 func GetLorebook(db *sql.DB, id int64) (Lorebook, error) {

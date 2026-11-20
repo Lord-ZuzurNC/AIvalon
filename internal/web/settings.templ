@@ -7,19 +7,20 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, systemPromptTemplate string) {
+templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, appSettings db.AppSettings) {
 	@Layout("Settings", "Settings") {
-		@SettingsPageBody(profiles, editing, personas, editingPersona, systemPromptTemplate)
+		@SettingsPageBody(profiles, editing, personas, editingPersona, appSettings)
 	}
 }
 
-templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, systemPromptTemplate string) {
+templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, appSettings db.AppSettings) {
 	<h1>Settings</h1>
 	<div class="tabs">
 		<div role="tablist" class="tab-list">
-			<button type="button" class="tab-btn" data-tab-target="profiles" aria-selected="true" onclick="switchTabs(this)">Backend profiles</button>
-			<button type="button" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchTabs(this)">Your persona</button>
-			<button type="button" class="tab-btn" data-tab-target="prompt" aria-selected="false" onclick="switchTabs(this)">System prompt</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="profiles" aria-selected="true" onclick="switchTabs(this)">Backend profiles</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchTabs(this)">Your persona</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected="false" onclick="switchTabs(this)">System prompt</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected="false" onclick="switchTabs(this)">Imports</button>
 		</div>
 
 		<div data-tab-panel="profiles">
@@ -133,7 +134,12 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				instruction to improvise when there are none), and <code>{ "{{lorebook}}" }</code>
 				(the session's attached Lorebook's entries that are active this turn — see World).
 			</p>
-			@systemPromptForm(systemPromptTemplate)
+			@systemPromptForm(appSettings.SystemPromptTemplate)
+			@contextBudgetForm(appSettings.ContextBudgetChars)
+		</div>
+
+		<div data-tab-panel="imports" hidden="hidden">
+			@importWhitelistForm(appSettings.PNGImportWhitelist)
 		</div>
 	</div>
 	<script>
@@ -166,6 +172,32 @@ templ systemPromptForm(template string) {
 	</form>
 	<form method="post" action="/settings/system-prompt/reset" style="display:inline">
 		<button type="submit">Reset to default</button>
+	</form>
+}
+
+// contextBudgetForm is AppSettings.ContextBudgetChars' editor — see
+// truncateHistoryToBudget (handlers_chat.go) for what it actually cuts.
+templ contextBudgetForm(budget int) {
+	<form method="post" action="/settings/context-budget">
+		<label>
+			Context budget (characters)
+			<input type="number" name="context_budget_chars" value={ strconv.Itoa(budget) } min="0" step="1000"/>
+			<small>Upper limit on what's sent to the model per reply (system prompt + chat history). Roughly 4 characters per token, so 24000 ≈ 6k tokens — keep it comfortably under your backend's context size. When a long chat goes over, the oldest messages are left out first (the system prompt never is) and the chat page says so. 0 means no limit.</small>
+		</label>
+		<button type="submit">Save</button>
+	</form>
+}
+
+// importWhitelistForm edits AppSettings.PNGImportWhitelist — one host
+// per line; see checkImportHost (handlers_import.go) for the rules.
+templ importWhitelistForm(hosts []string) {
+	<form method="post" action="/settings/import-whitelist">
+		<label>
+			Allowed domains for URL imports (one per line)
+			<textarea name="png_import_whitelist" rows="8" spellcheck="false" autocomplete="off">{ db.JoinHostList(hosts) }</textarea>
+			<small>Character Card PNG imports from these domains are allowed in addition to 127.0.0.1; JSON imports are always restricted to 127.0.0.1. Exact hostname match (www.example.com and example.com are different entries); port is ignored.</small>
+		</label>
+		<button type="submit">Save</button>
 	</form>
 }
 

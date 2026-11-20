@@ -25,21 +25,21 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 				@templ.Raw(m.ContentHTML)
 			</p>
 			<div class="options-menu">
-				<button type="button" class="options-trigger" aria-label="Message options" data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
-				<div id={ fmt.Sprintf("options-message-%d", m.ID) } class="options-dropdown" hidden>
+				<button type="button" class="options-trigger" aria-label="Message options" aria-haspopup="true" aria-expanded="false" aria-controls={ fmt.Sprintf("options-message-%d", m.ID) } data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
+				<div id={ fmt.Sprintf("options-message-%d", m.ID) } class="options-dropdown" role="menu" hidden>
 					if m.Role == "user" {
-						<button type="button" onclick="toggleEditForm(this)">Edit</button>
+						<button type="button" role="menuitem" onclick="toggleEditForm(this)">Edit</button>
 					} else {
 						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
-							<button type="submit">Regenerate</button>
+							<button type="submit" role="menuitem">Regenerate</button>
 						</form>
 						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
-							<button type="submit">Branch</button>
+							<button type="submit" role="menuitem">Branch</button>
 						</form>
 					}
-					<button type="button" onclick="copyMessageContent(this)">Copy</button>
+					<button type="button" role="menuitem" onclick="copyMessageContent(this)">Copy</button>
 					<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/delete", sessionID, m.ID)) }>
-						<button type="submit" class="danger">Delete</button>
+						<button type="submit" class="danger" role="menuitem">Delete</button>
 					</form>
 				</div>
 			</div>
@@ -53,7 +53,7 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 	</div>
 }
 
-templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
+templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
 	@Layout("Chat", "Chat") {
 		if len(profiles) == 0 {
 			<div class="page-header">
@@ -66,9 +66,10 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
 		} else {
-			<ul class="list-with-actions">
+			@searchFilterInput("chat")
+			<ul class="list-with-actions" data-search-scope="chat">
 				for _, s := range sessions {
-					<li>
+					<li data-search-name={ s.Title }>
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
 							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
@@ -78,6 +79,8 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 					</li>
 				}
 			</ul>
+			@pagerNav(pager)
+			@searchFilterScript()
 		}
 		if len(profiles) == 0 {
 			<p>
@@ -139,6 +142,16 @@ templ ChatListPage(sessions []db.Session, profiles []db.BackendProfile, personas
 	}
 }
 
+// ContextTrimNotice is the out-of-band SSE payload Stream sends when
+// truncateHistoryToBudget left messages out of this reply's prompt.
+// innerHTML (not a full replace) so #context-trim-notice stays the same
+// live-region node and screen readers announce the new text.
+templ ContextTrimNotice(dropped int) {
+	<div id="context-trim-notice" hx-swap-oob="innerHTML">
+		<small>{ trimNoticeText(dropped) } <a href="/settings">adjust it in Settings</a>{ " if needed." }</small>
+	</div>
+}
+
 // sendIcon/imageIcon are small authored line-art SVGs (same
 // stroke="currentColor" convention as navIcon in templates.templ) for
 // the two input-row actions — a paper plane for Send, a simple framed
@@ -189,6 +202,9 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 					hx-swap="beforeend"
 				></div>
 			}
+			<!-- Filled by an out-of-band SSE swap (ContextTrimNotice) when
+			     this reply's prompt had to leave old messages out. -->
+			<div id="context-trim-notice" class="context-trim-notice" role="status" aria-live="polite"></div>
 			<div class="chat-input-toolbar">
 				<button type="button" class="icon-button" disabled title="Not built yet">
 					@imageIcon()
@@ -231,6 +247,9 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				var form = message.querySelector(".message-edit-form");
 				form.style.display = form.style.display === "none" ? "block" : "none";
 				closeOptionsMenu(button);
+				if (form.style.display === "block") {
+					form.querySelector("textarea").focus();
+				}
 			}
 
 			// Copy reads the message's own raw content back out of its
@@ -251,7 +270,12 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			function closeOptionsMenu(button) {
 				var dropdown = button.closest(".options-dropdown");
 				if (dropdown) {
-					dropdown.hidden = true;
+					// Shared helper (Layout) also resets aria-expanded.
+					closeOptionsMenus();
+					var trigger = document.querySelector('.options-trigger[data-menu-id="' + dropdown.id + '"]');
+					if (trigger) {
+						trigger.focus();
+					}
 				}
 			}
 		</script>
@@ -274,12 +298,12 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 		</div>
 		<div class="tabs">
 			<div role="tablist" class="tab-list">
-				<button type="button" class="tab-btn" data-tab-target="summary" aria-selected="true" onclick="switchPanelTab(this)">Summary</button>
-				<button type="button" class="tab-btn" data-tab-target="characters" aria-selected="false" onclick="switchPanelTab(this)">Characters</button>
-				<button type="button" class="tab-btn" data-tab-target="world" aria-selected="false" onclick="switchPanelTab(this)">World</button>
-				<button type="button" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchPanelTab(this)">Persona</button>
-				<button type="button" class="tab-btn" data-tab-target="gallery" aria-selected="false" onclick="switchPanelTab(this)">Gallery</button>
-				<button type="button" class="tab-btn" data-tab-target="background" aria-selected="false" onclick="switchPanelTab(this)">Background</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="summary" aria-selected="true" onclick="switchPanelTab(this)">Summary</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="characters" aria-selected="false" onclick="switchPanelTab(this)">Characters</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="world" aria-selected="false" onclick="switchPanelTab(this)">World</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchPanelTab(this)">Persona</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="gallery" aria-selected="false" onclick="switchPanelTab(this)">Gallery</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="background" aria-selected="false" onclick="switchPanelTab(this)">Background</button>
 			</div>
 			<div data-tab-panel="summary">
 				<dl class="session-summary">
