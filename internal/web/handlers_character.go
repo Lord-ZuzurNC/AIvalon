@@ -15,12 +15,24 @@ type CharacterHandlers struct {
 }
 
 func (h CharacterHandlers) List(w http.ResponseWriter, r *http.Request) {
-	cards, err := db.ListCharacterCards(h.DB)
+	cards, pager, err := h.listPage(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, CharacterPage(cards, nil, nil))
+	render(w, r, CharacterPage(cards, pager, nil, nil))
+}
+
+// listPage is the paginated card list both List and EditForm render
+// behind their content (EditForm opens its modal over the same list).
+func (h CharacterHandlers) listPage(r *http.Request) ([]db.CharacterCard, Pager, error) {
+	total, err := db.CountCharacterCards(h.DB)
+	if err != nil {
+		return nil, Pager{}, err
+	}
+	pager := newPager(r, "/characters", total, viewPageSize(r, "character"))
+	cards, err := db.ListCharacterCards(h.DB, pager.Size, pager.Offset())
+	return cards, pager, err
 }
 
 func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +46,7 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	cards, err := db.ListCharacterCards(h.DB)
+	cards, pager, err := h.listPage(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -44,7 +56,7 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, CharacterPage(cards, &card, images))
+	render(w, r, CharacterPage(cards, pager, &card, images))
 }
 
 func (h CharacterHandlers) Create(w http.ResponseWriter, r *http.Request) {

@@ -85,6 +85,24 @@ a[aria-current] {
 	text-decoration: none !important;
 }
 
+/* Keyboard focus ring. Pico's own default draws it in
+   --pico-primary-focus (gold at 35% alpha) — on #121020/#181527 that
+   lands well under WCAG's 3:1 for focus indicators, and several flat
+   icon controls here (view toggle, import/vault triggers, keys toggle)
+   also drop box-shadow, which is how Pico draws it on buttons. Solid
+   --pico-primary is ~8:1 on both backgrounds. :focus-visible only, so
+   mouse clicks don't paint a ring. */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+	outline: 2px solid var(--pico-primary);
+	outline-offset: 2px;
+}
+
 /* The "classless" Pico build only styles bare tags — it has no
    .secondary/.primary modifier classes at all, so every
    class="secondary" in this app (the view-toggle's inactive button,
@@ -1312,4 +1330,56 @@ html.sidebar-collapsed #sidebar-toggle {
 	.page-header {
 		flex-wrap: wrap;
 	}
+}
+
+/* --- Pager (pagerNav, templates.templ) ---
+   Prev / "Page N of M" / Next under every server-side-paginated list:
+   muted, small, no chrome — metadata, not a toolbar. */
+.pager {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
+	margin: 1rem 0;
+	font-size: 0.9rem;
+	color: var(--pico-muted-color);
+	font-variant-numeric: tabular-nums;
+}
+
+/* LorebookPage's collapsible entries section: the <h2> sits inline in
+   its <summary> next to the entry count, so collapsing it keeps both. */
+.entries-section > summary h2 {
+	display: inline;
+	margin: 0;
+}
+
+.entries-summary-count {
+	margin-left: 0.5rem;
+	color: var(--pico-muted-color);
+	font-size: 0.85rem;
+	font-variant-numeric: tabular-nums;
+}
+
+/* searchFilterInput: sits between the page header and the list. The
+   list rows are display:flex (.list-with-actions li) and the vignette
+   cards have their own display, both of which beat the UA's [hidden]
+   rule — re-assert it so filtering actually hides them. */
+.search-filter {
+	margin-bottom: 1rem;
+}
+
+[data-search-name][hidden] {
+	display: none !important;
+}
+
+/* Chat page: "N earlier messages were left out" (ContextTrimNotice,
+   filled by an SSE out-of-band swap). Empty — the normal case — takes
+   no space. */
+.context-trim-notice {
+	margin-bottom: 0.4rem;
+	color: var(--pico-muted-color);
+}
+
+.context-trim-notice:empty {
+	display: none;
 }

@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"html"
+	"log"
 	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 	"github.com/Lord-ZuzurNC/AIvalon/internal/llmclient"
@@ -33,7 +35,13 @@ type DisplayMessage struct {
 }
 
 func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
-	sessions, err := db.ListSessions(h.DB)
+	total, err := db.CountSessions(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	pager := newPager(r, "/chat", total, listPageSize)
+	sessions, err := db.ListSessions(h.DB, pager.Size, pager.Offset())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -48,17 +56,17 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	characters, err := db.ListCharacterCards(h.DB)
+	characters, err := db.ListCharacterCards(h.DB, -1, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	lorebooks, err := db.ListLorebooks(h.DB)
+	lorebooks, err := db.ListLorebooks(h.DB, -1, 0)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatListPage(sessions, profiles, personas, characters, lorebooks))
+	render(w, r, ChatListPage(sessions, pager, profiles, personas, characters, lorebooks))
 }
 
 func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -694,7 +702,19 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 		}
 		lorebookContent = resolveLorebookContent(entries, lastUserMessageContent(history), defaultProbabilityRoll)
 	}
-	chatMessages := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history)
+	chatMessages, dropped := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history, settings.ContextBudgetChars)
+	if dropped > 0 {
+		// Never silent: logged server-side, and shown on the chat page
+		// via an out-of-band swap into its #context-trim-notice live
+		// region (same SSE+OOB mechanism as Stream's final swap, through
+		// emitRaw so newlines can't break the event framing).
+		log.Printf("session %d: left %d oldest message(s) out of the prompt to fit the %d-char context budget", session.ID, dropped, settings.ContextBudgetChars)
+		var notice strings.Builder
+		if err := ContextTrimNotice(dropped).Render(r.Context(), &notice); err == nil {
+			flusher, _ := w.(http.Flusher)
+			emitRaw(w, flusher, notice.String())
+		}
+	}
 	var full strings.Builder
 	err = llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
 		full.WriteString(token)
@@ -727,12 +747,53 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 // to resolve against) and past "narrator" lines passed through as-is,
 // since each already reads as one coherent passage with names naturally
 // in the prose.
-func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage) []llmclient.Message {
-	messages := []llmclient.Message{{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}}
+//
+// budgetChars (AppSettings.ContextBudgetChars, 0 = unlimited) caps the
+// total size — see truncateHistoryToBudget. The second return value is
+// how many of the oldest history messages were left out to fit.
+func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage, budgetChars int) ([]llmclient.Message, int) {
+	system := llmclient.Message{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}
+	mapped := make([]llmclient.Message, 0, len(history))
 	for _, m := range history {
-		messages = append(messages, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
+		mapped = append(mapped, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
 	}
-	return messages
+	kept, dropped := truncateHistoryToBudget(mapped, utf8.RuneCountInString(system.Content), budgetChars)
+	return append([]llmclient.Message{system}, kept...), dropped
+}
+
+func trimNoticeText(dropped int) string {
+	if dropped == 1 {
+		return "1 earlier message was left out to fit the context budget —"
+	}
+	return fmt.Sprintf("%d earlier messages were left out to fit the context budget —", dropped)
+}
+
+// truncateHistoryToBudget drops the OLDEST history messages, one at a
+// time, until system prompt + history fits in budgetChars characters
+// (runes; ~4 per token — a deliberate approximation, real tokenizers
+// differ per backend/model). It works on the already-mapped messages
+// so the "Name: " prefixes namePrefixed adds are counted too.
+//
+//   - budgetChars <= 0: no limit, nothing dropped.
+//   - the system prompt is never dropped or cut, even if it alone is
+//     over budget — it's curated persona/lorebook/character content,
+//     not disposable history (shrinking it is the user's call).
+//   - the most recent message (the turn being answered) is always kept,
+//     so the model is never sent a prompt with nothing to reply to.
+func truncateHistoryToBudget(history []llmclient.Message, systemChars, budgetChars int) ([]llmclient.Message, int) {
+	if budgetChars <= 0 {
+		return history, 0
+	}
+	total := systemChars
+	for _, m := range history {
+		total += utf8.RuneCountInString(m.Content)
+	}
+	dropped := 0
+	for total > budgetChars && len(history)-dropped > 1 {
+		total -= utf8.RuneCountInString(history[dropped].Content)
+		dropped++
+	}
+	return history[dropped:], dropped
 }
 
 // buildNarratorPrompt fills in the user-editable system prompt template

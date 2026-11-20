@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/llmclient"
 )
 
 func TestNamePrefixed(t *testing.T) {
@@ -111,4 +112,49 @@ func TestRenderCharactersBlockIncludesAuthorNote(t *testing.T) {
 			t.Errorf("shouldn't mention an author's note when the card has none:\n%s", got)
 		}
 	})
+}
+
+func TestTruncateHistoryToBudget(t *testing.T) {
+	msg := func(s string) llmclient.Message { return llmclient.Message{Role: "user", Content: s} }
+	history := []llmclient.Message{msg("aaaaaaaaaa"), msg("bbbbbbbbbb"), msg("cccccccccc"), msg("dddddddddd")} // 4 × 10 chars
+
+	// Budget 0 = no limit, even when far over.
+	if kept, dropped := truncateHistoryToBudget(history, 1000, 0); len(kept) != 4 || dropped != 0 {
+		t.Fatalf("budget 0 must not truncate, kept %d dropped %d", len(kept), dropped)
+	}
+
+	// system 15 + 40 history = 55 > 40: drop oldest-first until it fits
+	// (15+30=45 still over, 15+20=35 fits) → a and b gone.
+	kept, dropped := truncateHistoryToBudget(history, 15, 40)
+	if dropped != 2 || len(kept) != 2 || kept[0].Content != "cccccccccc" || kept[1].Content != "dddddddddd" {
+		t.Fatalf("expected the two oldest dropped, got dropped=%d kept=%+v", dropped, kept)
+	}
+
+	// Already fits: untouched.
+	if kept, dropped := truncateHistoryToBudget(history, 0, 40); len(kept) != 4 || dropped != 0 {
+		t.Fatalf("fitting history must be untouched, kept %d dropped %d", len(kept), dropped)
+	}
+
+	// System prompt alone over budget: history shrinks to just the
+	// latest message, the system prompt itself is never what's cut.
+	kept, dropped = truncateHistoryToBudget(history, 500, 100)
+	if dropped != 3 || len(kept) != 1 || kept[0].Content != "dddddddddd" {
+		t.Fatalf("expected only the latest message kept, got dropped=%d kept=%+v", dropped, kept)
+	}
+
+	// Counts runes, not bytes: 10 × "é" is 10 chars (20 bytes).
+	if _, dropped := truncateHistoryToBudget([]llmclient.Message{msg("éééééééééé"), msg("x")}, 0, 11); dropped != 0 {
+		t.Fatalf("multi-byte text over-counted, dropped %d", dropped)
+	}
+}
+
+func TestBuildNarratorMessagesKeepsSystemPromptOverBudget(t *testing.T) {
+	history := []db.ChatMessage{{Role: "user", Content: "old"}, {Role: "narrator", Content: "reply"}, {Role: "user", Content: "latest"}}
+	msgs, dropped := buildNarratorMessages("a very long system prompt that is over budget by itself", db.DefaultPersona, nil, "", history, 10)
+	if msgs[0].Role != "system" || !strings.Contains(msgs[0].Content, "very long system prompt") {
+		t.Fatalf("system message must be first and untouched, got %+v", msgs[0])
+	}
+	if dropped != 2 || len(msgs) != 2 || msgs[1].Content != "latest" {
+		t.Fatalf("expected system + latest only, got dropped=%d msgs=%+v", dropped, msgs)
+	}
 }

@@ -6,19 +6,21 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ WorldPage(books []db.Lorebook) {
+templ WorldPage(books []db.Lorebook, pager Pager) {
 	@Layout("World", "World") {
 		@PageHeaderWithViewAndCreate("World", "world", "lorebook-import-modal", "lorebook-modal", "Add a lorebook")
 		<p>Lorebooks: world info the narrator can draw on. Attach one to a session in Chat.</p>
 		if len(books) == 0 {
 			<p><em>No lorebooks yet — add one above, then open it to add entries.</em></p>
 		} else {
-			<div data-view-panel="grid" class="card-grid">
-				for _, b := range books {
-					@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
-				}
-			</div>
-			<div data-view-panel="list" hidden="hidden">
+			@searchFilterInput("world")
+			<div data-search-scope="world">
+				<div data-view-panel="grid" class="card-grid">
+					for _, b := range books {
+						@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
+					}
+				</div>
+				<div data-view-panel="list" hidden="hidden">
 				<table>
 					<thead>
 						<tr>
@@ -29,7 +31,7 @@ templ WorldPage(books []db.Lorebook) {
 					</thead>
 					<tbody>
 						for _, b := range books {
-							<tr>
+							<tr data-search-name={ b.Name }>
 								<td>@Avatar(b.ImagePath, b.Name)<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>{ b.Name }</a></td>
 								<td>{ fmt.Sprintf("%d", b.EntryCount) }</td>
 								<td>
@@ -41,8 +43,11 @@ templ WorldPage(books []db.Lorebook) {
 						}
 					</tbody>
 				</table>
+				</div>
 			</div>
+			@pagerNav(pager)
 			@viewToggleScript()
+			@searchFilterScript()
 		}
 
 		<dialog id="lorebook-modal">
@@ -66,7 +71,7 @@ templ WorldPage(books []db.Lorebook) {
 	}
 }
 
-templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry) {
+templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry, pager Pager) {
 	@Layout(book.Name, "World") {
 		@BackLink("/world", "World")
 		<h1>{ book.Name }</h1>
@@ -80,7 +85,14 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 			<button type="submit">Rename</button>
 		</form>
 
-		<h2>Entries</h2>
+		<!-- Collapsible so a big imported book (hundreds of entries)
+		     doesn't bury the Add button and the rest of the page:
+		     content-aware default like ImageField — open when short
+		     (≤ 10 entries) or while paging through it (?page= present),
+		     collapsed otherwise. The summary carries the count so
+		     collapsing never hides how big the book is. -->
+		<details class="entries-section" open?={ len(entries) <= 10 || pager.Requested }>
+			<summary><h2>Entries</h2> <span class="entries-summary-count">{ entryCountLabel(len(entries)) }</span></summary>
 		if len(entries) == 0 {
 			<p><em>No entries yet — add one below.</em></p>
 		} else {
@@ -96,7 +108,7 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 					</tr>
 				</thead>
 				<tbody>
-					for _, e := range entries {
+					for _, e := range pageOf(entries, pager) {
 						<tr>
 							<td>@lorebookKeysCell(book.ID, e.ID, e.Keys)</td>
 							<td>{ e.TriggerStrategy }</td>
@@ -120,8 +132,10 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 					}
 				</tbody>
 			</table>
+			@pagerNav(pager)
 			@lorebookKeysScript()
 		}
+		</details>
 
 		<button type="button" class="create-button" aria-label="Add an entry" title="Add an entry" onclick="document.getElementById('entry-modal').setAttribute('open','')">+</button>
 
@@ -161,7 +175,7 @@ templ lorebookKeysCell(bookID, entryID int64, keys []string) {
 		{{ preview := joinKeys(previewKeys(keys, 2)) + "…" }}
 		{{ full := joinKeys(keys) }}
 		<div class="keys-cell">
-			<button type="button" class="keys-toggle" aria-label="Show all keys" data-expand-label={ "▾ " + keyCountLabel(len(keys)) } data-collapse-label="▴ Collapse" onclick="toggleLorebookKeys(this)">{ "▾ " + keyCountLabel(len(keys)) }</button>
+			<button type="button" class="keys-toggle" aria-label="Show all keys" aria-expanded="false" data-expand-label={ "▾ " + keyCountLabel(len(keys)) } data-collapse-label="▴ Collapse" onclick="toggleLorebookKeys(this)">{ "▾ " + keyCountLabel(len(keys)) }</button>
 			<a href={ editHref } class="keys-list" data-preview={ preview } data-full={ full }>{ preview }</a>
 			<button type="button" class="keys-toggle keys-toggle-bottom" hidden aria-label="Collapse keys" onclick="toggleLorebookKeys(this)">▴ Collapse</button>
 		</div>
@@ -185,6 +199,9 @@ templ lorebookKeysScript() {
 			var expanding = bottom.hidden;
 			link.textContent = expanding ? link.dataset.full : link.dataset.preview;
 			top.textContent = expanding ? top.dataset.collapseLabel : top.dataset.expandLabel;
+			// Keep the accessible name in step with the visible label.
+			top.setAttribute("aria-label", expanding ? "Collapse keys" : "Show all keys");
+			top.setAttribute("aria-expanded", String(expanding));
 			bottom.hidden = !expanding;
 		}
 	</script>

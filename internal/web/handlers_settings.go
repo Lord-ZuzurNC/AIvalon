@@ -2,8 +2,10 @@ package web
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/a-h/templ"
 
@@ -211,17 +213,54 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 
 func (h SettingsHandlers) SystemPromptUpdate(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	err := db.UpdateAppSettings(h.DB, db.AppSettings{SystemPromptTemplate: r.FormValue("system_prompt_template")})
+	h.updateAppSettings(w, r, func(s *db.AppSettings) error {
+		s.SystemPromptTemplate = r.FormValue("system_prompt_template")
+		return nil
+	})
+}
+
+func (h SettingsHandlers) SystemPromptReset(w http.ResponseWriter, r *http.Request) {
+	h.updateAppSettings(w, r, func(s *db.AppSettings) error {
+		s.SystemPromptTemplate = db.DefaultSystemPromptTemplate
+		return nil
+	})
+}
+
+func (h SettingsHandlers) ImportWhitelistUpdate(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	h.updateAppSettings(w, r, func(s *db.AppSettings) error {
+		s.PNGImportWhitelist = db.SplitHostList(r.FormValue("png_import_whitelist"))
+		return nil
+	})
+}
+
+func (h SettingsHandlers) ContextBudgetUpdate(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	h.updateAppSettings(w, r, func(s *db.AppSettings) error {
+		n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("context_budget_chars")))
+		if err != nil || n < 0 {
+			return fmt.Errorf("context budget must be a whole number, 0 or more (0 = no limit)")
+		}
+		s.ContextBudgetChars = n
+		return nil
+	})
+}
+
+// updateAppSettings is the read-modify-write every AppSettings form
+// goes through: UpdateAppSettings writes every column, so starting
+// from the stored row is what keeps one form from wiping the others.
+// A non-nil error from change is the user's input being wrong (400).
+func (h SettingsHandlers) updateAppSettings(w http.ResponseWriter, r *http.Request, change func(*db.AppSettings) error) {
+	s, err := db.GetAppSettings(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/settings", http.StatusSeeOther)
-}
-
-func (h SettingsHandlers) SystemPromptReset(w http.ResponseWriter, r *http.Request) {
-	err := db.UpdateAppSettings(h.DB, db.AppSettings{SystemPromptTemplate: db.DefaultSystemPromptTemplate})
-	if err != nil {
+	if err := change(&s); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := db.UpdateAppSettings(h.DB, s); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -247,7 +286,7 @@ func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editing
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona, appSettings.SystemPromptTemplate))
+	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona, appSettings))
 }
 
 // profileFromForm reads the plain POST form fields shared by Create and

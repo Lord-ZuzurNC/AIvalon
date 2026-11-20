@@ -37,7 +37,7 @@ func TestSessionAndMessageCRUD(t *testing.T) {
 		t.Fatalf("ListMessages returned %+v", messages)
 	}
 
-	sessions, err := ListSessions(sqlDB)
+	sessions, err := ListSessions(sqlDB, -1, 0)
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestDeleteSessionCascadesMessages(t *testing.T) {
 		t.Fatalf("DeleteSession: %v", err)
 	}
 
-	sessions, err := ListSessions(sqlDB)
+	sessions, err := ListSessions(sqlDB, -1, 0)
 	if err != nil {
 		t.Fatalf("ListSessions: %v", err)
 	}

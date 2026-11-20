@@ -30,7 +30,7 @@ func TestLorebookCRUD(t *testing.T) {
 	if err := UpdateLorebook(sqlDB, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	books, err := ListLorebooks(sqlDB)
+	books, err := ListLorebooks(sqlDB, -1, 0)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestLorebookCRUD(t *testing.T) {
 	if err := DeleteLorebook(sqlDB, id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	books, _ = ListLorebooks(sqlDB)
+	books, _ = ListLorebooks(sqlDB, -1, 0)
 	if len(books) != 0 {
 		t.Fatalf("expected no lorebooks after delete, got %+v", books)
 	}
@@ -119,7 +119,7 @@ func TestLorebookEntryCRUD(t *testing.T) {
 
 	// ListLorebooks.EntryCount is a join, not a stored column — World's
 	// list shows it next to Name, so it has to track real entry rows.
-	books, err := ListLorebooks(sqlDB)
+	books, err := ListLorebooks(sqlDB, -1, 0)
 	if err != nil {
 		t.Fatalf("ListLorebooks: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestLorebookEntryCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateLorebookEntry (2nd): %v", err)
 	}
-	books, err = ListLorebooks(sqlDB)
+	books, err = ListLorebooks(sqlDB, -1, 0)
 	if err != nil {
 		t.Fatalf("ListLorebooks (2nd): %v", err)
 	}
@@ -164,5 +164,29 @@ func TestLorebookEntryCRUD(t *testing.T) {
 	entries, _ = ListLorebookEntries(sqlDB, bookID)
 	if len(entries) != 0 {
 		t.Fatalf("expected no entries after delete, got %+v", entries)
+	}
+}
+
+func TestListLorebooksPaging(t *testing.T) {
+	sqlDB, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer sqlDB.Close()
+	for _, name := range []string{"C", "A", "B"} {
+		if _, err := CreateLorebook(sqlDB, Lorebook{Name: name}); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+	}
+	n, err := CountLorebooks(sqlDB)
+	if err != nil || n != 3 {
+		t.Fatalf("Count = %d, %v", n, err)
+	}
+	page, err := ListLorebooks(sqlDB, 2, 1)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(page) != 2 || page[0].Name != "B" || page[1].Name != "C" {
+		t.Fatalf("expected [B C] for limit 2 offset 1, got %+v", page)
 	}
 }

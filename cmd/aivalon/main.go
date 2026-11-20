@@ -94,6 +94,8 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /settings/personas/{id}/delete", settings.PersonaDelete)
 	mux.HandleFunc("POST /settings/system-prompt", settings.SystemPromptUpdate)
 	mux.HandleFunc("POST /settings/system-prompt/reset", settings.SystemPromptReset)
+	mux.HandleFunc("POST /settings/context-budget", settings.ContextBudgetUpdate)
+	mux.HandleFunc("POST /settings/import-whitelist", settings.ImportWhitelistUpdate)
 
 	character := web.CharacterHandlers{DB: sqlDB, Cache: importCache}
 	mux.HandleFunc("GET /characters", character.List)

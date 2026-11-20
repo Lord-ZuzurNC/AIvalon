@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -213,7 +214,7 @@ func parseCharacterJSON(raw []byte) (card db.CharacterCard, book *characterBookJ
 // "url" field (the "From URL" tab) that gets fetched server-side —
 // see fetchImportURL. Either way the caller gets the same (raw,
 // filename) shape back and never needs to know which tab was used.
-func readUploadOrURL(w http.ResponseWriter, r *http.Request) (raw []byte, filename string, err error) {
+func readUploadOrURL(w http.ResponseWriter, r *http.Request, sqlDB *sql.DB) (raw []byte, filename string, err error) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		if err := r.ParseMultipartForm(maxUploadSize); err != nil {
@@ -238,21 +239,100 @@ func readUploadOrURL(w http.ResponseWriter, r *http.Request) (raw []byte, filena
 	if rawURL == "" {
 		return nil, "", fmt.Errorf("no file uploaded and no URL given")
 	}
-	return fetchImportURL(rawURL)
+	settings, err := db.GetAppSettings(sqlDB)
+	if err != nil {
+		return nil, "", err
+	}
+	return fetchImportURL(rawURL, settings.PNGImportWhitelist)
 }
+
+// isLoopbackHost: the only hosts the URL import trusts unconditionally
+// (any content type) — this machine itself, where a user is most
+// likely serving their own card files from.
+func isLoopbackHost(host string) bool {
+	switch strings.ToLower(host) {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
+}
+
+// checkImportHost is the SSRF gate for "From URL" imports, applied
+// before any connection is made (and again to every redirect hop):
+// loopback always passes; any other host must exactly match (case-
+// insensitive, port ignored — u.Hostname() already strips both port
+// and IPv6 brackets) an entry in Settings' PNG import whitelist, and
+// then only for a Character Card PNG (requirePNG — checked on the
+// downloaded bytes by checkImportBody, since nothing before the
+// download can prove what a remote host will actually send).
+//
+// ponytail: matches the hostname only, not its resolved IP — a
+// whitelisted name whose DNS points at a LAN address would still be
+// fetched. Pin/validate the dialed IP (net.Dialer.Control) if the
+// whitelist ever holds hosts that aren't trusted public sites.
+func checkImportHost(u *url.URL, whitelist []string) (requirePNG bool, err error) {
+	host := strings.ToLower(u.Hostname())
+	if isLoopbackHost(host) {
+		return false, nil
+	}
+	for _, allowed := range whitelist {
+		if host == strings.ToLower(allowed) {
+			return true, nil
+		}
+	}
+	return false, fmt.Errorf("imports from %q aren't allowed — only 127.0.0.1 and the domains listed in Settings → Imports (Character Card PNGs only) are; add %q there if you trust it", host, host)
+}
+
+// checkImportBody enforces checkImportHost's requirePNG on what was
+// actually downloaded — an untrusted host's non-PNG bytes are refused
+// outright rather than falling through to JSON parsing.
+func checkImportBody(raw []byte, host string, requirePNG bool) error {
+	if requirePNG && !bytes.HasPrefix(raw, pngSignature) {
+		return fmt.Errorf("%s is whitelisted for Character Card PNG imports only, got something else (JSON imports are only allowed from 127.0.0.1)", host)
+	}
+	return nil
+}
+
+// importHTTPClient is the "From URL" fetcher. CheckRedirect re-runs the
+// host gate on every hop, so a whitelisted host can't bounce the
+// request onward to some internal address. A package var (not built
+// per call) only so tests can point its Transport at a local server.
+var importHTTPClient = &http.Client{
+	Timeout: importURLTimeout,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		whitelist, _ := req.Context().Value(importWhitelistKey{}).([]string)
+		_, err := checkImportHost(req.URL, whitelist)
+		return err
+	},
+}
+
+// importWhitelistKey carries the whitelist into CheckRedirect, which
+// only sees the request, not fetchImportURL's arguments.
+type importWhitelistKey struct{}
 
 // fetchImportURL downloads rawURL server-side for the "From URL" tab
 // — it must point directly at a .json or a Character Card .png
 // (same formats readUploadOrURL's other branch accepts), not a page
 // that merely links to one; nothing here follows links or scrapes
 // HTML.
-func fetchImportURL(rawURL string) (raw []byte, filename string, err error) {
+func fetchImportURL(rawURL string, whitelist []string) (raw []byte, filename string, err error) {
 	u, err := url.Parse(rawURL)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return nil, "", fmt.Errorf("invalid URL — must be http(s) and point directly to a .json or .png file")
 	}
-	client := &http.Client{Timeout: importURLTimeout}
-	resp, err := client.Get(rawURL)
+	requirePNG, err := checkImportHost(u, whitelist)
+	if err != nil {
+		return nil, "", err
+	}
+	ctx := context.WithValue(context.Background(), importWhitelistKey{}, whitelist)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid URL: %w", err)
+	}
+	resp, err := importHTTPClient.Do(req)
 	if err != nil {
 		return nil, "", fmt.Errorf("fetching URL: %w", err)
 	}
@@ -266,6 +346,15 @@ func fetchImportURL(rawURL string) (raw []byte, filename string, err error) {
 	}
 	if len(raw) > maxUploadSize {
 		return nil, "", fmt.Errorf("file at URL is too large (over %d MiB)", maxUploadSize>>20)
+	}
+	// A redirect may have landed somewhere else (already host-gated by
+	// CheckRedirect) — if either end is non-loopback, it's PNG-only.
+	finalHost := resp.Request.URL.Hostname()
+	if !isLoopbackHost(finalHost) {
+		requirePNG = true
+	}
+	if err := checkImportBody(raw, finalHost, requirePNG); err != nil {
+		return nil, "", err
 	}
 	filename = path.Base(u.Path)
 	if filename == "" || filename == "/" || filename == "." {
@@ -296,7 +385,7 @@ func createLorebookWithEntries(sqlDB *sql.DB, name string, entries []db.Lorebook
 }
 
 func existingLorebookNames(sqlDB *sql.DB) (map[string]bool, error) {
-	books, err := db.ListLorebooks(sqlDB)
+	books, err := db.ListLorebooks(sqlDB, -1, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +397,7 @@ func existingLorebookNames(sqlDB *sql.DB) (map[string]bool, error) {
 }
 
 func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
-	cards, err := db.ListCharacterCards(sqlDB)
+	cards, err := db.ListCharacterCards(sqlDB, -1, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +414,7 @@ func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
 // Character Card instead, it offers to finish the import in
 // Character rather than just failing (see ImportCrossConfirmPage).
 func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request) {
-	raw, filename, err := readUploadOrURL(w, r)
+	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -405,7 +494,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 // actually parses as a bare lorebook instead, it offers to finish the
 // import in World (see ImportCrossConfirmPage).
 func (h CharacterHandlers) ImportCharacterJSON(w http.ResponseWriter, r *http.Request) {
-	raw, filename, err := readUploadOrURL(w, r)
+	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

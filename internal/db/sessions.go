@@ -31,8 +31,10 @@ type ChatMessage struct {
 	Content         string
 }
 
-func ListSessions(db *sql.DB) ([]Session, error) {
-	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted FROM sessions WHERE is_vaulted = 0 ORDER BY created_at DESC`)
+// ListSessions returns one page of non-vaulted sessions, newest first.
+// limit < 0 means "no limit" — see ListLorebooks.
+func ListSessions(db *sql.DB, limit, offset int) ([]Session, error) {
+	rows, err := db.Query(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted FROM sessions WHERE is_vaulted = 0 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
@@ -47,6 +49,15 @@ func ListSessions(db *sql.DB) ([]Session, error) {
 		sessions = append(sessions, s)
 	}
 	return sessions, rows.Err()
+}
+
+// CountSessions counts what ListSessions pages over (vaulted ones excluded).
+func CountSessions(db *sql.DB) (int, error) {
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE is_vaulted = 0`).Scan(&n); err != nil {
+		return 0, fmt.Errorf("counting sessions: %w", err)
+	}
+	return n, nil
 }
 
 func GetSession(db *sql.DB, id int64) (Session, error) {
