@@ -284,6 +284,19 @@ func keyCountLabel(n int) string {
 	return fmt.Sprintf("%d keys", n)
 }
 
+// entryCountLabel is LorebookPage's own "N entries" subheading —
+// Lord's follow-up ask: World's list already shows this per book
+// (ListLorebooks' COUNT(*) join), but opening a book from the Grid
+// view landed on a page with no count visible at all until you
+// scrolled past the whole entries table. Uses len(entries), already
+// loaded for the page — no extra query needed.
+func entryCountLabel(n int) string {
+	if n == 1 {
+		return "1 entry"
+	}
+	return fmt.Sprintf("%d entries", n)
+}
+
 // previewKeys returns at most n keys — the collapsed state's preview
 // before lorebookKeysCell's "show all" toggle expands to the rest.
 func previewKeys(keys []string, n int) []string {

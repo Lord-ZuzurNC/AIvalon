@@ -4,6 +4,25 @@ templ Layout(title string, active string) {
 	<!DOCTYPE html>
 	<html lang="en" data-theme="dark">
 		<head>
+			<!-- Sidebar-collapsed state must be known before the very
+			     first paint — reading it later (even "DOMContentLoaded"-
+			     early) means the header paints expanded for one frame
+			     then snaps to its collapsed width, visible as a flash on
+			     every full-page navigation (every link in this app is a
+			     plain <a>, there's no SPA route to skip it). A classless
+			     render-blocking script, first thing in <head>, runs
+			     before the browser has anything to paint yet — the class
+			     goes on <html> (not <body>) because body doesn't exist
+			     as a DOM node this early in parsing. -->
+			<script>
+				(function () {
+					try {
+						if (localStorage.getItem("aivalon-sidebar-collapsed") === "1") {
+							document.documentElement.classList.add("sidebar-collapsed");
+						}
+					} catch (e) {}
+				})();
+			</script>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · AIvalon</title>
@@ -31,27 +50,33 @@ templ Layout(title string, active string) {
 				{ children... }
 			</main>
 			<script>
-				// Sidebar collapse: a plain class toggle on <body>, persisted so
-				// it survives a full-page navigation (every link here is a
-				// regular <a>, not an SPA route) instead of snapping back open
-				// on the very next click.
+				// The <head> script above already set the class before
+				// first paint — this just syncs the toggle button's own
+				// aria-expanded/glyph to match on load, then wires up the
+				// click handler. Deliberately NOT re-applying the class
+				// here: doing so a second time is harmless on its own,
+				// but keeping "decide the class" in exactly one place
+				// (the head script) avoids the two ever disagreeing if
+				// one gets edited later and not the other.
 				(function () {
 					var STORAGE_KEY = "aivalon-sidebar-collapsed";
 					var toggle = document.getElementById("sidebar-toggle");
+					var root = document.documentElement;
 
-					function apply(collapsed) {
-						document.body.classList.toggle("sidebar-collapsed", collapsed);
+					function syncToggleButton() {
+						var collapsed = root.classList.contains("sidebar-collapsed");
 						if (toggle) {
 							toggle.setAttribute("aria-expanded", String(!collapsed));
 							toggle.textContent = collapsed ? "»" : "«";
 						}
 					}
 
-					apply(localStorage.getItem(STORAGE_KEY) === "1");
+					syncToggleButton();
 					if (toggle) {
 						toggle.addEventListener("click", function () {
-							var collapsed = !document.body.classList.contains("sidebar-collapsed");
-							apply(collapsed);
+							var collapsed = !root.classList.contains("sidebar-collapsed");
+							root.classList.toggle("sidebar-collapsed", collapsed);
+							syncToggleButton();
 							localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
 						});
 					}
