@@ -117,14 +117,10 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 								}
 							</select>
 						</label>
-						<label>
-							Characters (optional, select multiple for a group chat)
-							<select name="character_ids" multiple="multiple">
-								for _, c := range characters {
-									<option value={ fmt.Sprintf("%d", c.ID) }>{ c.Name }</option>
-								}
-							</select>
-						</label>
+						<fieldset>
+							<legend>Characters (optional, pick several for a group chat)</legend>
+							@characterPickerStrip(characters, "character_ids")
+						</fieldset>
 						<label>
 							Lorebook (optional — world info available to the narrator)
 							<select name="lorebook_id">
@@ -139,6 +135,36 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 				</article>
 			</dialog>
 		}
+	}
+}
+
+// characterPickerStrip is the New-session modal's character picker: a
+// horizontally scrolling row of vignettes, each a toggle <button>
+// (aria-pressed) rather than a link. The form still submits a plain
+// name=character_ids list via one hidden checkbox per card (the
+// button's next sibling — an <input> inside a <button> is invalid), so
+// Create's r.Form["character_ids"] parsing is unchanged. Submission
+// order is DOM order, same as the old <select multiple>, so "first
+// character speaks first" still means the leftmost picked card.
+templ characterPickerStrip(characters []db.CharacterCard, name string) {
+	if len(characters) == 0 {
+		<p><em>No characters yet — <a href="/characters">add one</a>. A session with none picked runs as a free-form world/GM instead.</em></p>
+	} else {
+		<div class="character-picker">
+			for _, c := range characters {
+				<button type="button" class="vignette-card character-pick" aria-pressed="false" title={ c.Name } onclick="toggleCharacterPick(this)">
+					@vignetteFace(c.ImagePath, c.Name)
+				</button>
+				<input type="checkbox" name={ name } value={ fmt.Sprintf("%d", c.ID) } hidden/>
+			}
+		</div>
+		<script>
+			function toggleCharacterPick(button) {
+				var on = button.getAttribute("aria-pressed") !== "true";
+				button.setAttribute("aria-pressed", on ? "true" : "false");
+				button.nextElementSibling.checked = on;
+			}
+		</script>
 	}
 }
 
@@ -177,12 +203,20 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			if session.BackgroundImagePath != "" {
 				style={ fmt.Sprintf("background-image:url(/static/%s);background-size:cover;background-position:center;background-attachment:fixed;", session.BackgroundImagePath) }
 			}
-			class="chat-page-bg"
+			class={ "chat-page-bg", templ.KV("has-bg-image", session.BackgroundImagePath != "") }
 		>
+			<script>
+				// Applied before #messages parses so a saved Bubble
+				// layout doesn't flash as List first.
+				if (localStorage.getItem("aivalon-chat-layout") === "bubble") {
+					document.currentScript.parentElement.classList.add("chat-bubbles");
+				}
+			</script>
 			@BackLink("/chat", "Chat")
 			<div class="chat-header">
 				<img class="chat-cover" src={ coverImage } alt=""/>
 				<h1>{ session.Title }</h1>
+				<button type="button" class="view-toggle-btn chat-layout-toggle" onclick="toggleChatLayout()">List</button>
 				<button type="button" class="session-panel-toggle" aria-label="Session info" onclick="document.getElementById('session-panel').classList.toggle('open')">☰</button>
 			</div>
 			<div id="messages">
@@ -246,6 +280,8 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				var message = button.closest(".message");
 				var form = message.querySelector(".message-edit-form");
 				form.style.display = form.style.display === "none" ? "block" : "none";
+				// Lets a content-sized bubble widen to fit the textarea.
+				message.classList.toggle("editing", form.style.display === "block");
 				closeOptionsMenu(button);
 				if (form.style.display === "block") {
 					form.querySelector("textarea").focus();
@@ -256,6 +292,24 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			// data-content attribute — never re-serializes it into a JS
 			// string literal, so there's no quoting/escaping to get
 			// wrong for apostrophes, backslashes, or newlines.
+			// List/Bubble layout, remembered globally (not per session)
+			// in localStorage. The button shows the CURRENT layout's
+			// name, same convention as viewToggle's glyph.
+			function syncChatLayoutToggle() {
+				var bubble = document.querySelector(".chat-page-bg").classList.contains("chat-bubbles");
+				var btn = document.querySelector(".chat-layout-toggle");
+				var label = bubble ? "Bubble layout — tap to switch to list" : "List layout — tap to switch to bubbles";
+				btn.textContent = bubble ? "Bubble" : "List";
+				btn.setAttribute("aria-label", label);
+				btn.setAttribute("title", label);
+			}
+			function toggleChatLayout() {
+				var bubble = document.querySelector(".chat-page-bg").classList.toggle("chat-bubbles");
+				localStorage.setItem("aivalon-chat-layout", bubble ? "bubble" : "list");
+				syncChatLayoutToggle();
+			}
+			syncChatLayoutToggle();
+
 			function copyMessageContent(button) {
 				var message = button.closest(".message");
 				navigator.clipboard.writeText(message.dataset.content);

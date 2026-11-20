@@ -382,9 +382,9 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var17 string
-					templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d/entries/%d/toggle", book.ID, e.ID))).ResolveURL(ctx)
+					templ_7745c5c3_Var17, templ_7745c5c3_Err = templruntime.NewAttributeExpression(templ.URL(fmt.Sprintf("/world/%d/entries/%d/toggle?page=%d", book.ID, e.ID, pager.Page))).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 118, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/world.templ`, Line: 118, Col: 125}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 					if templ_7745c5c3_Err != nil {
@@ -410,7 +410,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 						return templ_7745c5c3_Err
 					}
 					templ_7745c5c3_Err = OptionsMenu(fmt.Sprintf("options-entry-%d", e.ID), []MenuAction{
-						{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete", book.ID, e.ID), Danger: true},
+						{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete?page=%d", book.ID, e.ID, pager.Page), Danger: true},
 					}).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -462,7 +462,7 @@ func LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = lorebookEntryForm(book, editingEntry).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = lorebookEntryForm(book, editingEntry, pager.Page).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -661,7 +661,7 @@ func lorebookKeysScript() templ.Component {
 	})
 }
 
-func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Component {
+func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry, page int) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -678,12 +678,12 @@ func lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry) templ.Compon
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		action := fmt.Sprintf("/world/%d/entries", book.ID)
+		action := fmt.Sprintf("/world/%d/entries?page=%d", book.ID, page)
 		keys, content, triggerStrategy := "", "", "selective"
 		insertionOrder, probability := "0", "100"
 		enabled := true
 		if editing != nil {
-			action = fmt.Sprintf("/world/%d/entries/%d", book.ID, editing.ID)
+			action = fmt.Sprintf("/world/%d/entries/%d?page=%d", book.ID, editing.ID, page)
 			keys = joinKeys(editing.Keys)
 			content = editing.Content
 			triggerStrategy = editing.TriggerStrategy

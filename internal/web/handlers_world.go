@@ -151,6 +151,21 @@ func (h WorldHandlers) EntryEditForm(w http.ResponseWriter, r *http.Request) {
 	render(w, r, LorebookPage(book, entries, &entry, pager))
 }
 
+// redirectToBookPage sends the browser back to the lorebook, carrying
+// forward whatever ?page= the triggering request itself carried —
+// every entry action (edit, toggle, delete) used to bounce back to
+// plain /world/%d regardless of which page you were on, collapsing a
+// long list's <details> back to page 1 after a single click (Lord's
+// bug report). The three POST actions below add ?page= to their own
+// form action so it's there to read.
+func redirectToBookPage(w http.ResponseWriter, r *http.Request, bookID int64) {
+	target := fmt.Sprintf("/world/%d", bookID)
+	if page := r.URL.Query().Get("page"); page != "" {
+		target += "?page=" + page
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
 func (h WorldHandlers) EntryCreate(w http.ResponseWriter, r *http.Request) {
 	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
@@ -162,7 +177,7 @@ func (h WorldHandlers) EntryCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/world/%d", bookID), http.StatusSeeOther)
+	redirectToBookPage(w, r, bookID)
 }
 
 func (h WorldHandlers) EntryUpdate(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +203,7 @@ func (h WorldHandlers) EntryUpdate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/world/%d", bookID), http.StatusSeeOther)
+	redirectToBookPage(w, r, bookID)
 }
 
 // EntryToggleEnabled flips an entry's Enabled flag in place — the
@@ -220,7 +235,7 @@ func (h WorldHandlers) EntryToggleEnabled(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/world/%d", bookID), http.StatusSeeOther)
+	redirectToBookPage(w, r, bookID)
 }
 
 func (h WorldHandlers) EntryDelete(w http.ResponseWriter, r *http.Request) {
@@ -245,7 +260,7 @@ func (h WorldHandlers) EntryDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/world/%d", bookID), http.StatusSeeOther)
+	redirectToBookPage(w, r, bookID)
 }
 
 func (h WorldHandlers) loadBook(r *http.Request) (db.Lorebook, []db.LorebookEntry, error) {

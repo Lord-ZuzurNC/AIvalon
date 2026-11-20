@@ -80,6 +80,8 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /world/{id}/entries/{entryID}/delete", world.EntryDelete)
 	mux.HandleFunc("POST /world/{id}/entries/{entryID}/toggle", world.EntryToggleEnabled)
 
+	mux.HandleFunc("GET /about", web.About)
+
 	settings := web.SettingsHandlers{DB: sqlDB}
 	mux.HandleFunc("GET /settings", settings.List)
 	mux.HandleFunc("POST /settings/backend-profiles", settings.Create)
