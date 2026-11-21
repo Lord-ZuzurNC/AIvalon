@@ -722,7 +722,23 @@ html.sidebar-collapsed #sidebar-toggle {
 }
 
 /* Delete-confirmation dialog (DeleteConfirmPage): Cancel + red
-   "Delete anyway" side by side in the footer. */
+   "Delete anyway" side by side in the footer. Explicit flex row
+   rather than trusting Pico's own <footer> default — Pico's action
+   buttons/links are block-level (width:100%) by default, which
+   stacks them unless something overrides it. */
+.delete-confirm-footer {
+	display: flex;
+	flex-direction: row;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.delete-confirm-footer > a,
+.delete-confirm-footer .inline-form button {
+	width: auto;
+}
+
 .inline-form {
 	display: inline;
 	margin: 0;
