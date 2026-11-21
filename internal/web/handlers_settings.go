@@ -121,8 +121,8 @@ func (h SettingsHandlers) ProfileTest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	modelCount, err := testBackendConnection(profile)
-	render(w, r, TestResult(err, modelCount))
+	models, err := testBackendConnection(profile)
+	render(w, r, TestResult(err, models, r.FormValue("model")))
 }
 
 func (h SettingsHandlers) PersonaEditForm(w http.ResponseWriter, r *http.Request) {

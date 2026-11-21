@@ -69,15 +69,16 @@ func hostPort(baseURL string) (host, port string, err error) {
 // OpenAI-style proxy, Ollama, llama.cpp's server, LM Studio, ...)
 // expose, carrying the API key when one's set — a real exercise of
 // the whole path (DNS, TCP, TLS, auth), not just the socket-level
-// reachability pingBackend checks every 5s. Returns the listed model
-// count on success (0 if the response's shape couldn't be parsed —
-// still a success, since plenty of backends answer 200 without a
-// standard body).
-func testBackendConnection(profile db.BackendProfile) (modelCount int, err error) {
+// reachability pingBackend checks every 5s. Returns the listed
+// model IDs (nil if the response's shape couldn't be parsed — still
+// a success, since plenty of backends answer 200 without a standard
+// body) so the caller can offer them as picks (see TestResult/
+// modelFieldSelect) instead of free text.
+func testBackendConnection(profile db.BackendProfile) (models []string, err error) {
 	base := strings.TrimRight(profile.BaseURL, "/")
 	req, err := http.NewRequest(http.MethodGet, base+"/models", nil)
 	if err != nil {
-		return 0, fmt.Errorf("invalid base URL: %w", err)
+		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
 	if profile.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+profile.APIKey)
@@ -85,18 +86,25 @@ func testBackendConnection(profile db.BackendProfile) (modelCount int, err error
 	client := &http.Client{Timeout: testTimeout}
 	resp, err := client.Do(req)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
-		return 0, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var payload struct {
-		Data []json.RawMessage `json:"data"`
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err == nil {
-		return len(payload.Data), nil
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, nil
 	}
-	return 0, nil
+	for _, d := range payload.Data {
+		if d.ID != "" {
+			models = append(models, d.ID)
+		}
+	}
+	return models, nil
 }
