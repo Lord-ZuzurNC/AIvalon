@@ -220,12 +220,14 @@ templ backendProfileForm(editing *db.BackendProfile) {
 	{{
 	action := "/settings/backend-profiles"
 	idStr, name, baseURL, model := "", "", "", ""
+	kind := "llm"
 	hasKey := false
 	temperature, topP := "", ""
 	if editing != nil {
 		action = fmt.Sprintf("/settings/backend-profiles/%d", editing.ID)
 		idStr = fmt.Sprintf("%d", editing.ID)
 		name, baseURL, model = editing.Name, editing.BaseURL, editing.Model
+		kind = editing.Kind
 		hasKey = editing.APIKey != ""
 		if v, ok := editing.ModelParams["temperature"]; ok {
 			temperature = strconv.FormatFloat(v, 'f', -1, 64)
@@ -240,6 +242,14 @@ templ backendProfileForm(editing *db.BackendProfile) {
 		<label>
 			Name
 			<input type="text" name="name" value={ name } required="required"/>
+		</label>
+		<label>
+			Kind
+			<select name="kind">
+				<option value="llm" selected?={ kind == "llm" }>LLM (chat)</option>
+				<option value="image" selected?={ kind == "image" }>Image generation</option>
+			</select>
+			<small>Which API shape this backend speaks — picks what "Test connection" checks and what the profile shows up for later (LLM backend picker vs. image generation).</small>
 		</label>
 		<label>
 			Base URL

@@ -299,12 +299,17 @@ func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editing
 }
 
 // profileFromForm reads the plain POST form fields shared by Create and
-// Update. ID/Kind come from the caller rather than the form: Kind isn't
-// user-editable yet (v1 only ever creates "llm" profiles — see
-// docs/DESIGN.md), and ID is never attacker-or-typo-controlled this way.
+// Update. ID comes from the caller rather than the form (never attacker-
+// or typo-controlled this way). Kind now comes from the form (the
+// selector in backendProfileForm) — an empty/unrecognized value keeps
+// whatever base.Kind already was (Create's "llm" default, or Update's
+// existing persisted value) rather than silently resetting it.
 func profileFromForm(r *http.Request, base db.BackendProfile) db.BackendProfile {
 	r.ParseForm()
 	base.Name = r.FormValue("name")
+	if kind := r.FormValue("kind"); kind == "llm" || kind == "image" {
+		base.Kind = kind
+	}
 	base.BaseURL = r.FormValue("base_url")
 	base.Model = r.FormValue("model")
 	// An empty field means "leave the existing key alone" (Create's

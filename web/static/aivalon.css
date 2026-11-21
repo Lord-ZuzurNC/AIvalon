@@ -396,6 +396,26 @@ html.sidebar-collapsed #sidebar-toggle {
 	margin-top: 0.4rem;
 }
 
+/* A generated image (role "image") — the picture, then its prompt and
+   seed as a muted caption. */
+.message-image-figure {
+	flex: 1;
+	margin: 0;
+}
+
+.message-image-figure img {
+	display: block;
+	max-width: 100%;
+	max-height: 70vh;
+	border-radius: var(--pico-border-radius, 0.25rem);
+}
+
+.message-image-figure figcaption {
+	margin-top: 0.3rem;
+	color: var(--pico-muted-color);
+	white-space: pre-line;
+}
+
 .message-edit-form textarea {
 	width: 100%;
 }
@@ -448,7 +468,9 @@ html.sidebar-collapsed #sidebar-toggle {
 	margin-bottom: 0.25rem;
 }
 
-.image-gallery-item button {
+.image-gallery-item button,
+.image-gallery-item a[role="button"] {
+	display: block;
 	width: 100%;
 	margin: 0 0 0.25rem;
 	padding: 0.25rem 0.4rem;

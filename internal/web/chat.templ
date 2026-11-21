@@ -2,6 +2,7 @@ package web
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
@@ -18,21 +19,32 @@ import (
 templ MessageBlock(sessionID int64, m DisplayMessage) {
 	<div class={ "message", "message-" + m.Role } data-content={ m.Content }>
 		<div class="message-header">
-			<p>
-				if m.Speaker != "" {
-					<strong>{ m.Speaker }:</strong>{ " " }
-				}
-				@templ.Raw(m.ContentHTML)
-			</p>
+			if m.ImagePath != "" {
+				<figure class="message-image-figure">
+					<a href={ templ.URL("/static/" + m.ImagePath) } target="_blank" rel="noopener">
+						<img src={ "/static/" + m.ImagePath } alt={ m.Content } loading="lazy"/>
+					</a>
+					<figcaption><small>{ m.Content }</small></figcaption>
+				</figure>
+			} else {
+				<p>
+					if m.Speaker != "" {
+						<strong>{ m.Speaker }:</strong>{ " " }
+					}
+					@templ.Raw(m.ContentHTML)
+				</p>
+			}
 			<div class="options-menu">
 				<button type="button" class="options-trigger" aria-label="Message options" aria-haspopup="true" aria-expanded="false" aria-controls={ fmt.Sprintf("options-message-%d", m.ID) } data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
 				<div id={ fmt.Sprintf("options-message-%d", m.ID) } class="options-dropdown" role="menu" hidden>
 					if m.Role == "user" {
 						<button type="button" role="menuitem" onclick="toggleEditForm(this)">Edit</button>
 					} else {
-						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
-							<button type="submit" role="menuitem">Regenerate</button>
-						</form>
+						if m.Role != "image" {
+							<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
+								<button type="submit" role="menuitem">Regenerate</button>
+							</form>
+						}
 						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
 							<button type="submit" role="menuitem">Branch</button>
 						</form>
@@ -197,7 +209,7 @@ templ imageIcon() {
 	</svg>
 }
 
-templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption, info SessionInfo) {
+templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption, info SessionInfo, imageForm ImageGenForm) {
 	@Layout(session.Title, "Chat") {
 		<div
 			if session.BackgroundImagePath != "" {
@@ -242,11 +254,12 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			     this reply's prompt had to leave old messages out. -->
 			<div id="context-trim-notice" class="context-trim-notice" role="status" aria-live="polite"></div>
 			<div class="chat-input-toolbar">
-				<button type="button" class="icon-button" disabled title="Not built yet">
+				<button type="button" class="icon-button" data-modal-id="image-modal" onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">
 					@imageIcon()
 					Generate image
 				</button>
 			</div>
+			@imageGenModal(session.ID, imageForm)
 			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) } class="chat-input-row">
 				<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
 				<button type="submit" class="send-button" aria-label="Send">
@@ -254,7 +267,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				</button>
 			</form>
 		</div>
-		@sessionPanel(session, bgOptions, info)
+		@sessionPanel(session, bgOptions, info, messages)
 		<script>
 			// Land on the bottom of the conversation on load, and keep
 			// following it as tokens stream in / the final styled swap
@@ -316,6 +329,23 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			}
 			syncChatLayoutToggle();
 
+			// Picking a preset copies its data-preset JSON (keys = the
+			// dialog's field names, see presetJSON) into the form — no
+			// round-trip. "(no preset)" carries none and leaves the
+			// fields as they are.
+			function applyImagePreset(select) {
+				var opt = select.selectedOptions[0];
+				if (!opt || !opt.dataset.preset) {
+					return;
+				}
+				var p = JSON.parse(opt.dataset.preset);
+				for (var k in p) {
+					if (select.form.elements[k]) {
+						select.form.elements[k].value = p[k];
+					}
+				}
+			}
+
 			function copyMessageContent(button) {
 				var message = button.closest(".message");
 				navigator.clipboard.writeText(message.dataset.content);
@@ -350,7 +380,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 // each page owns its own script in this codebase, nothing shared
 // globally, so duplicating ~8 lines beats inventing a shared-script
 // mechanism for one function).
-templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info SessionInfo) {
+templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info SessionInfo, messages []DisplayMessage) {
 	<aside id="session-panel" class="session-panel">
 		<div class="session-panel-header">
 			<strong>Session</strong>
@@ -435,7 +465,23 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 				}
 			</div>
 			<div data-tab-panel="gallery" hidden="hidden">
-				<p><em>Image generation isn't built yet (see the disabled "Generate image" button) — once it is, this tab will hold this session's generated images with a PNG download on each.</em></p>
+				{{ hasImages := false }}
+				<div class="image-gallery">
+					for _, m := range messages {
+						if m.ImagePath != "" {
+							{{ hasImages = true }}
+							<div class="image-gallery-item">
+								<a href={ templ.URL("/static/" + m.ImagePath) } target="_blank" rel="noopener">
+									<img src={ "/static/" + m.ImagePath } alt={ m.Content } loading="lazy"/>
+								</a>
+								<a href={ templ.URL("/static/" + m.ImagePath) } download role="button" class="secondary">Download</a>
+							</div>
+						}
+					}
+				</div>
+				if !hasImages {
+					<p><em>No images generated in this session yet — use “Generate image” under the chat.</em></p>
+				}
 			</div>
 			<div data-tab-panel="background" hidden="hidden">
 				if len(bgOptions) == 0 {
@@ -465,4 +511,166 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 			}
 		</script>
 	</aside>
+}
+
+
+// imageGenModal is the "Generate image" dialog — same <dialog>+<article>
+// shape as session-modal. The form posts via htmx so the Generate button
+// can show #image-spinner and stay disabled for the (long) request;
+// errors land in #image-result, success HX-Redirects to the session.
+// Preset buttons set their own hx-target/hx-indicator because a form's
+// hx-* attributes are inherited by everything inside it.
+templ imageGenModal(sessionID int64, f ImageGenForm) {
+	{{ d := defaultImageParams }}
+	<dialog id="image-modal">
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>Generate image</strong>
+			</header>
+			if len(f.Profiles) == 0 {
+				<p>
+					No image backend profile yet —
+					<a href="/settings">add one in Settings</a>
+					(Kind: Image generation, e.g. an Automatic1111 WebUI started with --api at http://127.0.0.1:7860) first.
+				</p>
+			} else {
+				<form
+					method="post"
+					action={ templ.URL(fmt.Sprintf("/chat/%d/images", sessionID)) }
+					hx-post={ fmt.Sprintf("/chat/%d/images", sessionID) }
+					hx-target="#image-result"
+					hx-swap="innerHTML"
+					hx-indicator="#image-spinner"
+					hx-disabled-elt="find button[type='submit']"
+				>
+					if len(f.Profiles) == 1 {
+						<input type="hidden" name="backend_profile_id" value={ fmt.Sprintf("%d", f.Profiles[0].ID) }/>
+					} else {
+						<label>
+							Image backend
+							<select name="backend_profile_id">
+								for _, p := range f.Profiles {
+									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+								}
+							</select>
+							<small>Which of your image-generation profiles runs this request.</small>
+						</label>
+					}
+					<label>
+						Preset
+						@presetSelect(f.Presets, 0, false)
+						<small>Fills every field below except the prompt — tweak freely before generating.</small>
+					</label>
+					<label>
+						Prompt
+						<textarea name="prompt" rows="3" required="required"></textarea>
+						<small>What to draw. The style suffix below is appended to it.</small>
+					</label>
+					<label>
+						Style suffix
+						<input type="text" name="style_suffix" value={ d.StyleSuffix }/>
+						<small>Appended to the prompt as “, suffix” — what makes a preset look manga vs. photo vs. cyberpunk.</small>
+					</label>
+					<label>
+						Negative prompt
+						<textarea name="negative_prompt" rows="2">{ d.NegativePrompt }</textarea>
+						<small>What to steer away from (blur, extra fingers, watermarks…).</small>
+					</label>
+					<label>
+						Steps
+						<input type="number" name="steps" value={ fmt.Sprintf("%d", d.Steps) } min="1" max="150" required="required"/>
+						<small>Denoising iterations — more is slower; 20–30 is typical.</small>
+					</label>
+					<label>
+						CFG scale
+						<input type="number" name="cfg_scale" value={ strconv.FormatFloat(d.CFGScale, 'f', -1, 64) } step="0.5" min="1" max="30" required="required"/>
+						<small>How strictly to follow the prompt — 5–8 is typical; too high looks overcooked.</small>
+					</label>
+					<label>
+						Width
+						<input type="number" name="width" value={ fmt.Sprintf("%d", d.Width) } step="8" min="64" max="2048" required="required"/>
+						<small>Pixels. SD 1.5 models like ~512, SDXL ~1024.</small>
+					</label>
+					<label>
+						Height
+						<input type="number" name="height" value={ fmt.Sprintf("%d", d.Height) } step="8" min="64" max="2048" required="required"/>
+						<small>Pixels. Taller than wide suits portraits.</small>
+					</label>
+					<label>
+						Sampler
+						<input type="text" name="sampler_name" value={ d.SamplerName } list="sampler-options" required="required"/>
+						<datalist id="sampler-options">
+							<option value="Euler a"></option>
+							<option value="Euler"></option>
+							<option value="DPM++ 2M Karras"></option>
+							<option value="DPM++ SDE Karras"></option>
+							<option value="DPM++ 2M SDE Karras"></option>
+							<option value="DDIM"></option>
+							<option value="UniPC"></option>
+						</datalist>
+						<small>Sampler name exactly as Automatic1111's own dropdown spells it.</small>
+					</label>
+					<label>
+						Seed
+						<input type="number" name="seed" value={ fmt.Sprintf("%d", d.Seed) } min="-1" step="1" required="required"/>
+						<small>-1 = random each time; reuse a seed (shown under each image) to reproduce it.</small>
+					</label>
+					<fieldset>
+						<legend>Presets</legend>
+						<label>
+							Preset name
+							<input type="text" name="preset_name"/>
+							<small>Saves the fields above as they are now (not the picked preset's originals).</small>
+						</label>
+						<label>
+							<input type="checkbox" name="overwrite" value="1"/>
+							Overwrite if a preset with this name already exists
+						</label>
+						<div class="test-row">
+							<button type="button" class="secondary" hx-post="/image-presets" hx-target="#preset-result" hx-indicator="#preset-spinner">Save as preset</button>
+							<button type="button" class="secondary" hx-post="/image-presets/delete" hx-target="#preset-result" hx-indicator="#preset-spinner" hx-confirm="Delete the selected preset?">Delete selected preset</button>
+							<span id="preset-spinner" class="htmx-indicator">Saving…</span>
+						</div>
+						<div id="preset-result" role="status" aria-live="polite"></div>
+					</fieldset>
+					<div class="test-row">
+						<button type="submit">Generate</button>
+						<span id="image-spinner" class="htmx-indicator">Generating… this can take a minute or two.</span>
+					</div>
+					<div id="image-result" role="status" aria-live="polite"></div>
+				</form>
+			}
+		</article>
+	</dialog>
+}
+
+// presetSelect is the dialog's preset picker; oob=true is the same
+// element re-rendered by ImagePresetResult after a save/delete.
+templ presetSelect(presets []db.ImagePreset, selectedID int64, oob bool) {
+	<select
+		id="image-preset-select"
+		name="preset_id"
+		onchange="applyImagePreset(this)"
+		if oob {
+			hx-swap-oob="true"
+		}
+	>
+		<option value="">(no preset — keep the fields as they are)</option>
+		for _, p := range presets {
+			<option value={ fmt.Sprintf("%d", p.ID) } data-preset={ presetJSON(p) } selected?={ p.ID == selectedID }>{ p.Name }</option>
+		}
+	</select>
+}
+
+// ImagePresetResult is the Save/Delete preset buttons' fragment: a
+// ✅/❌ line, plus — on success — the refreshed preset list swapped in
+// out-of-band.
+templ ImagePresetResult(msg string, ok bool, presets []db.ImagePreset, selectedID int64) {
+	if ok {
+		<p class="test-result test-ok">✅ { msg }</p>
+		@presetSelect(presets, selectedID, true)
+	} else {
+		<p class="test-result test-fail">❌ { msg }</p>
+	}
 }

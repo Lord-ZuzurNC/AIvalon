@@ -62,7 +62,9 @@ An earlier draft of this document used the reversed, project-local terms `Person
 - **Lorebook** (World Info) — name, entries (keys, content, trigger strategy, insertion order, probability).
   A separate object from CharacterCard, attachable to a session — this is the split that was missing from the first pass at the idea, where "a card" was expected to carry an entire world by itself.
 - **Session** — a `Persona`, one or more `CharacterCard`s (group chats are multiple AI characters in one session), at most one `Lorebook`, the message log, and a snapshot of which backend profile and model parameters were used.
-- **Message** — role, content, timestamp (v2 adds optional generated-image references).
+- **Message** — role, content, timestamp, and for role `image` an `image_path` to a generated picture.
+  Image messages are their own role (not `system`) so they're trivially kept out of the LLM prompt history and get their own rendering; they sort like any other message, so the next turn always lands below the image.
+- **ImagePreset** — a named txt2img parameter set (steps, cfg_scale, sampler, size, seed, negative prompt) plus a style suffix appended to the prompt (`image_presets`, migration 00012; three built-ins seeded: Realistic, Manga / Anime, Cyberpunk).
 - **BackendProfile** — see above.
 
 ## Character card compatibility
@@ -160,10 +162,10 @@ CREATE TABLE session_characters (
 CREATE TABLE messages (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id         INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-    role               TEXT NOT NULL,  -- 'user' | 'character' | 'system'
+    role               TEXT NOT NULL,  -- 'user' | 'character' | 'narrator' | 'system' | 'image'
     character_card_id  INTEGER REFERENCES character_cards(id),  -- set when role = 'character'
     content            TEXT NOT NULL,
-    image_path         TEXT,  -- v2
+    image_path         TEXT,  -- set only on role = 'image' (a generated picture; content = its prompt + seed)
     created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX idx_messages_session_created ON messages(session_id, created_at);

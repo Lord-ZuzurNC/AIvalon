@@ -20,15 +20,19 @@ type Session struct {
 	BackgroundImagePath string
 }
 
-// ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "system".
+// ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "narrator" | "system" | "image".
 // CharacterCardID is 0 (unset) for "user"/"system" messages, and for a
 // "character" reply before any character is attached to the session.
+// ImagePath is set only on "image" messages (a generated picture; Content
+// then holds the prompt it came from) — relative to web/static, same as
+// every other image_path column.
 type ChatMessage struct {
 	ID              int64
 	SessionID       int64
 	Role            string
 	CharacterCardID int64
 	Content         string
+	ImagePath       string
 }
 
 // ListSessions returns one page of non-vaulted sessions, newest first.
@@ -115,7 +119,7 @@ func DeleteSession(db *sql.DB, id int64) error {
 
 func ListMessages(db *sql.DB, sessionID int64) ([]ChatMessage, error) {
 	rows, err := db.Query(
-		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content FROM messages WHERE session_id = ? ORDER BY created_at, id`,
+		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content, COALESCE(image_path, '') FROM messages WHERE session_id = ? ORDER BY created_at, id`,
 		sessionID,
 	)
 	if err != nil {
@@ -126,7 +130,7 @@ func ListMessages(db *sql.DB, sessionID int64) ([]ChatMessage, error) {
 	var messages []ChatMessage
 	for rows.Next() {
 		var m ChatMessage
-		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.CharacterCardID, &m.Content); err != nil {
+		if err := rows.Scan(&m.ID, &m.SessionID, &m.Role, &m.CharacterCardID, &m.Content, &m.ImagePath); err != nil {
 			return nil, fmt.Errorf("scanning message: %w", err)
 		}
 		messages = append(messages, m)
@@ -135,13 +139,16 @@ func ListMessages(db *sql.DB, sessionID int64) ([]ChatMessage, error) {
 }
 
 func CreateMessage(db *sql.DB, m ChatMessage) (int64, error) {
-	var characterCardID any
+	var characterCardID, imagePath any
 	if m.CharacterCardID != 0 {
 		characterCardID = m.CharacterCardID
 	}
+	if m.ImagePath != "" {
+		imagePath = m.ImagePath
+	}
 	res, err := db.Exec(
-		`INSERT INTO messages (session_id, role, character_card_id, content) VALUES (?, ?, ?, ?)`,
-		m.SessionID, m.Role, characterCardID, m.Content,
+		`INSERT INTO messages (session_id, role, character_card_id, content, image_path) VALUES (?, ?, ?, ?, ?)`,
+		m.SessionID, m.Role, characterCardID, m.Content, imagePath,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating message: %w", err)
@@ -152,8 +159,8 @@ func CreateMessage(db *sql.DB, m ChatMessage) (int64, error) {
 func GetMessage(db *sql.DB, id int64) (ChatMessage, error) {
 	var m ChatMessage
 	err := db.QueryRow(
-		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content FROM messages WHERE id = ?`, id,
-	).Scan(&m.ID, &m.SessionID, &m.Role, &m.CharacterCardID, &m.Content)
+		`SELECT id, session_id, role, COALESCE(character_card_id, 0), content, COALESCE(image_path, '') FROM messages WHERE id = ?`, id,
+	).Scan(&m.ID, &m.SessionID, &m.Role, &m.CharacterCardID, &m.Content, &m.ImagePath)
 	if err != nil {
 		return ChatMessage{}, fmt.Errorf("getting message %d: %w", id, err)
 	}
@@ -166,6 +173,26 @@ func UpdateMessageContent(db *sql.DB, id int64, content string) error {
 	_, err := db.Exec(`UPDATE messages SET content = ? WHERE id = ?`, content, id)
 	if err != nil {
 		return fmt.Errorf("updating message %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetMessageImagePath attaches a saved image to message id — a separate
+// write because the file is named after the message's own ID, which
+// only exists once the row does.
+func SetMessageImagePath(db *sql.DB, id int64, path string) error {
+	if _, err := db.Exec(`UPDATE messages SET image_path = ? WHERE id = ?`, path, id); err != nil {
+		return fmt.Errorf("setting image path on message %d: %w", id, err)
+	}
+	return nil
+}
+
+// DeleteMessage removes exactly one message — the rollback for an image
+// message whose file failed to save (DeleteMessagesFrom is the
+// user-facing "this and everything after" delete).
+func DeleteMessage(db *sql.DB, id int64) error {
+	if _, err := db.Exec(`DELETE FROM messages WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("deleting message %d: %w", id, err)
 	}
 	return nil
 }
@@ -212,6 +239,7 @@ func BranchSession(db *sql.DB, sessionID, uptoMessageID int64) (int64, error) {
 			Role:            m.Role,
 			CharacterCardID: m.CharacterCardID,
 			Content:         m.Content,
+			ImagePath:       m.ImagePath,
 		}); err != nil {
 			return 0, fmt.Errorf("copying message %d into branch: %w", m.ID, err)
 		}
@@ -244,6 +272,7 @@ func DuplicateSession(db *sql.DB, sessionID int64) (int64, error) {
 			Role:            m.Role,
 			CharacterCardID: m.CharacterCardID,
 			Content:         m.Content,
+			ImagePath:       m.ImagePath,
 		}); err != nil {
 			return 0, fmt.Errorf("copying message %d into duplicate: %w", m.ID, err)
 		}
