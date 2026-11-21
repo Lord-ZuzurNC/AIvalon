@@ -1159,25 +1159,45 @@ html.sidebar-collapsed #sidebar-toggle {
 	border-radius: var(--pico-border-radius, 0.25rem);
 	display: flex;
 	flex-direction: column;
+	/* min-height:100vh alone is computed against the viewport AS THE
+	   MOBILE BROWSER'S OWN TOOLBAR STOOD AT LOAD TIME — on a phone
+	   whose address bar auto-hides on scroll, that's a shorter
+	   viewport than the one you get a moment later once it slides
+	   away, so the page visibly grows/jumps right after load (Lord's
+	   "une barre unie qui apparait en haut... dès que je bouge elle
+	   disparaît"). dvh (dynamic viewport height) tracks the REAL
+	   current viewport instead, eliminating that jump. Declared
+	   second on purpose: a browser that doesn't know the dvh unit
+	   ignores this whole line (invalid value), keeping the vh
+	   fallback above rather than breaking. */
 	min-height: 100vh;
+	min-height: 100dvh;
 }
 
 /* Only a session WITH a background image breaks out of <main>'s own
-   padded/capped column (Lord's call: the art should fill the
-   viewport edge to edge via background-size:cover, not sit inside a
+   padding (Lord's call: the art should fill the available content
+   area edge to edge via background-size:cover, not sit inside a
    rounded card with the app's own dark canvas visible around it).
-   The calc(50% - 50vw) pair is the standard "full-bleed inside a
-   centered container" trick — it works regardless of main's own
-   padding/max-width since it's computed against the viewport, not
-   the parent. Padding is re-added here so inner content (header,
-   messages, input) doesn't then touch the viewport edges that the
-   box itself now does. */
+   Escaping via calc(50% - 50vw) (viewport-relative) was the first
+   attempt here — wrong, because it assumes <main> is horizontally
+   centered in the viewport with equal margins on both sides. It
+   isn't: <main> is a flex sibling of the sidebar, offset to the
+   right by the sidebar's own width, not centered. That mismatch
+   dragged the background's left edge UNDER the sidebar and its
+   right edge past the viewport, causing the horizontal scrollbar
+   (Lord's bug report, worse on a narrow phone where the sidebar is
+   a bigger fraction of the screen). Escaping by exactly main's own
+   padding instead — not viewport units — fills main's box exactly,
+   stays clear of the sidebar automatically (it's relative to main's
+   own edges, not the viewport's), and can't overflow: the negative
+   margins and the width's "+ 3rem" cancel out exactly regardless of
+   how wide the sidebar is. */
 .has-bg-image {
 	border-radius: 0;
-	width: 100vw;
-	max-width: 100vw;
-	margin-left: calc(50% - 50vw);
-	margin-right: calc(50% - 50vw);
+	margin-left: -1.5rem;
+	margin-right: -1.5rem;
+	width: calc(100% + 3rem);
+	max-width: calc(100% + 3rem);
 	padding-left: 1.5rem;
 	padding-right: 1.5rem;
 	box-sizing: border-box;
@@ -1358,6 +1378,10 @@ html.sidebar-collapsed #sidebar-toggle {
 	}
 
 	.has-bg-image {
+		margin-left: -1rem;
+		margin-right: -1rem;
+		width: calc(100% + 2rem);
+		max-width: calc(100% + 2rem);
 		padding-left: 1rem;
 		padding-right: 1rem;
 	}
