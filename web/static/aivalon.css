@@ -1318,13 +1318,17 @@ html.sidebar-collapsed #sidebar-toggle {
    ============================================================ */
 @media (max-width: 640px) {
 	/* Same narrow rail as html.sidebar-collapsed > body > header on
-	   desktop — width only, position/height/border stay as set
-	   in the unconditional rule above (sticky, full height, right
-	   border) so it still reads as a left-hand rail, not a bar. */
+	   desktop, just a touch narrower still — Lord's call: a phone's
+	   width is the one place where 56px genuinely competes with the
+	   chat/content it's sitting next to, and every control here is
+	   still well above the ~44px minimum touch-target guideline.
+	   Position/height/border stay as set in the unconditional rule
+	   above (sticky, full height, right border) so it still reads as
+	   a left-hand rail, not a bar. */
 	body > header {
-		flex: 0 0 56px;
-		max-width: 56px;
-		padding: 1rem 0.4rem;
+		flex: 0 0 48px;
+		max-width: 48px;
+		padding: 0.75rem 0.25rem;
 	}
 
 	.sidebar-header {

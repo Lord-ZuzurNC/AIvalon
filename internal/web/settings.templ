@@ -243,10 +243,9 @@ templ backendProfileForm(editing *db.BackendProfile) {
 			Base URL
 			<input type="url" name="base_url" value={ baseURL } placeholder="http://127.0.0.1:11434/v1" required="required"/>
 		</label>
-		<label>
-			Model
-			<input type="text" name="model" value={ model } placeholder="llama3.1 (some backends ignore this)"/>
-		</label>
+		<div id="model-field">
+			@modelFieldInput(model)
+		</div>
 		<label>
 			API key (optional)
 			if hasKey {
@@ -307,6 +306,44 @@ templ personaForm(editing *db.Persona) {
 	</form>
 }
 
+// modelFieldInput is the plain free-text Model field — the default
+// state, and what a page reload always falls back to (the dropdown
+// below is a client-side convenience, never persisted on its own).
+templ modelFieldInput(model string) {
+	<label>
+		Model
+		<input type="text" name="model" value={ model } placeholder="llama3.1 (some backends ignore this)"/>
+	</label>
+}
+
+// modelFieldSelect replaces the plain input with a dropdown of the
+// model IDs a successful Test actually found — Lord's ask: typing a
+// model name by hand when the backend already told you what exists
+// invites typos. "(Default)" (empty value, same as leaving the old
+// input blank) is always first for "don't know / don't care, let
+// the backend pick". If the already-set model isn't among the ones
+// just listed (stale, or the backend's list is incomplete), it's
+// kept as its own trailing option instead of silently dropped —
+// switching to the picker should never discard a working value.
+templ modelFieldSelect(current string, models []string) {
+	{{ currentInList := false }}
+	<label>
+		Model
+		<select name="model">
+			<option value="" selected?={ current == "" }>(Default — let the backend decide)</option>
+			for _, m := range models {
+				<option value={ m } selected?={ m == current }>{ m }</option>
+				if m == current {
+					{{ currentInList = true }}
+				}
+			}
+			if current != "" && !currentInList {
+				<option value={ current } selected="selected">{ current } (current — not in this list)</option>
+			}
+		</select>
+	</label>
+}
+
 // PingDot is the recurring healthcheck fragment — htmx re-fetches
 // this every 5s (see its hx-trigger in the profile list row) and
 // swaps it in place, so the dot's color always reflects the latest
@@ -322,12 +359,19 @@ templ PingDot(reachable bool) {
 // TestResult is the Test button's own fragment — a real HTTP
 // exercise of the backend's /models endpoint, not just the socket
 // pingBackend checks every 5s, so this can fail on auth/path issues
-// pingBackend wouldn't catch.
-templ TestResult(err error, modelCount int) {
+// pingBackend wouldn't catch. On success with at least one model
+// listed, it also swaps the form's plain Model <input> for a
+// <select> of what was found (Lord's ask) via an out-of-band swap
+// targeting #model-field (see backendProfileForm) — a failed test or
+// a backend that lists nothing leaves the plain text field alone.
+templ TestResult(err error, models []string, currentModel string) {
 	if err != nil {
 		<p class="test-result test-fail">❌ { err.Error() }</p>
-	} else if modelCount > 0 {
-		<p class="test-result test-ok">✅ Reachable — { fmt.Sprintf("%d model(s) listed", modelCount) }</p>
+	} else if len(models) > 0 {
+		<p class="test-result test-ok">✅ Reachable — { fmt.Sprintf("%d model(s) listed", len(models)) }</p>
+		<div id="model-field" hx-swap-oob="true">
+			@modelFieldSelect(currentModel, models)
+		</div>
 	} else {
 		<p class="test-result test-ok">✅ Reachable</p>
 	}
