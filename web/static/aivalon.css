@@ -171,8 +171,13 @@ h1, h2, h3,
 	color: var(--pico-primary);
 }
 
+/* *Asterisk* action/narration text — Lord's call: the original muted
+   gray barely showed up once glass (.has-bg-image) sat behind it, so
+   it moved to a muted mid-blue instead. Deliberately not a light/pale
+   blue (Lord's own wording: "pas trop clair") — this needs to read
+   as a distinct accent, not a near-white tint. */
 .action {
-	color: var(--pico-muted-color);
+	color: #5f8ac2;
 	font-style: italic;
 }
 
@@ -1148,8 +1153,8 @@ html.sidebar-collapsed #sidebar-toggle {
    always ends up at the bottom of the page — Lord's call: a short or
    empty conversation used to leave it floating right under the last
    message instead of anchored to the bottom, since it was just
-   whatever came next in normal block flow. #messages taking the
-   remaining space (flex:1) is what pushes it down there. */
+   whatever came next in normal block flow. .chat-messages-wrap taking
+   the remaining space (flex:1) is what pushes it down there. */
 .chat-page-bg {
 	border-radius: var(--pico-border-radius, 0.25rem);
 	display: flex;
@@ -1157,8 +1162,42 @@ html.sidebar-collapsed #sidebar-toggle {
 	min-height: 100vh;
 }
 
-#messages {
+/* Only a session WITH a background image breaks out of <main>'s own
+   padded/capped column (Lord's call: the art should fill the
+   viewport edge to edge via background-size:cover, not sit inside a
+   rounded card with the app's own dark canvas visible around it).
+   The calc(50% - 50vw) pair is the standard "full-bleed inside a
+   centered container" trick — it works regardless of main's own
+   padding/max-width since it's computed against the viewport, not
+   the parent. Padding is re-added here so inner content (header,
+   messages, input) doesn't then touch the viewport edges that the
+   box itself now does. */
+.has-bg-image {
+	border-radius: 0;
+	width: 100vw;
+	max-width: 100vw;
+	margin-left: calc(50% - 50vw);
+	margin-right: calc(50% - 50vw);
+	padding-left: 1.5rem;
+	padding-right: 1.5rem;
+	box-sizing: border-box;
+}
+
+/* .chat-messages-wrap holds #messages (the loaded history) and #live
+   (the in-progress/just-finished streamed reply — see Stream's own
+   OOB swap in handlers_chat.go, which replaces #live's own content
+   rather than relocating it into #messages) as ONE flex column that
+   grows to fill the page. #messages used to carry flex:1 itself,
+   which stretched it alone to the page's full height and left #live
+   sitting far below the last real message instead of right after it
+   — Lord's bug report ("sa réponse devrait être juste en dessous").
+   Moving flex:1 up to the shared wrapper keeps both children stacked
+   tight at the top, with any extra space landing below both instead
+   of between them. */
+.chat-messages-wrap {
 	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
 }
 
 .chat-input-toolbar,
@@ -1312,6 +1351,11 @@ html.sidebar-collapsed #sidebar-toggle {
 	body > main {
 		max-width: 100%;
 		padding: 1rem;
+	}
+
+	.has-bg-image {
+		padding-left: 1rem;
+		padding-right: 1rem;
 	}
 
 	/* A table sized for a desktop window (World/Character/Settings'
