@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,15 +11,29 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/imageclient"
 )
 
-// ImageGenForm is what the chat page's "Generate image" dialog needs:
-// the kind="image" backend profiles to pick from, and the saved presets.
+// ImageGenForm is what the chat page's image UI needs: the kind="image"
+// backend profiles for the "Generate image" dialog, and the saved
+// presets for the session panel's picker (and the dialog's
+// "using preset X" note).
 type ImageGenForm struct {
 	Profiles []db.BackendProfile
 	Presets  []db.ImagePreset
 }
 
-// defaultImageParams pre-fills the dialog before any preset is picked —
-// A1111's own txt2img defaults.
+// activePresetName is the session's chosen preset's name, or "" when
+// none is chosen (or it no longer exists — GenerateImage falls back to
+// defaults in both cases).
+func (f ImageGenForm) activePresetName(presetID int64) string {
+	for _, p := range f.Presets {
+		if p.ID == presetID {
+			return p.Name
+		}
+	}
+	return ""
+}
+
+// defaultImageParams is what a session with no preset chosen generates
+// with — A1111's own txt2img defaults.
 var defaultImageParams = db.ImagePreset{Steps: 20, CFGScale: 7, Width: 512, Height: 512, SamplerName: "Euler a", Seed: -1}
 
 func (h ChatHandlers) imageGenForm() (ImageGenForm, error) {
@@ -39,7 +52,9 @@ func (h ChatHandlers) imageGenForm() (ImageGenForm, error) {
 }
 
 // GenerateImage runs one txt2img call and appends the result to the
-// session as an "image" message. The message row is inserted first
+// session as an "image" message, using the session's chosen preset
+// (sessions.image_preset_id) or defaultImageParams — only the prompt
+// and backend come from the dialog. The message row is inserted first
 // because its ID names the file (writeImageToDisk overwrites per entity
 // ID); a failed save rolls the row back. Being a normal message row, it
 // sorts like any other — whatever's posted next lands below it.
@@ -68,17 +83,30 @@ func (h ChatHandlers) GenerateImage(w http.ResponseWriter, r *http.Request) {
 		fail(errors.New("pick an image backend profile"))
 		return
 	}
-	params, suffix, err := imageParamsFromForm(r)
+	prompt := strings.TrimSpace(r.FormValue("prompt"))
+	if prompt == "" {
+		fail(errors.New("a prompt is required"))
+		return
+	}
+	session, err := db.GetSession(h.DB, sessionID)
 	if err != nil {
 		fail(err)
 		return
 	}
-	if params.Prompt == "" {
-		fail(errors.New("a prompt is required"))
-		return
+	preset := defaultImageParams
+	if session.ImagePresetID != 0 {
+		// A vanished preset (deleted mid-flight) degrades to defaults
+		// rather than failing the whole generation.
+		if p, err := db.GetImagePreset(h.DB, session.ImagePresetID); err == nil {
+			preset = p
+		}
 	}
-	if suffix != "" {
-		params.Prompt += ", " + suffix
+	params := imageclient.GenerationParams{
+		Prompt: prompt, NegativePrompt: preset.NegativePrompt, Steps: preset.Steps, CFGScale: preset.CFGScale,
+		Width: preset.Width, Height: preset.Height, SamplerName: preset.SamplerName, Seed: preset.Seed,
+	}
+	if preset.StyleSuffix != "" {
+		params.Prompt += ", " + preset.StyleSuffix
 	}
 
 	result, err := imageclient.GenerateImage(r.Context(), profile, params)
@@ -111,126 +139,33 @@ func (h ChatHandlers) GenerateImage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("HX-Redirect", dest)
 }
 
-// imageParamsFromForm reads and bounds-checks the dialog's fields. The
-// bounds are sanity limits, not model limits — A1111 itself rejects or
-// clamps anything its loaded checkpoint can't do.
-func imageParamsFromForm(r *http.Request) (imageclient.GenerationParams, string, error) {
-	p := imageclient.GenerationParams{
-		Prompt:         strings.TrimSpace(r.FormValue("prompt")),
-		NegativePrompt: strings.TrimSpace(r.FormValue("negative_prompt")),
-		SamplerName:    strings.TrimSpace(r.FormValue("sampler_name")),
-	}
-	var err error
-	intField := func(name string, lo, hi int) int {
-		v, e := strconv.Atoi(r.FormValue(name))
-		if err == nil && (e != nil || v < lo || v > hi) {
-			err = fmt.Errorf("%s must be a whole number from %d to %d", name, lo, hi)
-		}
-		return v
-	}
-	p.Steps = intField("steps", 1, 150)
-	p.Width = intField("width", 64, 2048)
-	p.Height = intField("height", 64, 2048)
-	if v, e := strconv.ParseFloat(r.FormValue("cfg_scale"), 64); e != nil || v < 1 || v > 30 {
-		if err == nil {
-			err = errors.New("cfg_scale must be a number from 1 to 30")
-		}
-	} else {
-		p.CFGScale = v
-	}
-	if v, e := strconv.ParseInt(r.FormValue("seed"), 10, 64); e != nil || v < -1 {
-		if err == nil {
-			err = errors.New("seed must be -1 (random) or a non-negative whole number")
-		}
-	} else {
-		p.Seed = v
-	}
-	if p.SamplerName == "" && err == nil {
-		err = errors.New("a sampler name is required")
-	}
-	return p, strings.TrimSpace(r.FormValue("style_suffix")), err
-}
-
-// SaveImagePreset stores the dialog's CURRENT field values under
-// preset_name. A taken name is refused unless the request carries
-// overwrite=1 (the dialog's explicit "Overwrite" checkbox) — never a
-// silent clobber.
-func (h ChatHandlers) SaveImagePreset(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	name := strings.TrimSpace(r.FormValue("preset_name"))
-	if name == "" {
-		h.presetResult(w, r, "Give the preset a name first.", false, 0)
-		return
-	}
-	params, suffix, err := imageParamsFromForm(r)
+// SetImagePreset is the session panel's preset picker — same plain
+// POST-then-redirect shape as SetBackground. image_preset_id 0 (or
+// empty) clears it back to defaultImageParams.
+func (h ChatHandlers) SetImagePreset(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		h.presetResult(w, r, err.Error(), false, 0)
+		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	preset := db.ImagePreset{
-		Name: name, StyleSuffix: suffix, NegativePrompt: params.NegativePrompt, Steps: params.Steps,
-		CFGScale: params.CFGScale, Width: params.Width, Height: params.Height, SamplerName: params.SamplerName, Seed: params.Seed,
+	if blocked, err := h.vaultBlocks(r, id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if blocked {
+		http.Error(w, "locked", http.StatusForbidden)
+		return
 	}
-
-	id, err := db.CreateImagePreset(h.DB, preset)
-	if errors.Is(err, db.ErrImagePresetExists) {
-		if r.FormValue("overwrite") != "1" {
-			h.presetResult(w, r, fmt.Sprintf("A preset named %q already exists — tick “Overwrite” to replace it, or pick another name.", name), false, 0)
+	r.ParseForm()
+	presetID, _ := strconv.ParseInt(r.FormValue("image_preset_id"), 10, 64)
+	if presetID != 0 {
+		if _, err := db.GetImagePreset(h.DB, presetID); err != nil {
+			http.Error(w, "no such image preset", http.StatusBadRequest)
 			return
 		}
-		presets, lerr := db.ListImagePresets(h.DB)
-		if lerr != nil {
-			h.presetResult(w, r, lerr.Error(), false, 0)
-			return
-		}
-		for _, p := range presets {
-			if strings.EqualFold(p.Name, name) {
-				preset.ID, preset.Name = p.ID, p.Name // keep the existing name's casing
-			}
-		}
-		id, err = preset.ID, db.UpdateImagePreset(h.DB, preset)
 	}
-	if err != nil {
-		h.presetResult(w, r, err.Error(), false, 0)
+	if err := db.SetSessionImagePreset(h.DB, id, presetID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.presetResult(w, r, fmt.Sprintf("Saved preset %q.", preset.Name), true, id)
-}
-
-func (h ChatHandlers) DeleteImagePreset(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	id, err := strconv.ParseInt(r.FormValue("preset_id"), 10, 64)
-	if err != nil {
-		h.presetResult(w, r, "Pick a preset to delete first.", false, 0)
-		return
-	}
-	if err := db.DeleteImagePreset(h.DB, id); err != nil {
-		h.presetResult(w, r, err.Error(), false, 0)
-		return
-	}
-	h.presetResult(w, r, "Preset deleted.", true, 0)
-}
-
-// presetResult renders the dialog's preset notice and, on success, an
-// out-of-band refresh of the preset <select> (selecting selectedID).
-func (h ChatHandlers) presetResult(w http.ResponseWriter, r *http.Request, msg string, ok bool, selectedID int64) {
-	var presets []db.ImagePreset
-	if ok {
-		var err error
-		if presets, err = db.ListImagePresets(h.DB); err != nil {
-			msg, ok = err.Error(), false
-		}
-	}
-	render(w, r, ImagePresetResult(msg, ok, presets, selectedID))
-}
-
-// presetJSON is one <option>'s data-preset blob, keyed by the dialog's
-// own field names so applyImagePreset can copy it over generically.
-func presetJSON(p db.ImagePreset) string {
-	b, _ := json.Marshal(map[string]any{
-		"preset_name": p.Name, "style_suffix": p.StyleSuffix, "negative_prompt": p.NegativePrompt,
-		"steps": p.Steps, "cfg_scale": p.CFGScale, "width": p.Width, "height": p.Height,
-		"sampler_name": p.SamplerName, "seed": p.Seed,
-	})
-	return string(b)
+	http.Redirect(w, r, fmt.Sprintf("/chat/%d", id), http.StatusSeeOther)
 }

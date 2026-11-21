@@ -251,12 +251,16 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := db.DeleteCharacterCard(h.DB, id); err != nil {
+	orphanedImages, err := db.DeleteCharacterCard(h.DB, id)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	for _, img := range images {
 		removeUploadedFile(img.ImagePath)
+	}
+	for _, p := range orphanedImages {
+		removeUploadedFile(p)
 	}
 	http.Redirect(w, r, "/characters", http.StatusSeeOther)
 }

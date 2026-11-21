@@ -65,6 +65,7 @@ An earlier draft of this document used the reversed, project-local terms `Person
 - **Message** — role, content, timestamp, and for role `image` an `image_path` to a generated picture.
   Image messages are their own role (not `system`) so they're trivially kept out of the LLM prompt history and get their own rendering; they sort like any other message, so the next turn always lands below the image.
 - **ImagePreset** — a named txt2img parameter set (steps, cfg_scale, sampler, size, seed, negative prompt) plus a style suffix appended to the prompt (`image_presets`, migration 00012; three built-ins seeded: Realistic, Manga / Anime, Cyberpunk).
+  Created, edited and deleted only in Settings → Image presets. Each session picks at most one (`sessions.image_preset_id`, migration 00013, nullable, `ON DELETE SET NULL`) from its session panel's Gallery tab; the "Generate image" dialog asks only for the prompt (and backend, if there are several) and resolves every other parameter server-side from that preset, or from A1111's defaults when none is chosen or the preset is gone.
 - **BackendProfile** — see above.
 
 ## Character card compatibility

@@ -164,7 +164,7 @@ func TestChatCountRendering(t *testing.T) {
 	WorldPage(books, Pager{}).Render(context.Background(), &buf)
 	pages["world"] = buf.String()
 	buf.Reset()
-	SettingsPageBody(nil, nil, personas, nil, db.AppSettings{}).Render(context.Background(), &buf)
+	SettingsPageBody(nil, nil, personas, nil, nil, nil, "", db.AppSettings{}).Render(context.Background(), &buf)
 	pages["persona"] = buf.String()
 
 	for name, html := range pages {

@@ -22,8 +22,8 @@ type ImagePreset struct {
 	Seed           int64
 }
 
-// ErrImagePresetExists is CreateImagePreset's answer to a name already
-// taken (case-insensitively) — callers decide whether to overwrite.
+// ErrImagePresetExists is Create/UpdateImagePreset's answer to a name
+// already taken (case-insensitively) — shown to the user, never clobbered.
 var ErrImagePresetExists = errors.New("an image preset with that name already exists")
 
 const imagePresetColumns = `id, name, style_suffix, negative_prompt, steps, cfg_scale, width, height, sampler_name, seed`
@@ -43,6 +43,16 @@ func ListImagePresets(db *sql.DB) ([]ImagePreset, error) {
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+func GetImagePreset(db *sql.DB, id int64) (ImagePreset, error) {
+	var p ImagePreset
+	err := db.QueryRow(`SELECT `+imagePresetColumns+` FROM image_presets WHERE id = ?`, id).
+		Scan(&p.ID, &p.Name, &p.StyleSuffix, &p.NegativePrompt, &p.Steps, &p.CFGScale, &p.Width, &p.Height, &p.SamplerName, &p.Seed)
+	if err != nil {
+		return ImagePreset{}, fmt.Errorf("getting image preset %d: %w", id, err)
+	}
+	return p, nil
 }
 
 func CreateImagePreset(db *sql.DB, p ImagePreset) (int64, error) {

@@ -48,7 +48,7 @@ func TestCharacterCardCRUD(t *testing.T) {
 		t.Fatalf("List after update returned %+v", cards)
 	}
 
-	if err := DeleteCharacterCard(sqlDB, id); err != nil {
+	if _, err := DeleteCharacterCard(sqlDB, id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	cards, _ = ListCharacterCards(sqlDB, -1, 0)

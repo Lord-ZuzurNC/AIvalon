@@ -110,7 +110,9 @@ func UpdateLorebook(db *sql.DB, l Lorebook) error {
 
 // DeleteLorebook also deletes every session using it — see
 // deleteWithSessions. The web handler confirms with the user first.
-func DeleteLorebook(db *sql.DB, id int64) error {
+// Returns generated-image files now orphaned by that cascade — the
+// caller is responsible for removing them from disk.
+func DeleteLorebook(db *sql.DB, id int64) ([]string, error) {
 	return deleteWithSessions(db, lorebookSessionIDs, "lorebooks", id)
 }
 

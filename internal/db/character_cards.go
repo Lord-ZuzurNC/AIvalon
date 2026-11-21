@@ -116,8 +116,10 @@ func UpdateCharacterCard(db *sql.DB, c CharacterCard) error {
 // DeleteCharacterCard also deletes every session including it — the
 // WHOLE session, even a group chat with other characters still in it
 // (Lord's explicit call). See deleteWithSessions; the web handler
-// confirms with the user first.
-func DeleteCharacterCard(db *sql.DB, id int64) error {
+// confirms with the user first. Returns generated-image files now
+// orphaned by that cascade — the caller is responsible for removing
+// them from disk.
+func DeleteCharacterCard(db *sql.DB, id int64) ([]string, error) {
 	return deleteWithSessions(db, characterSessionIDs, "character_cards", id)
 }
 

@@ -20,7 +20,7 @@ type SettingsHandlers struct {
 }
 
 func (h SettingsHandlers) List(w http.ResponseWriter, r *http.Request) {
-	h.render(w, r, nil, nil)
+	h.render(w, r, nil, nil, nil, "")
 }
 
 func (h SettingsHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +34,7 @@ func (h SettingsHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	h.render(w, r, &profile, nil)
+	h.render(w, r, &profile, nil, nil, "")
 }
 
 func (h SettingsHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func (h SettingsHandlers) PersonaEditForm(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	h.render(w, r, nil, &persona)
+	h.render(w, r, nil, &persona, nil, "")
 }
 
 func (h SettingsHandlers) PersonaCreate(w http.ResponseWriter, r *http.Request) {
@@ -212,11 +212,15 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 		render(w, r, DeleteConfirmPage("Settings", persona.Name, fmt.Sprintf("/settings/personas/%d/delete", id), "/settings", sessions))
 		return
 	}
-	if err := db.DeletePersona(h.DB, id); err != nil {
+	orphanedImages, err := db.DeletePersona(h.DB, id)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	removeUploadedFile(persona.ImagePath)
+	for _, p := range orphanedImages {
+		removeUploadedFile(p)
+	}
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
@@ -276,10 +280,11 @@ func (h SettingsHandlers) updateAppSettings(w http.ResponseWriter, r *http.Reque
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
-// render loads both lists (profiles are cheap, there's never many) and
-// renders the one Settings page with whichever form (if any) is being
-// edited — same page, two independent edit states.
-func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editingProfile *db.BackendProfile, editingPersona *db.Persona) {
+// render loads every list (all small) and renders the one Settings page
+// with whichever form (if any) is being edited — same page, independent
+// edit states. imagePresetErr is shown above the image preset form
+// (non-empty only when re-rendering a rejected submit).
+func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editingProfile *db.BackendProfile, editingPersona *db.Persona, editingImagePreset *db.ImagePreset, imagePresetErr string) {
 	profiles, err := db.ListBackendProfiles(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -290,12 +295,17 @@ func (h SettingsHandlers) render(w http.ResponseWriter, r *http.Request, editing
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	imagePresets, err := db.ListImagePresets(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	appSettings, err := db.GetAppSettings(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona, appSettings))
+	render(w, r, SettingsPage(profiles, editingProfile, personas, editingPersona, imagePresets, editingImagePreset, imagePresetErr, appSettings))
 }
 
 // profileFromForm reads the plain POST form fields shared by Create and

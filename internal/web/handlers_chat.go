@@ -376,9 +376,23 @@ func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "locked", http.StatusForbidden)
 		return
 	}
+	// Collected before the delete, checked after: a Branch/Duplicate
+	// copy can point at the same file from a DIFFERENT session (see
+	// deleteWithSessions' own comment), so a path is only safe to
+	// remove from disk once nothing anywhere still references it.
+	candidates, err := db.ImagePathsForSession(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := db.DeleteSession(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if orphaned, err := db.OrphanedImagePaths(h.DB, candidates); err == nil {
+		for _, p := range orphaned {
+			removeUploadedFile(p)
+		}
 	}
 	http.Redirect(w, r, "/chat", http.StatusSeeOther)
 }
@@ -659,6 +673,10 @@ func (h ChatHandlers) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	final.WriteString(`</div>`)
+	if err := generateImageButton(true).Render(r.Context(), &final); err != nil {
+		emitError(err)
+		return
+	}
 	// SSE's framing is line-based: each physical line of an event's
 	// payload needs its own "data:" prefix, or a bare newline inside it
 	// is read as "end of this event" instead of literal content (per

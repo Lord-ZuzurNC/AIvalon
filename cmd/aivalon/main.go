@@ -109,6 +109,10 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /settings/system-prompt/reset", settings.SystemPromptReset)
 	mux.HandleFunc("POST /settings/context-budget", settings.ContextBudgetUpdate)
 	mux.HandleFunc("POST /settings/import-whitelist", settings.ImportWhitelistUpdate)
+	mux.HandleFunc("POST /settings/image-presets", settings.ImagePresetCreate)
+	mux.HandleFunc("GET /settings/image-presets/{id}/edit", settings.ImagePresetEditForm)
+	mux.HandleFunc("POST /settings/image-presets/{id}", settings.ImagePresetUpdate)
+	mux.HandleFunc("POST /settings/image-presets/{id}/delete", settings.ImagePresetDelete)
 
 	character := web.CharacterHandlers{DB: sqlDB, Cache: importCache}
 	mux.HandleFunc("GET /characters", character.List)
@@ -135,8 +139,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /chat/{id}/background", chat.SetBackground)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 	mux.HandleFunc("POST /chat/{id}/images", chat.GenerateImage)
-	mux.HandleFunc("POST /image-presets", chat.SaveImagePreset)
-	mux.HandleFunc("POST /image-presets/delete", chat.DeleteImagePreset)
+	mux.HandleFunc("POST /chat/{id}/image-preset", chat.SetImagePreset)
 
 	vault := web.VaultHandlers{DB: sqlDB, Gate: vaultGate}
 	mux.HandleFunc("GET /vault", vault.Show)

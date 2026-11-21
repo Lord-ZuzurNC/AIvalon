@@ -119,11 +119,15 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		render(w, r, DeleteConfirmPage("World", book.Name, fmt.Sprintf("/world/%d/delete", id), "/world", sessions))
 		return
 	}
-	if err := db.DeleteLorebook(h.DB, id); err != nil {
+	orphanedImages, err := db.DeleteLorebook(h.DB, id)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	removeUploadedFile(book.ImagePath)
+	for _, p := range orphanedImages {
+		removeUploadedFile(p)
+	}
 	http.Redirect(w, r, "/world", http.StatusSeeOther)
 }
 

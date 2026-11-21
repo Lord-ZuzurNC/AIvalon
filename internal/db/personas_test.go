@@ -38,7 +38,7 @@ func TestPersonaCRUD(t *testing.T) {
 		t.Fatalf("List after update returned %+v", personas)
 	}
 
-	if err := DeletePersona(sqlDB, id); err != nil {
+	if _, err := DeletePersona(sqlDB, id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	personas, _ = ListPersonas(sqlDB)

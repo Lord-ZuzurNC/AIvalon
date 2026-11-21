@@ -543,6 +543,15 @@ html.sidebar-collapsed #sidebar-toggle {
 	color: var(--pico-muted-color);
 }
 
+/* "Generate image" specifically: grey/muted (the .icon-button default
+   above) until there's an actual LLM reply to draw from, then gold —
+   Lord's call, a visible state change rather than a disabled button
+   indistinguishable at a glance from an enabled one. */
+#generate-image-btn:not(:disabled) {
+	border-color: var(--pico-primary);
+	color: var(--pico-primary);
+}
+
 .chat-input-row {
 	display: flex;
 	align-items: center;

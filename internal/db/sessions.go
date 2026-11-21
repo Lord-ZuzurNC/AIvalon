@@ -18,6 +18,7 @@ type Session struct {
 	LorebookID          int64
 	IsVaulted           bool
 	BackgroundImagePath string
+	ImagePresetID       int64 // 0 = none chosen (defaultImageParams)
 }
 
 // ChatMessage.Role follows docs/DESIGN.md's vocabulary: "user" | "character" | "narrator" | "system" | "image".
@@ -66,8 +67,8 @@ func CountSessions(db *sql.DB) (int, error) {
 
 func GetSession(db *sql.DB, id int64) (Session, error) {
 	var s Session
-	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted, background_image_path FROM sessions WHERE id = ?`, id).
-		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID, &s.IsVaulted, &s.BackgroundImagePath)
+	err := db.QueryRow(`SELECT id, title, backend_profile_id, COALESCE(persona_id, 0), COALESCE(lorebook_id, 0), is_vaulted, background_image_path, COALESCE(image_preset_id, 0) FROM sessions WHERE id = ?`, id).
+		Scan(&s.ID, &s.Title, &s.BackendProfileID, &s.PersonaID, &s.LorebookID, &s.IsVaulted, &s.BackgroundImagePath, &s.ImagePresetID)
 	if err != nil {
 		return Session{}, fmt.Errorf("getting session %d: %w", id, err)
 	}
@@ -86,6 +87,24 @@ func UpdateSessionBackground(db *sql.DB, id int64, path string) error {
 	return nil
 }
 
+// SetSessionImagePreset picks the preset GenerateImage uses for this
+// session; presetID 0 clears it (stored as NULL, like PersonaID).
+func SetSessionImagePreset(db *sql.DB, sessionID, presetID int64) error {
+	_, err := db.Exec(`UPDATE sessions SET image_preset_id = ? WHERE id = ?`, nullID(presetID), sessionID)
+	if err != nil {
+		return fmt.Errorf("setting session %d image preset: %w", sessionID, err)
+	}
+	return nil
+}
+
+// nullID maps the Go-side "0 = unset" convention onto SQL NULL.
+func nullID(id int64) any {
+	if id == 0 {
+		return nil
+	}
+	return id
+}
+
 func CreateSession(db *sql.DB, s Session) (int64, error) {
 	var personaID, lorebookID any
 	if s.PersonaID != 0 {
@@ -95,8 +114,8 @@ func CreateSession(db *sql.DB, s Session) (int64, error) {
 		lorebookID = s.LorebookID
 	}
 	res, err := db.Exec(
-		`INSERT INTO sessions (title, backend_profile_id, persona_id, lorebook_id, is_vaulted) VALUES (?, ?, ?, ?, ?)`,
-		s.Title, s.BackendProfileID, personaID, lorebookID, s.IsVaulted,
+		`INSERT INTO sessions (title, backend_profile_id, persona_id, lorebook_id, is_vaulted, image_preset_id) VALUES (?, ?, ?, ?, ?, ?)`,
+		s.Title, s.BackendProfileID, personaID, lorebookID, s.IsVaulted, nullID(s.ImagePresetID),
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating session: %w", err)
@@ -298,6 +317,7 @@ func copySessionShell(db *sql.DB, sessionID int64, suffix string) (int64, error)
 		PersonaID:        original.PersonaID,
 		LorebookID:       original.LorebookID,
 		IsVaulted:        original.IsVaulted,
+		ImagePresetID:    original.ImagePresetID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("creating %s session: %w", suffix, err)

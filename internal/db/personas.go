@@ -82,6 +82,8 @@ func UpdatePersonaImagePath(db *sql.DB, id int64, imagePath string) error {
 
 // DeletePersona also deletes every session using it — see
 // deleteWithSessions. The web handler confirms with the user first.
-func DeletePersona(db *sql.DB, id int64) error {
+// Returns generated-image files now orphaned by that cascade — the
+// caller is responsible for removing them from disk.
+func DeletePersona(db *sql.DB, id int64) ([]string, error) {
 	return deleteWithSessions(db, personaSessionIDs, "personas", id)
 }

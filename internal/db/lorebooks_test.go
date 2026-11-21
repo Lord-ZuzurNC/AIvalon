@@ -38,7 +38,7 @@ func TestLorebookCRUD(t *testing.T) {
 		t.Fatalf("List after update returned %+v", books)
 	}
 
-	if err := DeleteLorebook(sqlDB, id); err != nil {
+	if _, err := DeleteLorebook(sqlDB, id); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	books, _ = ListLorebooks(sqlDB, -1, 0)

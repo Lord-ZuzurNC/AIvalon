@@ -7,13 +7,13 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, appSettings db.AppSettings) {
+templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, imagePresets []db.ImagePreset, editingImagePreset *db.ImagePreset, imagePresetErr string, appSettings db.AppSettings) {
 	@Layout("Settings", "Settings") {
-		@SettingsPageBody(profiles, editing, personas, editingPersona, appSettings)
+		@SettingsPageBody(profiles, editing, personas, editingPersona, imagePresets, editingImagePreset, imagePresetErr, appSettings)
 	}
 }
 
-templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, appSettings db.AppSettings) {
+templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, imagePresets []db.ImagePreset, editingImagePreset *db.ImagePreset, imagePresetErr string, appSettings db.AppSettings) {
 	{{
 	// Which tab opens active — defaults to "profiles", but editing a
 	// persona (reached via /settings/personas/{id}/edit) must land on
@@ -26,6 +26,9 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 	if editingPersona != nil {
 		activeTab = "persona"
 	}
+	if editingImagePreset != nil {
+		activeTab = "image-presets"
+	}
 	}}
 	<h1>Settings</h1>
 	<div class="tabs">
@@ -34,6 +37,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected={ fmt.Sprintf("%t", activeTab == "persona") } onclick="switchTabs(this)">Your persona</button>
 			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected={ fmt.Sprintf("%t", activeTab == "prompt") } onclick="switchTabs(this)">System prompt</button>
 			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected={ fmt.Sprintf("%t", activeTab == "imports") } onclick="switchTabs(this)">Imports</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="image-presets" aria-selected={ fmt.Sprintf("%t", activeTab == "image-presets") } onclick="switchTabs(this)">Image presets</button>
 		</div>
 
 		<div data-tab-panel="profiles" hidden?={ activeTab != "profiles" }>
@@ -155,6 +159,60 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 
 		<div data-tab-panel="imports" hidden?={ activeTab != "imports" }>
 			@importWhitelistForm(appSettings.PNGImportWhitelist)
+		</div>
+
+		<div data-tab-panel="image-presets" hidden?={ activeTab != "image-presets" }>
+			<p>Named txt2img settings for image generation. Each chat picks one in its session panel’s Gallery tab; a chat with none picked uses A1111’s defaults.</p>
+			if len(imagePresets) == 0 {
+				<p><em>No image preset yet — add one below.</em></p>
+			} else {
+				<table>
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>Steps</th>
+							<th>CFG</th>
+							<th>Size</th>
+							<th>Sampler</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, p := range imagePresets {
+							<tr>
+								<td><a href={ templ.URL(fmt.Sprintf("/settings/image-presets/%d/edit", p.ID)) }>{ p.Name }</a></td>
+								<td>{ strconv.Itoa(p.Steps) }</td>
+								<td>{ strconv.FormatFloat(p.CFGScale, 'f', -1, 64) }</td>
+								<td>{ fmt.Sprintf("%d×%d", p.Width, p.Height) }</td>
+								<td>{ p.SamplerName }</td>
+								<td>
+									@OptionsMenu(fmt.Sprintf("options-image-preset-%d", p.ID), []MenuAction{
+										{Label: "Delete", Action: fmt.Sprintf("/settings/image-presets/%d/delete", p.ID), Danger: true},
+									})
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+
+			<button type="button" onclick="document.getElementById('image-preset-modal').setAttribute('open','')">Add a preset</button>
+
+			<dialog id="image-preset-modal" open?={ editingImagePreset != nil }>
+				<article>
+					<header>
+						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+						<strong>
+							if editingImagePreset != nil && editingImagePreset.ID != 0 {
+								Edit preset
+							} else {
+								Add a preset
+							}
+						</strong>
+					</header>
+					@imagePresetForm(editingImagePreset, imagePresetErr)
+				</article>
+			</dialog>
 		</div>
 	</div>
 	<script>
@@ -284,6 +342,88 @@ templ backendProfileForm(editing *db.BackendProfile) {
 				Save
 			} else {
 				Add profile
+			}
+		</button>
+	</form>
+}
+
+// imagePresetForm edits one ImagePreset. editing == nil is a blank
+// "add" form pre-filled with defaultImageParams; editing.ID == 0 is a
+// rejected "add" re-rendered with what was submitted.
+templ imagePresetForm(editing *db.ImagePreset, errMsg string) {
+	{{
+	action := "/settings/image-presets"
+	p := defaultImageParams
+	if editing != nil {
+		p = *editing
+		if editing.ID != 0 {
+			action = fmt.Sprintf("/settings/image-presets/%d", editing.ID)
+		}
+	}
+	}}
+	<form method="post" action={ templ.URL(action) }>
+		if errMsg != "" {
+			<p class="danger-text" role="alert">{ errMsg }</p>
+		}
+		<label>
+			Name
+			<input type="text" name="name" value={ p.Name } required="required"/>
+			<small>Shown in each chat’s preset picker. Must be unique (case doesn’t count).</small>
+		</label>
+		<label>
+			Style suffix
+			<input type="text" name="style_suffix" value={ p.StyleSuffix }/>
+			<small>Appended to the prompt as “, suffix” — what makes a preset look manga vs. photo vs. cyberpunk.</small>
+		</label>
+		<label>
+			Negative prompt
+			<textarea name="negative_prompt" rows="2">{ p.NegativePrompt }</textarea>
+			<small>What to steer away from (blur, extra fingers, watermarks…).</small>
+		</label>
+		<label>
+			Steps
+			<input type="number" name="steps" value={ strconv.Itoa(p.Steps) } min="1" max="150" required="required"/>
+			<small>Denoising iterations — more is slower; 20–30 is typical.</small>
+		</label>
+		<label>
+			CFG scale
+			<input type="number" name="cfg_scale" value={ strconv.FormatFloat(p.CFGScale, 'f', -1, 64) } step="0.5" min="1" max="30" required="required"/>
+			<small>How strictly to follow the prompt — 5–8 is typical; too high looks overcooked.</small>
+		</label>
+		<label>
+			Width
+			<input type="number" name="width" value={ strconv.Itoa(p.Width) } step="8" min="64" max="2048" required="required"/>
+			<small>Pixels. SD 1.5 models like ~512, SDXL ~1024.</small>
+		</label>
+		<label>
+			Height
+			<input type="number" name="height" value={ strconv.Itoa(p.Height) } step="8" min="64" max="2048" required="required"/>
+			<small>Pixels. Taller than wide suits portraits.</small>
+		</label>
+		<label>
+			Sampler
+			<input type="text" name="sampler_name" value={ p.SamplerName } list="sampler-options" required="required"/>
+			<datalist id="sampler-options">
+				<option value="Euler a"></option>
+				<option value="Euler"></option>
+				<option value="DPM++ 2M Karras"></option>
+				<option value="DPM++ SDE Karras"></option>
+				<option value="DPM++ 2M SDE Karras"></option>
+				<option value="DDIM"></option>
+				<option value="UniPC"></option>
+			</datalist>
+			<small>Sampler name exactly as Automatic1111's own dropdown spells it.</small>
+		</label>
+		<label>
+			Seed
+			<input type="number" name="seed" value={ strconv.FormatInt(p.Seed, 10) } min="-1" step="1" required="required"/>
+			<small>-1 = random each time; reuse a seed (shown under each image) to reproduce it.</small>
+		</label>
+		<button type="submit">
+			if editing != nil && editing.ID != 0 {
+				Save
+			} else {
+				Add preset
 			}
 		</button>
 	</form>
