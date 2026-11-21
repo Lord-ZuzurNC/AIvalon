@@ -14,16 +14,29 @@ templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, per
 }
 
 templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, appSettings db.AppSettings) {
+	{{
+	// Which tab opens active — defaults to "profiles", but editing a
+	// persona (reached via /settings/personas/{id}/edit) must land on
+	// the Persona tab directly: the panel it's hardcoded as hidden
+	// (hidden ancestors hide a plain-attribute <dialog> too, open or
+	// not) meant the first click just silently did nothing until a
+	// second click on the Persona tab actually revealed the already-
+	// open modal underneath (Lord's bug report).
+	activeTab := "profiles"
+	if editingPersona != nil {
+		activeTab = "persona"
+	}
+	}}
 	<h1>Settings</h1>
 	<div class="tabs">
 		<div role="tablist" class="tab-list">
-			<button type="button" role="tab" class="tab-btn" data-tab-target="profiles" aria-selected="true" onclick="switchTabs(this)">Backend profiles</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchTabs(this)">Your persona</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected="false" onclick="switchTabs(this)">System prompt</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected="false" onclick="switchTabs(this)">Imports</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="profiles" aria-selected={ fmt.Sprintf("%t", activeTab == "profiles") } onclick="switchTabs(this)">Backend profiles</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected={ fmt.Sprintf("%t", activeTab == "persona") } onclick="switchTabs(this)">Your persona</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected={ fmt.Sprintf("%t", activeTab == "prompt") } onclick="switchTabs(this)">System prompt</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected={ fmt.Sprintf("%t", activeTab == "imports") } onclick="switchTabs(this)">Imports</button>
 		</div>
 
-		<div data-tab-panel="profiles">
+		<div data-tab-panel="profiles" hidden?={ activeTab != "profiles" }>
 			if len(profiles) == 0 {
 				<p><em>No backend profile yet — add one below to start chatting.</em></p>
 			} else {
@@ -78,7 +91,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 			</dialog>
 		</div>
 
-		<div data-tab-panel="persona" hidden="hidden">
+		<div data-tab-panel="persona" hidden?={ activeTab != "persona" }>
 			<p>How you're represented to the AI. A session with none picked uses a built-in default ("User").</p>
 			if len(personas) == 0 {
 				<p><em>No persona yet — add one below, or skip it and sessions use the "User" default.</em></p>
@@ -126,7 +139,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 			</dialog>
 		</div>
 
-		<div data-tab-panel="prompt" hidden="hidden">
+		<div data-tab-panel="prompt" hidden?={ activeTab != "prompt" }>
 			<p>
 				How the world/narrator is instructed. Placeholders:
 				<code>{ "{{persona_name}}" }</code>, <code>{ "{{persona_description}}" }</code>,
@@ -138,7 +151,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 			@contextBudgetForm(appSettings.ContextBudgetChars)
 		</div>
 
-		<div data-tab-panel="imports" hidden="hidden">
+		<div data-tab-panel="imports" hidden?={ activeTab != "imports" }>
 			@importWhitelistForm(appSettings.PNGImportWhitelist)
 		</div>
 	</div>

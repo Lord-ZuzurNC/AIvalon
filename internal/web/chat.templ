@@ -20,7 +20,7 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 		<div class="message-header">
 			<p>
 				if m.Speaker != "" {
-					<strong>{ m.Speaker }:</strong>
+					<strong>{ m.Speaker }:</strong>{ " " }
 				}
 				@templ.Raw(m.ContentHTML)
 			</p>
@@ -216,26 +216,28 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			<div class="chat-header">
 				<img class="chat-cover" src={ coverImage } alt=""/>
 				<h1>{ session.Title }</h1>
-				<button type="button" class="view-toggle-btn chat-layout-toggle" onclick="toggleChatLayout()">List</button>
+				<button type="button" class="view-toggle-btn chat-layout-toggle" onclick="toggleChatLayout()" aria-label="List layout — tap to switch to bubbles" title="List layout — tap to switch to bubbles">☰</button>
 				<button type="button" class="session-panel-toggle" aria-label="Session info" onclick="document.getElementById('session-panel').classList.toggle('open')">☰</button>
 			</div>
-			<div id="messages">
-				if len(messages) == 0 {
-					<p><em>No messages yet — say something below to start.</em></p>
-				}
-				for _, m := range messages {
-					@MessageBlock(session.ID, m)
+			<div class="chat-messages-wrap">
+				<div id="messages">
+					if len(messages) == 0 {
+						<p><em>No messages yet — say something below to start.</em></p>
+					}
+					for _, m := range messages {
+						@MessageBlock(session.ID, m)
+					}
+				</div>
+				if needsReply {
+					<div
+						id="live"
+						hx-ext="sse"
+						sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
+						sse-swap="message"
+						hx-swap="beforeend"
+					></div>
 				}
 			</div>
-			if needsReply {
-				<div
-					id="live"
-					hx-ext="sse"
-					sse-connect={ fmt.Sprintf("/chat/%d/stream", session.ID) }
-					sse-swap="message"
-					hx-swap="beforeend"
-				></div>
-			}
 			<!-- Filled by an out-of-band SSE swap (ContextTrimNotice) when
 			     this reply's prompt had to leave old messages out. -->
 			<div id="context-trim-notice" class="context-trim-notice" role="status" aria-live="polite"></div>
@@ -294,12 +296,12 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			// wrong for apostrophes, backslashes, or newlines.
 			// List/Bubble layout, remembered globally (not per session)
 			// in localStorage. The button shows the CURRENT layout's
-			// name, same convention as viewToggle's glyph.
+			// own glyph (☰/🗩), same convention as viewToggle.
 			function syncChatLayoutToggle() {
 				var bubble = document.querySelector(".chat-page-bg").classList.contains("chat-bubbles");
 				var btn = document.querySelector(".chat-layout-toggle");
 				var label = bubble ? "Bubble layout — tap to switch to list" : "List layout — tap to switch to bubbles";
-				btn.textContent = bubble ? "Bubble" : "List";
+				btn.textContent = bubble ? "🗩" : "☰";
 				btn.setAttribute("aria-label", label);
 				btn.setAttribute("title", label);
 			}
