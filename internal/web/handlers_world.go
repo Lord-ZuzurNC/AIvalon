@@ -110,6 +110,15 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	sessions, err := db.ListSessionsUsingLorebook(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
+		render(w, r, DeleteConfirmPage("World", book.Name, fmt.Sprintf("/world/%d/delete", id), "/world", sessions))
+		return
+	}
 	if err := db.DeleteLorebook(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -225,6 +225,14 @@ body > header {
 	top: 0;
 	align-self: flex-start;
 	height: 100vh;
+	/* Same mobile-toolbar mismatch as .chat-page-bg (see its comment)
+	   — on a short real viewport, the rail's CSS height can exceed
+	   what's actually visible, pushing .nav-footer (About) below the
+	   fold until something (a touch, a scroll) resolves it. dvh
+	   tracks the real viewport instead. Lord's bug report: having to
+	   scroll the sidebar to reach About when there's nowhere near
+	   enough nav items to need it. */
+	height: 100dvh;
 	overflow-y: auto;
 	overflow-x: hidden;
 	border-right: 1px solid var(--pico-muted-border-color);
@@ -694,6 +702,38 @@ html.sidebar-collapsed #sidebar-toggle {
 	background: rgba(0, 0, 0, 0.55);
 	color: #e06c75;
 	border: none;
+}
+
+/* "Used by N chats" badge, mirroring .vignette-delete in the opposite
+   corner. Click-through so it never blocks the card link under it. */
+.chat-count-badge {
+	position: absolute;
+	top: 0.4rem;
+	left: 0.4rem;
+	z-index: 1;
+	padding: 0.1rem 0.5rem;
+	border-radius: 0.4rem;
+	background: var(--pico-primary);
+	color: #000;
+	font-size: 0.8rem;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	pointer-events: none;
+}
+
+/* Delete-confirmation dialog (DeleteConfirmPage): Cancel + red
+   "Delete anyway" side by side in the footer. */
+.inline-form {
+	display: inline;
+	margin: 0;
+}
+
+.button-danger {
+	width: auto;
+	margin: 0;
+	background: #e06c75;
+	border-color: #e06c75;
+	color: #fff;
 }
 
 .create-button {

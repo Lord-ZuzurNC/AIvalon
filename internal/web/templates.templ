@@ -1,6 +1,10 @@
 package web
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
 
 templ Layout(title string, active string) {
 	<!DOCTYPE html>
@@ -426,11 +430,12 @@ templ Avatar(imagePath, name string) {
 // — the <a> and the delete <form> are siblings (not nested — a form
 // inside an anchor is invalid HTML) so the trash icon stays clickable
 // on top of the full-card link underneath it.
-templ vignetteCard(href, imagePath, name, deleteAction string) {
+templ vignetteCard(href, imagePath, name, deleteAction string, chatCount int) {
 	<div class="vignette-card" data-search-name={ name }>
 		<a href={ templ.URL(href) } class="vignette-card-link">
 			@vignetteFace(imagePath, name)
 		</a>
+		@chatCountBadge(chatCount)
 		<form method="post" action={ templ.URL(deleteAction) } class="vignette-delete">
 			<button type="submit" aria-label={ "Delete " + name } title={ "Delete " + name }>
 				<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -751,4 +756,53 @@ templ searchFilterScript() {
 			}
 		});
 	</script>
+}
+
+// DeleteConfirmPage is what a Delete POST renders instead of deleting
+// when the persona/lorebook/character is still used by chats — same
+// <dialog open><article> shape as every other modal here, just served
+// as its own page so the plain no-JS delete forms need no changes.
+// "Delete anyway" re-posts with confirm=1; Cancel just goes back.
+// Vaulted chats are listed but never by title (the Vault stays secret).
+templ DeleteConfirmPage(active, name, action, cancelHref string, sessions []db.SessionRef) {
+	@Layout("Delete "+name, active) {
+		<dialog open>
+			<article>
+				<header>
+					<a href={ templ.URL(cancelHref) } aria-label="Close" rel="prev"></a>
+					<strong>Delete “{ name }”?</strong>
+				</header>
+				<p>
+					{ fmt.Sprintf("%s is used by %d chat(s).", name, len(sessions)) }
+					<strong class="danger-text">Deleting it will also permanently delete these chats and all their messages:</strong>
+				</p>
+				<ul>
+					for _, s := range sessions {
+						if s.IsVaulted {
+							<li><em>A hidden chat in the Vault</em></li>
+						} else if s.Title == "" {
+							<li><em>Untitled chat</em></li>
+						} else {
+							<li>{ s.Title }</li>
+						}
+					}
+				</ul>
+				<footer>
+					<a href={ templ.URL(cancelHref) } role="button" class="secondary">Cancel</a>
+					<form method="post" action={ templ.URL(action) } class="inline-form">
+						<input type="hidden" name="confirm" value="1"/>
+						<button type="submit" class="button-danger">Delete anyway</button>
+					</form>
+				</footer>
+			</article>
+		</dialog>
+	}
+}
+
+// chatCountBadge is the vignette's top-left "used by N chats" marker —
+// nothing at all for an unused item.
+templ chatCountBadge(n int) {
+	if n > 0 {
+		<span class="chat-count-badge" title={ fmt.Sprintf("Used by %d chat(s)", n) }>{ fmt.Sprintf("%d", n) }</span>
+	}
 }

@@ -17,7 +17,7 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 			<div data-search-scope="world">
 				<div data-view-panel="grid" class="card-grid">
 					for _, b := range books {
-						@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID))
+						@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID), b.ChatCount)
 					}
 				</div>
 				<div data-view-panel="list" hidden="hidden">
@@ -25,6 +25,7 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 					<thead>
 						<tr>
 							<th>Name</th>
+							<th>Chats</th>
 							<th>Entries</th>
 							<th></th>
 						</tr>
@@ -33,6 +34,7 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 						for _, b := range books {
 							<tr data-search-name={ b.Name }>
 								<td>@Avatar(b.ImagePath, b.Name)<a href={ templ.URL(fmt.Sprintf("/world/%d", b.ID)) }>{ b.Name }</a></td>
+								<td>{ fmt.Sprintf("%d", b.ChatCount) }</td>
 								<td>{ fmt.Sprintf("%d", b.EntryCount) }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-lorebook-%d", b.ID), []MenuAction{

@@ -296,12 +296,16 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			// wrong for apostrophes, backslashes, or newlines.
 			// List/Bubble layout, remembered globally (not per session)
 			// in localStorage. The button shows the CURRENT layout's
-			// own glyph (☰/🗩), same convention as viewToggle.
+			// own glyph (☰/💬), same convention as viewToggle. 💬
+			// (U+1F4AC SPEECH BALLOON) over 🗩 (U+1F5E9 LEFT SPEECH
+			// BUBBLE) on purpose — Lord's bug report: 🗩 has no glyph
+			// on stock Android (Pixel 8 Pro), renders as a tofu box.
+			// 💬 is near-universally supported.
 			function syncChatLayoutToggle() {
 				var bubble = document.querySelector(".chat-page-bg").classList.contains("chat-bubbles");
 				var btn = document.querySelector(".chat-layout-toggle");
 				var label = bubble ? "Bubble layout — tap to switch to list" : "List layout — tap to switch to bubbles";
-				btn.textContent = bubble ? "🗩" : "☰";
+				btn.textContent = bubble ? "💬" : "☰";
 				btn.setAttribute("aria-label", label);
 				btn.setAttribute("title", label);
 			}

@@ -203,6 +203,15 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	sessions, err := db.ListSessionsUsingPersona(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
+		render(w, r, DeleteConfirmPage("Settings", persona.Name, fmt.Sprintf("/settings/personas/%d/delete", id), "/settings", sessions))
+		return
+	}
 	if err := db.DeletePersona(h.DB, id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

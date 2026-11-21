@@ -29,7 +29,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 			<div data-search-scope="character">
 				<div data-view-panel="grid" class="card-grid">
 					for _, c := range cards {
-						@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID))
+						@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID), c.ChatCount)
 					}
 				</div>
 				<div data-view-panel="list" hidden="hidden">
@@ -37,6 +37,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 					<thead>
 						<tr>
 							<th>Name</th>
+							<th>Chats</th>
 							<th>Description</th>
 							<th></th>
 						</tr>
@@ -45,6 +46,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 						for _, c := range cards {
 							<tr data-search-name={ c.Name }>
 								<td>@Avatar(c.ImagePath, c.Name)<a href={ templ.URL(fmt.Sprintf("/characters/%d/edit", c.ID)) }>{ c.Name }</a></td>
+								<td>{ fmt.Sprintf("%d", c.ChatCount) }</td>
 								<td>{ truncate(c.Description, 120) }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
