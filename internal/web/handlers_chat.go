@@ -32,6 +32,7 @@ type DisplayMessage struct {
 	Speaker     string
 	Content     string
 	ContentHTML string
+	ImagePath   string // "image" role only — relative to web/static
 }
 
 func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -168,7 +169,12 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatPage(session, display, needsReply, coverImage, bgOptions, info))
+	imageForm, err := h.imageGenForm()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatPage(session, display, needsReply, coverImage, bgOptions, info, imageForm))
 }
 
 // SessionInfo is the right-hand panel's "what's attached to this
@@ -755,6 +761,9 @@ func buildNarratorMessages(template string, persona db.Persona, characters []db.
 	system := llmclient.Message{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}
 	mapped := make([]llmclient.Message, 0, len(history))
 	for _, m := range history {
+		if m.Role == "image" {
+			continue // a picture the user generated, not something the narrator said
+		}
 		mapped = append(mapped, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
 	}
 	kept, dropped := truncateHistoryToBudget(mapped, utf8.RuneCountInString(system.Content), budgetChars)
@@ -921,8 +930,10 @@ func (h ChatHandlers) displayMessages(session db.Session, messages []db.ChatMess
 			speaker = ""
 		case "system":
 			speaker = "System"
+		case "image":
+			speaker = ""
 		}
-		out = append(out, DisplayMessage{ID: m.ID, Role: m.Role, Speaker: speaker, Content: m.Content, ContentHTML: formatMessageContent(m.Content)})
+		out = append(out, DisplayMessage{ID: m.ID, Role: m.Role, Speaker: speaker, Content: m.Content, ContentHTML: formatMessageContent(m.Content), ImagePath: m.ImagePath})
 	}
 	return out, nil
 }
