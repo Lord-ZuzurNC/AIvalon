@@ -20,6 +20,9 @@ type Lorebook struct {
 	// not a stored column) — shown in World's list so "how big is this
 	// book" doesn't require opening it.
 	EntryCount int
+	// ChatCount is populated by ListLorebooks only: how many sessions
+	// use this book (and would be deleted along with it).
+	ChatCount int
 }
 
 // LorebookEntry.TriggerStrategy is "constant" (always included whenever
@@ -47,7 +50,7 @@ type LorebookEntry struct {
 // row (name de-duplication on import, the new-session picker).
 func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
 	rows, err := db.Query(`
-		SELECT l.id, l.name, l.image_path, COUNT(e.id)
+		SELECT l.id, l.name, l.image_path, COUNT(e.id), (SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id)
 		FROM lorebooks l
 		LEFT JOIN lorebook_entries e ON e.lorebook_id = l.id
 		GROUP BY l.id, l.name, l.image_path
@@ -61,7 +64,7 @@ func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
 	var books []Lorebook
 	for rows.Next() {
 		var l Lorebook
-		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount, &l.ChatCount); err != nil {
 			return nil, fmt.Errorf("scanning lorebook: %w", err)
 		}
 		books = append(books, l)
@@ -105,12 +108,10 @@ func UpdateLorebook(db *sql.DB, l Lorebook) error {
 	return nil
 }
 
+// DeleteLorebook also deletes every session using it — see
+// deleteWithSessions. The web handler confirms with the user first.
 func DeleteLorebook(db *sql.DB, id int64) error {
-	_, err := db.Exec(`DELETE FROM lorebooks WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting lorebook %d: %w", id, err)
-	}
-	return nil
+	return deleteWithSessions(db, lorebookSessionIDs, "lorebooks", id)
 }
 
 // UpdateLorebookImagePath mirrors UpdateCharacterCardImagePath — its own

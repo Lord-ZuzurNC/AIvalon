@@ -14,13 +14,16 @@ type Persona struct {
 	Name        string
 	Description string
 	ImagePath   string
+	// ChatCount is populated by ListPersonas only: how many sessions
+	// use this persona (and would be deleted along with it).
+	ChatCount int
 }
 
 // DefaultPersona is used when a session has no persona_id set.
 var DefaultPersona = Persona{Name: "User", Description: ""}
 
 func ListPersonas(db *sql.DB) ([]Persona, error) {
-	rows, err := db.Query(`SELECT id, name, description, image_path FROM personas ORDER BY name`)
+	rows, err := db.Query(`SELECT p.id, p.name, p.description, p.image_path, (SELECT COUNT(*) FROM sessions s WHERE s.persona_id = p.id) FROM personas p ORDER BY p.name`)
 	if err != nil {
 		return nil, fmt.Errorf("listing personas: %w", err)
 	}
@@ -29,7 +32,7 @@ func ListPersonas(db *sql.DB) ([]Persona, error) {
 	var personas []Persona
 	for rows.Next() {
 		var p Persona
-		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.ImagePath); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.ImagePath, &p.ChatCount); err != nil {
 			return nil, fmt.Errorf("scanning persona: %w", err)
 		}
 		personas = append(personas, p)
@@ -77,10 +80,8 @@ func UpdatePersonaImagePath(db *sql.DB, id int64, imagePath string) error {
 	return nil
 }
 
+// DeletePersona also deletes every session using it — see
+// deleteWithSessions. The web handler confirms with the user first.
 func DeletePersona(db *sql.DB, id int64) error {
-	_, err := db.Exec(`DELETE FROM personas WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting persona %d: %w", id, err)
-	}
-	return nil
+	return deleteWithSessions(db, personaSessionIDs, "personas", id)
 }

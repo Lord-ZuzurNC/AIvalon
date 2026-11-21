@@ -30,13 +30,17 @@ type CharacterCard struct {
 	// served by the existing GET /static/ route — "" means no image was
 	// uploaded, which the UI treats as a placeholder case, not an error.
 	ImagePath string
+	// ChatCount is populated by ListCharacterCards only: how many
+	// sessions include this card (and would be deleted along with it).
+	ChatCount int
 }
 
 // ListCharacterCards returns one page of cards, ordered by name. limit < 0
 // means "no limit" — see ListLorebooks.
 func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) {
 	rows, err := db.Query(`
-		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, '')
+		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, ''),
+			(SELECT COUNT(*) FROM session_characters sc WHERE sc.character_card_id = cc.id)
 		FROM character_cards cc
 		LEFT JOIN character_card_images cci ON cci.id = cc.primary_image_id
 		ORDER BY cc.name, cc.id
@@ -49,7 +53,7 @@ func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) 
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.ChatCount); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
@@ -109,12 +113,12 @@ func UpdateCharacterCard(db *sql.DB, c CharacterCard) error {
 	return nil
 }
 
+// DeleteCharacterCard also deletes every session including it — the
+// WHOLE session, even a group chat with other characters still in it
+// (Lord's explicit call). See deleteWithSessions; the web handler
+// confirms with the user first.
 func DeleteCharacterCard(db *sql.DB, id int64) error {
-	_, err := db.Exec(`DELETE FROM character_cards WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("deleting character card %d: %w", id, err)
-	}
-	return nil
+	return deleteWithSessions(db, characterSessionIDs, "character_cards", id)
 }
 
 // ListCharacterCardsForSession returns the characters attached to a

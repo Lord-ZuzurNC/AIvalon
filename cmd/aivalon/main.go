@@ -61,7 +61,17 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	vaultGate := web.NewVaultGate()
 	importCache := web.NewImportCache()
 
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(noListFileSystem{http.Dir("web/static")})))
+	// no-cache (not no-store): the browser still keeps a local copy
+	// and can reuse it, but only after revalidating with the server
+	// first (If-Modified-Since/If-None-Match, which http.FileServer
+	// already answers via Last-Modified/ETag — a 304 when unchanged,
+	// so this doesn't add real network cost). Without this, mobile
+	// Chrome/Safari's own heuristic freshness lifetime can decide a
+	// CSS/JS file is "fresh enough" for a good while and skip
+	// revalidation entirely — Lord's bug report: a CSS fix only
+	// showed up in private browsing (no heuristic cache), not in his
+	// normal tab, until now.
+	mux.Handle("GET /static/", http.StripPrefix("/static/", noCacheHeaders(http.FileServer(noListFileSystem{http.Dir("web/static")}))))
 
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/chat", http.StatusFound)
@@ -214,6 +224,17 @@ func requireLocalHost(next http.Handler) http.Handler {
 			}
 		}
 		http.Error(w, "forbidden host", http.StatusForbidden)
+	})
+}
+
+// noCacheHeaders forces revalidation on every /static/ request (see
+// its registration above for why) without disabling caching outright
+// — If-Modified-Since/If-None-Match still let http.FileServer answer
+// 304 when the file is actually unchanged.
+func noCacheHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		next.ServeHTTP(w, r)
 	})
 }
 

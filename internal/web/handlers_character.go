@@ -227,6 +227,20 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	card, err := db.GetCharacterCard(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	sessions, err := db.ListSessionsUsingCharacterCard(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
+		render(w, r, DeleteConfirmPage("Character", card.Name, fmt.Sprintf("/characters/%d/delete", id), "/characters", sessions))
+		return
+	}
 	// Gallery rows cascade-delete with the character (ON DELETE
 	// CASCADE, see migration 00006), but that only removes the DB
 	// rows — their files would rot on disk under /static/uploads
