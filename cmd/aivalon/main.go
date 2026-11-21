@@ -5,6 +5,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -152,9 +153,43 @@ func newHandler(sqlDB *sql.DB) http.Handler {
 	return web.WithSecurityHeaders(requireLocalHost(http.NewCrossOriginProtection().Handler(mux)))
 }
 
+// privateHostRanges are the networks requireLocalHost accepts a bare
+// IP Host header from, besides the literal "localhost" name — Lord's
+// ask: reachable from another device on the same home WiFi (his
+// phone), via AIVALON_ADDR=0.0.0.0:PORT, without opening the door to
+// an arbitrary public address. Loopback is included here too (not
+// just via the literal addr/localhost map below) so 127.0.0.1 keeps
+// working even once addr itself is "0.0.0.0:PORT" and no longer
+// equals "127.0.0.1:PORT" literally. A domain name (DNS-rebinding's
+// whole point) never matches here — only a Host header that's
+// already a literal IP in one of these ranges does, so rebinding a
+// public domain to a private address still gets rejected on the
+// Host string itself, same as before.
+var privateHostRanges = mustParseCIDRs(
+	"127.0.0.0/8",
+	"::1/128",
+	"10.0.0.0/8",
+	"172.16.0.0/12",
+	"192.168.0.0/16",
+)
+
+func mustParseCIDRs(cidrs ...string) []*net.IPNet {
+	nets := make([]*net.IPNet, 0, len(cidrs))
+	for _, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic(err)
+		}
+		nets = append(nets, n)
+	}
+	return nets
+}
+
 // requireLocalHost rejects any request whose Host header isn't this
-// server's own bind address (in either 127.0.0.1:PORT or localhost:PORT
-// form). Without it, a DNS entry that resolves to 127.0.0.1 — attacker-
+// server's own bind address (127.0.0.1:PORT, localhost:PORT, or —
+// only once AIVALON_ADDR itself is set to a LAN-reachable address
+// like 0.0.0.0:PORT — a bare IP literal in privateHostRanges, same
+// port). Without it, a DNS entry that resolves to 127.0.0.1 — attacker-
 // controlled, since DNS is public — lets a browser that visited that
 // domain send real requests here with a Host header matching whatever
 // the attacker chose, bypassing same-origin assumptions baked into the
@@ -163,11 +198,22 @@ func requireLocalHost(next http.Handler) http.Handler {
 	_, port, _ := strings.Cut(addr, ":")
 	allowed := map[string]bool{addr: true, "localhost:" + port: true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowed[r.Host] {
-			http.Error(w, "forbidden host", http.StatusForbidden)
+		if allowed[r.Host] {
+			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r)
+		host, hostPort, err := net.SplitHostPort(r.Host)
+		if err == nil && hostPort == port {
+			if ip := net.ParseIP(host); ip != nil {
+				for _, n := range privateHostRanges {
+					if n.Contains(ip) {
+						next.ServeHTTP(w, r)
+						return
+					}
+				}
+			}
+		}
+		http.Error(w, "forbidden host", http.StatusForbidden)
 	})
 }
 
