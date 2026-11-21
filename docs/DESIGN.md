@@ -30,7 +30,8 @@ Nothing in v1's data model should need to change shape to support v2 — see **B
 - **Streaming transport: Server-Sent Events.**
   One-directional, token-by-token, matches how Ollama/llama.cpp/OpenAI-compatible APIs already stream completions — AIvalon just relays the stream instead of re-framing it.
 - **Default bind: `127.0.0.1` only.**
-  Nothing about this app needs to be reachable from the network; a user who wants that can change it themselves.
+  Nothing about this app needs to be reachable from the network by default; a user who wants that sets `AIVALON_ADDR=0.0.0.0:PORT`.
+  Doing so also relaxes `requireLocalHost` (DNS-rebinding guard, `cmd/aivalon/main.go`) to accept a Host header that's a bare IP literal in a private LAN range (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`) on the same port — a domain name never matches there, so rebinding a public name to a private address is still rejected. Lord's own call, for reaching the app from his phone on the same home WiFi; see the "Open questions" TLS entry below for what this does and doesn't cover.
 
 ## Backend profiles
 
@@ -204,6 +205,4 @@ Running it locally, alone, carries no obligation beyond respecting the license o
 ## Open questions
 
 - ⬜ TLS (self-signed by default, custom certificate importable in Settings) is wanted, but it answers a different question than the one above: it protects the connection to the server, not what is written to `character_cards`/`backend_profiles` on disk.
-  It has no real payoff under the current scope (bind `127.0.0.1` only — nothing to intercept on loopback).
-  It becomes worth building the day AIvalon is reachable from another device (phone, another PC on the LAN) — a scope change from "local to this machine" that hasn't been made yet.
-  Tracked here, not blocking v1: implement when that scope question is actually answered yes.
+  The scope question is now answered yes (`AIVALON_ADDR=0.0.0.0:PORT` + `requireLocalHost`'s private-range allowance, see "Default bind" above) — AIvalon is reachable from another device on the same home WiFi today. Traffic there is still plain HTTP: readable by anything else on that WiFi (an accepted risk on a trusted home network, Lord's own call), but still not implemented. Tracked here, not blocking.
