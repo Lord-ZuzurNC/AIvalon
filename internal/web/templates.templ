@@ -766,7 +766,11 @@ templ searchFilterScript() {
 // Vaulted chats are listed but never by title (the Vault stays secret).
 templ DeleteConfirmPage(active, name, action, cancelHref string, sessions []db.SessionRef) {
 	@Layout("Delete "+name, active) {
-		<dialog open>
+		<dialog
+			open
+			data-cancel-href={ cancelHref }
+			onclick="if(event.target===this){location.href=this.dataset.cancelHref}"
+		>
 			<article>
 				<header>
 					<a href={ templ.URL(cancelHref) } aria-label="Close" rel="prev"></a>
@@ -787,7 +791,7 @@ templ DeleteConfirmPage(active, name, action, cancelHref string, sessions []db.S
 						}
 					}
 				</ul>
-				<footer>
+				<footer class="delete-confirm-footer">
 					<a href={ templ.URL(cancelHref) } role="button" class="secondary">Cancel</a>
 					<form method="post" action={ templ.URL(action) } class="inline-form">
 						<input type="hidden" name="confirm" value="1"/>
