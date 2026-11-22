@@ -1487,6 +1487,33 @@ html.sidebar-collapsed #sidebar-toggle {
 	padding: 0.4rem 0;
 }
 
+/* Vault tab rows: eye (unhide, gold) + trash (delete, red) sit
+   together as one flex child so justify-content: space-between on
+   the <li> above still just splits [link] from [this one group]. */
+.vault-item-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	flex: none;
+}
+
+.vault-item-actions form {
+	margin: 0;
+	display: inline;
+}
+
+/* Gold variant of .icon-btn (which defaults to the guarded-action
+   red) — for icon buttons that reveal/restore rather than destroy. */
+.icon-btn-gold {
+	color: var(--pico-primary);
+}
+
+.icon-btn-gold:hover,
+.icon-btn-gold:focus {
+	background: none;
+	color: #e0b85a;
+}
+
 /* ============================================================
    MOBILE — phone-width layout.
    The sidebar (a 220px always-full-height rail, built for a

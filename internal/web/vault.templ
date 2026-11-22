@@ -227,6 +227,33 @@ templ lockIcon() {
 	</svg>
 }
 
+// trashIcon mirrors vignetteCard's own delete-button SVG (same outline
+// shape, same stroke="currentColor" convention) — kept as its own
+// component here since the Vault list's row actions (see
+// VaultListPageWithError) need the exact same icon on a plain
+// <button>, not the vignette grid's absolutely-positioned corner.
+templ trashIcon() {
+	<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4 7h16"></path>
+		<path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+		<path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"></path>
+		<path d="M10 11v6"></path>
+		<path d="M14 11v6"></path>
+	</svg>
+}
+
+// eyeIcon is the Vault list's "Unhide" trigger (replacing the old
+// plain text button) — an open eye, same outline convention as every
+// other authored icon here. Gold (.icon-btn-gold) rather than the red
+// lockIcon/trashIcon use: revealing something isn't a guarded/
+// destructive action the way locking or deleting is.
+templ eyeIcon() {
+	<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"></path>
+		<circle cx="12" cy="12" r="3"></circle>
+	</svg>
+}
+
 templ VaultSetupPage(errMsg, salt string) {
 	@Layout("Vault", "Vault") {
 		<h1>Vault</h1>
@@ -274,9 +301,10 @@ templ VaultListPage(v VaultContents, salt string) {
 
 // vaultItem is one row of a Vault tab, whatever its kind.
 type vaultItem struct {
-	ID    int64
-	Title string
-	Href  string
+	ID         int64
+	Title      string
+	Href       string
+	DeleteHref string
 }
 
 // vaultTab is one of the Vault page's three tabs; Kind is also the
@@ -299,13 +327,13 @@ func vaultTabs(v VaultContents) []vaultTab {
 		tabs[0].Create = "session-modal"
 	}
 	for _, s := range v.Sessions {
-		tabs[0].Items = append(tabs[0].Items, vaultItem{s.ID, s.Title, fmt.Sprintf("/chat/%d", s.ID)})
+		tabs[0].Items = append(tabs[0].Items, vaultItem{s.ID, s.Title, fmt.Sprintf("/chat/%d", s.ID), fmt.Sprintf("/chat/%d/delete", s.ID)})
 	}
 	for _, c := range v.Characters {
-		tabs[1].Items = append(tabs[1].Items, vaultItem{c.ID, c.Name, fmt.Sprintf("/characters/%d/edit", c.ID)})
+		tabs[1].Items = append(tabs[1].Items, vaultItem{c.ID, c.Name, fmt.Sprintf("/characters/%d/edit", c.ID), fmt.Sprintf("/characters/%d/delete", c.ID)})
 	}
 	for _, l := range v.Lorebooks {
-		tabs[2].Items = append(tabs[2].Items, vaultItem{l.ID, l.Name, fmt.Sprintf("/world/%d", l.ID)})
+		tabs[2].Items = append(tabs[2].Items, vaultItem{l.ID, l.Name, fmt.Sprintf("/world/%d", l.ID), fmt.Sprintf("/world/%d/delete", l.ID)})
 	}
 	return tabs
 }
@@ -352,7 +380,16 @@ templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind s
 								{{ isErrTarget := t.Kind == errKind && it.ID == errID }}
 								<li>
 									<a href={ templ.URL(it.Href) }>{ it.Title }</a>
-									<button type="button" data-open-dialog={ dialogID }>Unhide</button>
+									<div class="vault-item-actions">
+										<button type="button" class="icon-btn icon-btn-gold" aria-label={ "Unhide " + it.Title } title={ "Unhide " + it.Title } data-open-dialog={ dialogID }>
+											@eyeIcon()
+										</button>
+										<form method="post" action={ templ.URL(it.DeleteHref) }>
+											<button type="submit" class="icon-btn" aria-label={ "Delete " + it.Title } title={ "Delete " + it.Title }>
+												@trashIcon()
+											</button>
+										</form>
+									</div>
 									<dialog id={ dialogID } class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", isErrTarget) }>
 										<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%s/%d/out", t.Kind, it.ID)) } class="vault-out-form pin-form">
 											<input type="hidden" name="salt" value={ salt }/>
