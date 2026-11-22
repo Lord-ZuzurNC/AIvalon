@@ -436,12 +436,21 @@ templ Avatar(imagePath, name string) {
 // — the <a> and the delete <form> are siblings (not nested — a form
 // inside an anchor is invalid HTML) so the trash icon stays clickable
 // on top of the full-card link underneath it.
-templ vignetteCard(href, imagePath, name, deleteAction string, chatCount int) {
+//
+// vaultAction is the item's /vault/{kind}/{id}/in route — the top-
+// center padlock. These grids only ever list non-vaulted items, so it
+// only ever means "hide this one", never a toggle.
+templ vignetteCard(href, imagePath, name, deleteAction, vaultAction string, chatCount, vaultedCount int) {
 	<div class="vignette-card" data-search-name={ name }>
 		<a href={ templ.URL(href) } class="vignette-card-link">
 			@vignetteFace(imagePath, name)
 		</a>
-		@chatCountBadge(chatCount)
+		@chatCountBadge(chatCount, vaultedCount)
+		<form method="post" action={ templ.URL(vaultAction) } class="vignette-vault">
+			<button type="submit" aria-label={ "Hide " + name + " into vault" } title={ "Hide " + name + " into vault" }>
+				<span aria-hidden="true">@navIcon("Vault")</span>
+			</button>
+		</form>
 		<form method="post" action={ templ.URL(deleteAction) } class="vignette-delete">
 			<button type="submit" aria-label={ "Delete " + name } title={ "Delete " + name }>
 				<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -803,10 +812,22 @@ templ DeleteConfirmPage(active, name, action, cancelHref string, sessions []db.S
 	}
 }
 
-// chatCountBadge is the vignette's top-left "used by N chats" marker —
-// nothing at all for an unused item.
-templ chatCountBadge(n int) {
-	if n > 0 {
-		<span class="chat-count-badge" title={ fmt.Sprintf("Used by %d chat(s)", n) }>{ fmt.Sprintf("%d", n) }</span>
+// chatCountBadge is the vignette's top-left "x y" marker: x = visible
+// chats using the item, y = vaulted ones. The two pills swap gold and
+// tertiary on purpose, so which number is which reads from the colors,
+// not just position. Nothing at all for an unused item.
+templ chatCountBadge(visible, vaulted int) {
+	if visible+vaulted > 0 {
+		<span class="chat-count-badge" title={ fmt.Sprintf("Used by %d chat(s), %d more hidden in the vault", visible, vaulted) }>
+			<span class="chat-count-visible">{ fmt.Sprintf("%d", visible) }</span>
+			{ " " }
+			<span class="chat-count-vaulted">{ fmt.Sprintf("%d", vaulted) }</span>
+		</span>
 	}
+}
+
+// vaultMarker is the non-interactive "this one's in the vault" badge
+// (same padlock as the sidebar's Vault icon) — see sessionModal.
+templ vaultMarker() {
+	<span class="vault-marker" role="img" aria-label="In the vault" title="In the vault">@navIcon("Vault")</span>
 }

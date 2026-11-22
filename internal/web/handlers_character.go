@@ -66,7 +66,9 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 
 func (h CharacterHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
-	c := characterCardFromForm(r, db.CharacterCard{})
+	// vault=1 comes from the Vault page's own "+" — created already
+	// hidden, never briefly listed outside it.
+	c := characterCardFromForm(r, db.CharacterCard{IsVaulted: r.FormValue("vault") == "1"})
 	id, err := db.CreateCharacterCard(h.DB, c)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -76,13 +78,26 @@ func (h CharacterHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/characters", http.StatusSeeOther)
+	http.Redirect(w, r, vaultHome("characters", c.IsVaulted), http.StatusSeeOther)
 }
 
 func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	// Loaded before mutating anything: the GET-side pages already
+	// refuse a vaulted card without the vault unlocked (EditForm) —
+	// without this, the same card's SAVE route stayed wide open,
+	// cosmetic hiding only. Same check, same renderVaultLocked.
+	existing, err := db.GetCharacterCard(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if existing.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
@@ -95,7 +110,8 @@ func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	http.Redirect(w, r, "/characters", http.StatusSeeOther)
+	saved, _ := db.GetCharacterCard(h.DB, id) // lookup failure → plain list, as before
+	http.Redirect(w, r, vaultHome("characters", saved.IsVaulted), http.StatusSeeOther)
 }
 
 // saveImage adds the form's "image" field as a new gallery entry — a
@@ -237,13 +253,17 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	if card.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
+		return
+	}
 	sessions, err := db.ListSessionsUsingCharacterCard(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Characters", card.Name, fmt.Sprintf("/characters/%d/delete", id), "/characters", sessions))
+		render(w, r, DeleteConfirmPage("Characters", card.Name, fmt.Sprintf("/characters/%d/delete", id), vaultHome("characters", card.IsVaulted), sessions))
 		return
 	}
 	// Gallery rows cascade-delete with the character (ON DELETE
@@ -267,7 +287,7 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	for _, p := range orphanedImages {
 		removeUploadedFile(p)
 	}
-	http.Redirect(w, r, "/characters", http.StatusSeeOther)
+	http.Redirect(w, r, vaultHome("characters", card.IsVaulted), http.StatusSeeOther)
 }
 
 func characterCardFromForm(r *http.Request, base db.CharacterCard) db.CharacterCard {

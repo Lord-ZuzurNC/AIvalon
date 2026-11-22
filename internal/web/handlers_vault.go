@@ -3,6 +3,7 @@ package web
 import (
 	"database/sql"
 	"net/http"
+	"sort"
 	"strconv"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
@@ -35,6 +36,17 @@ func (h VaultHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// ?tab= is the "coming back from acting on a vaulted item" entry
+	// point (see vaultHome): an already-unlocked browser lands straight
+	// on that tab instead of being re-prompted. A bare /vault — the
+	// sidebar link, i.e. actually *opening* the vault — still always
+	// re-prompts per the rule above.
+	if tab := r.URL.Query().Get("tab"); tab != "" && h.Gate.Unlocked(r) {
+		if _, ok := vaultKinds[tab]; ok {
+			h.renderList(w, r, stored.PINSalt, tab)
+			return
+		}
 	}
 	render(w, r, VaultUnlockPage("", stored.PINSalt))
 }
@@ -92,7 +104,7 @@ func (h VaultHandlers) Setup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.renderList(w, r, salt)
+	h.renderList(w, r, salt, "")
 }
 
 // Unlock checks the submitted hash against the stored one and, on
@@ -121,7 +133,7 @@ func (h VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	h.renderList(w, r, stored.PINSalt)
+	h.renderList(w, r, stored.PINSalt, "")
 }
 
 // renderList is shared by Setup and Unlock's success path: both end
@@ -130,13 +142,13 @@ func (h VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 // Show's comment) instead of actually showing what unlocking was for.
 // salt is threaded through so the list's own per-item "remove from
 // vault" forms can hash their PIN client-side too.
-func (h VaultHandlers) renderList(w http.ResponseWriter, r *http.Request, salt string) {
+func (h VaultHandlers) renderList(w http.ResponseWriter, r *http.Request, salt, tab string) {
 	v, err := loadVaultContents(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, VaultListPage(v, salt))
+	render(w, r, VaultListPageWithError(v, salt, tab, "", "", 0))
 }
 
 // VaultContents is everything hidden in the vault, one slice per tab.
@@ -144,6 +156,15 @@ type VaultContents struct {
 	Sessions   []db.Session
 	Characters []db.CharacterCard
 	Lorebooks  []db.Lorebook
+
+	// For the Chats tab's "+" (a vaulted new session): the usual
+	// new-session pickers, except characters/lorebooks list vaulted
+	// AND non-vaulted rows together, sorted by name so same-named
+	// pairs sit side by side — the vault marker tells them apart.
+	Profiles       []db.BackendProfile
+	Personas       []db.Persona
+	PickCharacters []db.CharacterCard
+	PickLorebooks  []db.Lorebook
 }
 
 func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
@@ -155,8 +176,39 @@ func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
 	if v.Characters, err = db.ListVaultedCharacterCards(sqlDB); err != nil {
 		return v, err
 	}
-	v.Lorebooks, err = db.ListVaultedLorebooks(sqlDB)
-	return v, err
+	if v.Lorebooks, err = db.ListVaultedLorebooks(sqlDB); err != nil {
+		return v, err
+	}
+	if v.Profiles, err = db.ListBackendProfiles(sqlDB); err != nil {
+		return v, err
+	}
+	if v.Personas, err = db.ListPersonas(sqlDB); err != nil {
+		return v, err
+	}
+	plainCards, err := db.ListCharacterCards(sqlDB, -1, 0)
+	if err != nil {
+		return v, err
+	}
+	v.PickCharacters = append(plainCards, v.Characters...)
+	sort.SliceStable(v.PickCharacters, func(i, j int) bool { return v.PickCharacters[i].Name < v.PickCharacters[j].Name })
+	plainBooks, err := db.ListLorebooks(sqlDB, -1, 0)
+	if err != nil {
+		return v, err
+	}
+	v.PickLorebooks = append(plainBooks, v.Lorebooks...)
+	sort.SliceStable(v.PickLorebooks, func(i, j int) bool { return v.PickLorebooks[i].Name < v.PickLorebooks[j].Name })
+	return v, nil
+}
+
+// vaultHome is where a handler sends the browser after saving or
+// deleting a character/lorebook/session: back to the plain list as
+// always, unless the item is vaulted — the plain list excludes it, so
+// that would make it vanish from view; the Vault's own tab doesn't.
+func vaultHome(kind string, vaulted bool) string {
+	if vaulted {
+		return "/vault?tab=" + kind
+	}
+	return vaultKinds[kind].home
 }
 
 // vaultKinds maps the {kind} path segment of /vault/{kind}/{id}/in|out
@@ -250,7 +302,7 @@ func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		render(w, r, VaultListPageWithError(v, stored.PINSalt, "Wrong PIN — "+kind.noun+" stays in the vault.", kindKey, id))
+		render(w, r, VaultListPageWithError(v, stored.PINSalt, kindKey, "Wrong PIN — "+kind.noun+" stays in the vault.", kindKey, id))
 		return
 	}
 	h.Gate.recordSuccess()

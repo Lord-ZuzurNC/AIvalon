@@ -269,7 +269,7 @@ templ VaultUnlockPage(errMsg, salt string) {
 }
 
 templ VaultListPage(v VaultContents, salt string) {
-	@VaultListPageWithError(v, salt, "", "", 0)
+	@VaultListPageWithError(v, salt, "", "", "", 0)
 }
 
 // vaultItem is one row of a Vault tab, whatever its kind.
@@ -281,9 +281,11 @@ type vaultItem struct {
 
 // vaultTab is one of the Vault page's three tabs; Kind is also the
 // {kind} segment of its /vault/{kind}/{id}/out route.
+// Create is the id of the dialog its "+" opens ("" = no "+", the
+// Chats tab with no backend profile to start a session on yet).
 type vaultTab struct {
-	Kind, Label, Noun, Empty string
-	Items                    []vaultItem
+	Kind, Label, Noun, Empty, Create string
+	Items                            []vaultItem
 }
 
 func vaultTabs(v VaultContents) []vaultTab {
@@ -291,6 +293,10 @@ func vaultTabs(v VaultContents) []vaultTab {
 		{Kind: "chats", Label: "Chats", Noun: "session", Empty: "Nothing in the vault — move a session here from its own options menu in Chats."},
 		{Kind: "characters", Label: "Characters", Noun: "character", Empty: "No hidden characters — move one here from its options menu in Characters (list view)."},
 		{Kind: "worlds", Label: "Worlds", Noun: "lorebook", Empty: "No hidden lorebooks — move one here from its options menu in Worlds (list view)."},
+	}
+	tabs[1].Create, tabs[2].Create = "character-modal", "lorebook-modal"
+	if len(v.Profiles) > 0 {
+		tabs[0].Create = "session-modal"
 	}
 	for _, s := range v.Sessions {
 		tabs[0].Items = append(tabs[0].Items, vaultItem{s.ID, s.Title, fmt.Sprintf("/chat/%d", s.ID)})
@@ -304,15 +310,14 @@ func vaultTabs(v VaultContents) []vaultTab {
 	return tabs
 }
 
-// errKind+errID identify which item's own Unhide dialog a wrong-PIN
+// activeTab picks the visible tab ("" = Chats); errKind+errID identify which item's own Unhide dialog a wrong-PIN
 // retry belongs to (errKind "" means no error) — MoveOut re-renders
 // this whole page on failure, so only *that* item's dialog gets
 // reopened (data-autoopen) with the error message inside it, and its
 // tab is the one shown (a dialog inside a [hidden] panel would open
 // invisibly). The kind is part of the key because a character and a
 // session can share the same numeric id.
-templ VaultListPageWithError(v VaultContents, salt, errMsg, errKind string, errID int64) {
-	{{ activeTab := errKind }}
+templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind string, errID int64) {
 	if activeTab == "" {
 		{{ activeTab = "chats" }}
 	}
@@ -333,6 +338,11 @@ templ VaultListPageWithError(v VaultContents, salt, errMsg, errKind string, errI
 			</div>
 			for _, t := range vaultTabs(v) {
 				<div data-tab-panel={ t.Kind } role="tabpanel" hidden?={ activeTab != t.Kind }>
+					if t.Create != "" {
+						<div class="vault-tab-actions">
+							<button type="button" class="create-button" aria-label={ "New hidden " + t.Noun } title={ "New hidden " + t.Noun } data-modal-id={ t.Create } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+						</div>
+					}
 					if len(t.Items) == 0 {
 						<p><em>{ t.Empty }</em></p>
 					} else {
@@ -361,6 +371,19 @@ templ VaultListPageWithError(v VaultContents, salt, errMsg, errKind string, errI
 				</div>
 			}
 		</div>
+		if len(v.Profiles) > 0 {
+			@sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, true)
+		}
+		<dialog id="character-modal">
+			<article>
+				<header>
+					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<strong>Add a hidden character</strong>
+				</header>
+				@characterCardForm(nil, true)
+			</article>
+		</dialog>
+		@lorebookCreateModal(true)
 		@tabsScript()
 		@vaultPinHashScript()
 		@pinPadScript()

@@ -29,7 +29,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 			<div data-search-scope="character">
 				<div data-view-panel="grid" class="card-grid">
 					for _, c := range cards {
-						@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID), c.ChatCount)
+						@vignetteCard(fmt.Sprintf("/characters/%d/edit", c.ID), c.ImagePath, c.Name, fmt.Sprintf("/characters/%d/delete", c.ID), fmt.Sprintf("/vault/characters/%d/in", c.ID), c.ChatCount-c.VaultedChatCount, c.VaultedChatCount)
 					}
 				</div>
 				<div data-view-panel="list" hidden="hidden">
@@ -77,7 +77,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 						}
 					</strong>
 				</header>
-				@characterCardForm(editing)
+				@characterCardForm(editing, false)
 				if editing != nil {
 					@characterImageGallery(editing.ID, editing.ImagePath, editingImages)
 				}
@@ -136,7 +136,9 @@ templ characterImageGallery(characterID int64, primaryPath string, images []db.C
 	</details>
 }
 
-templ characterCardForm(editing *db.CharacterCard) {
+// vaulted adds the vault=1 field the Vault page's "+" relies on (see
+// CharacterHandlers.Create) — a new card only; an edit keeps its own.
+templ characterCardForm(editing *db.CharacterCard, vaulted bool) {
 	{{
 	action := "/characters"
 	c := db.CharacterCard{}
@@ -146,6 +148,9 @@ templ characterCardForm(editing *db.CharacterCard) {
 	}
 	}}
 	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
+		if vaulted {
+			<input type="hidden" name="vault" value="1"/>
+		}
 		@ImageField(c.ImagePath, c.Name)
 		<label>
 			Name

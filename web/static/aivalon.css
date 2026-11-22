@@ -34,6 +34,14 @@
 	--pico-secondary-hover-background: #534c78;
 	--pico-secondary-inverse: #fff;
 
+	/* Not a Pico token — AIvalon's own "vaulted/hidden" counterpart to
+	   gold (the vignette's swapped x/y count pills, the vault marker).
+	   A saturated dark purple: same depth as the near-black canvas but
+	   clearly hue-shifted from #121020/#1d1a30, and nothing like the
+	   pale --pico-secondary. Gold #cc9f45 on it (and it on gold) is
+	   ~5.6:1 — clears WCAG AA's 4.5:1 for small text both ways round. */
+	--pico-tertiary: #3b1f5e;
+
 	--pico-h1-color: #e4c583;
 	--pico-h2-color: #d4af6a;
 	--pico-h3-color: #c7a263;
@@ -735,21 +743,90 @@ html.sidebar-collapsed #sidebar-toggle {
 	border: none;
 }
 
-/* "Used by N chats" badge, mirroring .vignette-delete in the opposite
-   corner. Click-through so it never blocks the card link under it. */
+/* "x y" chat-count pills (visible / vaulted), mirroring .vignette-delete
+   in the opposite corner. The two swap gold and tertiary on purpose —
+   see chatCountBadge. Click-through so it never blocks the card link. */
 .chat-count-badge {
 	position: absolute;
 	top: 0.4rem;
 	left: 0.4rem;
 	z-index: 1;
-	padding: 0.1rem 0.5rem;
-	border-radius: 0.4rem;
-	background: var(--pico-primary);
-	color: #000;
+	display: flex;
+	gap: 0.2rem;
 	font-size: 0.8rem;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	pointer-events: none;
+	white-space: nowrap;
+}
+
+.chat-count-badge > span {
+	padding: 0.1rem 0.5rem;
+	border-radius: 0.4rem;
+	border: 1px solid var(--pico-primary);
+}
+
+.chat-count-visible {
+	background: var(--pico-primary);
+	color: var(--pico-tertiary);
+}
+
+.chat-count-vaulted {
+	background: var(--pico-tertiary);
+	color: var(--pico-primary);
+}
+
+/* Top-center "hide into vault" padlock — same chrome as
+   .vignette-delete, gold instead of red (hiding isn't destructive). */
+.vignette-vault {
+	position: absolute;
+	top: 0.4rem;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1;
+	margin: 0;
+}
+
+.vignette-vault button {
+	width: 1.8rem;
+	height: 1.8rem;
+	min-width: 1.8rem;
+	padding: 0;
+	margin: 0;
+	border-radius: 50%;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.55);
+	color: var(--pico-primary);
+	border: none;
+}
+
+.vignette-vault svg,
+.vault-marker svg {
+	width: 14px;
+	height: 14px;
+	display: block;
+}
+
+/* Non-interactive "in the vault" badge on a character-picker vignette
+   (Vault's new-session dialog only). */
+.vault-marker {
+	position: absolute;
+	top: 0.3rem;
+	left: 0.3rem;
+	z-index: 1;
+	padding: 0.2rem;
+	border-radius: 50%;
+	background: var(--pico-tertiary);
+	color: var(--pico-primary);
+	pointer-events: none;
+}
+
+.vault-tab-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 0.5rem;
 }
 
 /* Delete-confirmation dialog (DeleteConfirmPage): Cancel + red

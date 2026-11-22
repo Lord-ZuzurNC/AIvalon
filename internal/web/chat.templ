@@ -99,53 +99,78 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 				first.
 			</p>
 		} else {
-			<dialog id="session-modal">
-				<article>
-					<header>
-						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
-						<strong>New session</strong>
-					</header>
-					<form method="post" action="/chat">
-						<label>
-							Title
-							<input type="text" name="title" placeholder="Untitled chat" value=""/>
-						</label>
-						<label>
-							Backend profile
-							<select name="backend_profile_id">
-								for _, p := range profiles {
-									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
-								}
-							</select>
-						</label>
-						<label>
-							Persona (optional — defaults to "User")
-							<select name="persona_id">
-								<option value="">(default)</option>
-								for _, p := range personas {
-									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
-								}
-							</select>
-						</label>
-						<fieldset>
-							<legend>Characters (optional, pick several for a group chat)</legend>
-							@characterPickerStrip(characters, "character_ids")
-						</fieldset>
-						<label>
-							Lorebook (optional — world info available to the narrator)
-							<select name="lorebook_id">
-								<option value="">(none)</option>
-								for _, l := range lorebooks {
-									<option value={ fmt.Sprintf("%d", l.ID) }>{ l.Name }</option>
-								}
-							</select>
-						</label>
-						<button type="submit">Start chat</button>
-					</form>
-				</article>
-			</dialog>
+			@sessionModal(profiles, personas, characters, lorebooks, false)
 		}
 	}
+}
+
+// sessionModal is the "New session" dialog — Chat's own, and the
+// Vault's Chats-tab "+" (vaulted: posts vault=1 and is handed BOTH
+// vaulted and plain characters/lorebooks; the vaulted ones carry a
+// vault marker — the only place the two kinds are ever listed side
+// by side, so two same-named items stay distinguishable).
+templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook, vaulted bool) {
+	<dialog id="session-modal">
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>
+					if vaulted {
+						New hidden session
+					} else {
+						New session
+					}
+				</strong>
+			</header>
+			<form method="post" action="/chat">
+				if vaulted {
+					<input type="hidden" name="vault" value="1"/>
+				}
+				<label>
+					Title
+					<input type="text" name="title" placeholder="Untitled chat" value=""/>
+				</label>
+				<label>
+					Backend profile
+					<select name="backend_profile_id">
+						for _, p := range profiles {
+							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Persona (optional — defaults to "User")
+					<select name="persona_id">
+						<option value="">(default)</option>
+						for _, p := range personas {
+							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+						}
+					</select>
+				</label>
+				<fieldset>
+					<legend>Characters (optional, pick several for a group chat)</legend>
+					@characterPickerStrip(characters, "character_ids")
+				</fieldset>
+				<label>
+					Lorebook (optional — world info available to the narrator)
+					<select name="lorebook_id">
+						<option value="">(none)</option>
+						for _, l := range lorebooks {
+							if l.IsVaulted {
+								// An <option> can only hold text, so the
+								// vault marker here is the padlock glyph,
+								// not vaultMarker's SVG.
+								<option value={ fmt.Sprintf("%d", l.ID) }>{ "🔒 " + l.Name + " (vault)" }</option>
+							} else {
+								<option value={ fmt.Sprintf("%d", l.ID) }>{ l.Name }</option>
+							}
+						}
+					</select>
+				</label>
+				<button type="submit">Start chat</button>
+			</form>
+		</article>
+	</dialog>
 }
 
 // characterPickerStrip is the New-session modal's character picker: a
@@ -164,6 +189,9 @@ templ characterPickerStrip(characters []db.CharacterCard, name string) {
 			for _, c := range characters {
 				<button type="button" class="vignette-card character-pick" aria-pressed="false" title={ c.Name } onclick="toggleCharacterPick(this)">
 					@vignetteFace(c.ImagePath, c.Name)
+					if c.IsVaulted {
+						@vaultMarker()
+					}
 				</button>
 				<input type="checkbox" name={ name } value={ fmt.Sprintf("%d", c.ID) } hidden/>
 			}
@@ -259,7 +287,11 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 					document.currentScript.parentElement.classList.add("chat-bubbles");
 				}
 			</script>
-			@BackLink("/chat", "Chat")
+			if session.IsVaulted {
+				@BackLink("/vault?tab=chats", "Vault")
+			} else {
+				@BackLink("/chat", "Chat")
+			}
 			<div class="chat-header">
 				<img class="chat-cover" src={ coverImage } alt=""/>
 				<h1>{ session.Title }</h1>

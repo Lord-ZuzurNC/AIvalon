@@ -46,6 +46,23 @@ func vaultPost(h http.HandlerFunc, kind string, id int64, pinHash string) *httpt
 	return w
 }
 
+// deletePost is vaultPost's counterpart for the plain Character/World
+// Delete handlers — those take just {id} (no {kind}/pin_hash) and, as
+// of the vault-mutation-routes fix, DO care about the unlock cookie
+// when the target is vaulted. vaultPost never attaches one, which is
+// exactly how the earlier version of this test accidentally exercised
+// the unauthenticated path instead of the real one.
+func deletePost(h http.HandlerFunc, id int64, cookie *http.Cookie) *httptest.ResponseRecorder {
+	r := httptest.NewRequest("POST", "/x", nil)
+	r.SetPathValue("id", fmt.Sprint(id))
+	if cookie != nil {
+		r.AddCookie(cookie)
+	}
+	w := httptest.NewRecorder()
+	h(w, r)
+	return w
+}
+
 func TestVaultedDirectURLsRefusedUntilUnlocked(t *testing.T) {
 	f := newFixture(t)
 	gate := NewVaultGate()

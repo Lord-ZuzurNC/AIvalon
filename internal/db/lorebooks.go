@@ -23,6 +23,8 @@ type Lorebook struct {
 	// ChatCount is populated by ListLorebooks only: how many sessions
 	// use this book (and would be deleted along with it).
 	ChatCount int
+	// VaultedChatCount mirrors CharacterCard.VaultedChatCount.
+	VaultedChatCount int
 	// IsVaulted mirrors CharacterCard.IsVaulted: hidden from
 	// ListLorebooks only, GetLorebook still resolves it.
 	IsVaulted bool
@@ -63,7 +65,8 @@ func ListVaultedLorebooks(db *sql.DB) ([]Lorebook, error) {
 
 func listLorebooks(db *sql.DB, vaulted bool, limit, offset int) ([]Lorebook, error) {
 	rows, err := db.Query(`
-		SELECT l.id, l.name, l.image_path, COUNT(e.id), (SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id), l.is_vaulted
+		SELECT l.id, l.name, l.image_path, COUNT(e.id), (SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id),
+			(SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id AND s.is_vaulted = 1), l.is_vaulted
 		FROM lorebooks l
 		LEFT JOIN lorebook_entries e ON e.lorebook_id = l.id
 		WHERE l.is_vaulted = ?
@@ -78,7 +81,7 @@ func listLorebooks(db *sql.DB, vaulted bool, limit, offset int) ([]Lorebook, err
 	var books []Lorebook
 	for rows.Next() {
 		var l Lorebook
-		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount, &l.ChatCount, &l.IsVaulted); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount, &l.ChatCount, &l.VaultedChatCount, &l.IsVaulted); err != nil {
 			return nil, fmt.Errorf("scanning lorebook: %w", err)
 		}
 		books = append(books, l)
@@ -104,7 +107,7 @@ func GetLorebook(db *sql.DB, id int64) (Lorebook, error) {
 }
 
 func CreateLorebook(db *sql.DB, l Lorebook) (int64, error) {
-	res, err := db.Exec(`INSERT INTO lorebooks (name) VALUES (?)`, l.Name)
+	res, err := db.Exec(`INSERT INTO lorebooks (name, is_vaulted) VALUES (?, ?)`, l.Name, l.IsVaulted)
 	if err != nil {
 		return 0, fmt.Errorf("creating lorebook: %w", err)
 	}

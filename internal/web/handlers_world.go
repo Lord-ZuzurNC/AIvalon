@@ -34,7 +34,7 @@ func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
 func (h WorldHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	r.ParseMultipartForm(maxUploadSize)
-	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name")})
+	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name"), IsVaulted: r.FormValue("vault") == "1"})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -63,6 +63,19 @@ func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	// Same reasoning as CharacterHandlers.Update: the GET-side page
+	// (Show) already refuses a vaulted book without the vault
+	// unlocked — its SAVE route needs the identical check, or hiding
+	// it from the list/page is cosmetic only.
+	existing, err := db.GetLorebook(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if existing.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
@@ -115,13 +128,17 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
+	if book.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
+		return
+	}
 	sessions, err := db.ListSessionsUsingLorebook(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Worlds", book.Name, fmt.Sprintf("/world/%d/delete", id), "/world", sessions))
+		render(w, r, DeleteConfirmPage("Worlds", book.Name, fmt.Sprintf("/world/%d/delete", id), vaultHome("worlds", book.IsVaulted), sessions))
 		return
 	}
 	orphanedImages, err := db.DeleteLorebook(h.DB, id)
@@ -133,7 +150,7 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	for _, p := range orphanedImages {
 		removeUploadedFile(p)
 	}
-	http.Redirect(w, r, "/world", http.StatusSeeOther)
+	http.Redirect(w, r, vaultHome("worlds", book.IsVaulted), http.StatusSeeOther)
 }
 
 func (h WorldHandlers) EntryEditForm(w http.ResponseWriter, r *http.Request) {
@@ -188,10 +205,36 @@ func redirectToBookPage(w http.ResponseWriter, r *http.Request, bookID int64) {
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
+// bookLockedOut loads bookID's current IsVaulted flag and, if it's
+// vaulted and this browser hasn't unlocked the vault, renders the
+// refusal itself and reports true — same check Show/EntryEditForm
+// already apply to the lorebook's own pages, shared here so every
+// entry mutation (Create/Update/Toggle/Delete) gets it too: a vaulted
+// lorebook's entries are exactly as hidden as the lorebook itself,
+// and without this they weren't (Lord's find — the GET pages were
+// gated, the POST actions underneath them weren't).
+func (h WorldHandlers) bookLockedOut(w http.ResponseWriter, r *http.Request, bookID int64) (bool, error) {
+	book, err := db.GetLorebook(h.DB, bookID)
+	if err != nil {
+		return false, err
+	}
+	if book.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
+		return true, nil
+	}
+	return false, nil
+}
+
 func (h WorldHandlers) EntryCreate(w http.ResponseWriter, r *http.Request) {
 	bookID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if locked, err := h.bookLockedOut(w, r, bookID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if locked {
 		return
 	}
 	entry := entryFromForm(r, db.LorebookEntry{LorebookID: bookID})
@@ -211,6 +254,12 @@ func (h WorldHandlers) EntryUpdate(w http.ResponseWriter, r *http.Request) {
 	entryID, err := strconv.ParseInt(r.PathValue("entryID"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid entry id", http.StatusBadRequest)
+		return
+	}
+	if locked, err := h.bookLockedOut(w, r, bookID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if locked {
 		return
 	}
 	if existing, err := db.GetLorebookEntry(h.DB, entryID); err != nil {
@@ -243,6 +292,12 @@ func (h WorldHandlers) EntryToggleEnabled(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid entry id", http.StatusBadRequest)
 		return
 	}
+	if locked, err := h.bookLockedOut(w, r, bookID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if locked {
+		return
+	}
 	entry, err := db.GetLorebookEntry(h.DB, entryID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -269,6 +324,12 @@ func (h WorldHandlers) EntryDelete(w http.ResponseWriter, r *http.Request) {
 	entryID, err := strconv.ParseInt(r.PathValue("entryID"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid entry id", http.StatusBadRequest)
+		return
+	}
+	if locked, err := h.bookLockedOut(w, r, bookID); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	} else if locked {
 		return
 	}
 	if existing, err := db.GetLorebookEntry(h.DB, entryID); err != nil {

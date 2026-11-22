@@ -81,7 +81,8 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = "Untitled chat"
 	}
-	session := db.Session{Title: title, BackendProfileID: profileID}
+	// vault=1: the Vault's Chats-tab "+" — see CharacterHandlers.Create.
+	session := db.Session{Title: title, BackendProfileID: profileID, IsVaulted: r.FormValue("vault") == "1"}
 	if personaID, err := strconv.ParseInt(r.FormValue("persona_id"), 10, 64); err == nil {
 		session.PersonaID = personaID
 	}
@@ -376,6 +377,11 @@ func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 	// copy can point at the same file from a DIFFERENT session (see
 	// deleteWithSessions' own comment), so a path is only safe to
 	// remove from disk once nothing anywhere still references it.
+	session, err := db.GetSession(h.DB, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 	candidates, err := db.ImagePathsForSession(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -390,7 +396,7 @@ func (h ChatHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 			removeUploadedFile(p)
 		}
 	}
-	http.Redirect(w, r, "/chat", http.StatusSeeOther)
+	http.Redirect(w, r, vaultHome("chats", session.IsVaulted), http.StatusSeeOther)
 }
 
 // Duplicate clones a whole session (see db.DuplicateSession) and

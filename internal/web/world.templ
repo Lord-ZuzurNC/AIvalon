@@ -17,7 +17,7 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 			<div data-search-scope="world">
 				<div data-view-panel="grid" class="card-grid">
 					for _, b := range books {
-						@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID), b.ChatCount)
+						@vignetteCard(fmt.Sprintf("/world/%d", b.ID), b.ImagePath, b.Name, fmt.Sprintf("/world/%d/delete", b.ID), fmt.Sprintf("/vault/worlds/%d/in", b.ID), b.ChatCount-b.VaultedChatCount, b.VaultedChatCount)
 					}
 				</div>
 				<div data-view-panel="list" hidden="hidden">
@@ -53,30 +53,50 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 			@searchFilterScript()
 		}
 
-		<dialog id="lorebook-modal">
-			<article>
-				<header>
-					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
-					<strong>Add a lorebook</strong>
-				</header>
-				<form method="post" action="/world" enctype="multipart/form-data">
-					<label>
-						Name
-						<input type="text" name="name" required="required"/>
-					</label>
-					@ImageField("", "")
-					<button type="submit">Add lorebook</button>
-				</form>
-			</article>
-		</dialog>
+		@lorebookCreateModal(false)
 		@ImportModal("lorebook-import-modal", "/world/import")
 		@tabsScript()
 	}
 }
 
+// lorebookCreateModal is World's "Add a lorebook" dialog, shared with
+// the Vault's Worlds-tab "+" (vaulted: posts vault=1, see
+// WorldHandlers.Create).
+templ lorebookCreateModal(vaulted bool) {
+	<dialog id="lorebook-modal">
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>
+					if vaulted {
+						Add a hidden lorebook
+					} else {
+						Add a lorebook
+					}
+				</strong>
+			</header>
+			<form method="post" action="/world" enctype="multipart/form-data">
+				if vaulted {
+					<input type="hidden" name="vault" value="1"/>
+				}
+				<label>
+					Name
+					<input type="text" name="name" required="required"/>
+				</label>
+				@ImageField("", "")
+				<button type="submit">Add lorebook</button>
+			</form>
+		</article>
+	</dialog>
+}
+
 templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry, pager Pager) {
 	@Layout(book.Name, "Worlds") {
-		@BackLink("/world", "World")
+		if book.IsVaulted {
+			@BackLink("/vault?tab=worlds", "Vault")
+		} else {
+			@BackLink("/world", "World")
+		}
 		<h1>{ book.Name }</h1>
 		<p class="entry-count-sub">{ entryCountLabel(len(entries)) }</p>
 		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) } enctype="multipart/form-data">

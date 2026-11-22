@@ -33,6 +33,10 @@ type CharacterCard struct {
 	// ChatCount is populated by ListCharacterCards only: how many
 	// sessions include this card (and would be deleted along with it).
 	ChatCount int
+	// VaultedChatCount is the vaulted subset of ChatCount (also
+	// ListCharacterCards only) — the vignette shows the two halves
+	// separately.
+	VaultedChatCount int
 	// IsVaulted hides the card from ListCharacterCards (browsing) only —
 	// GetCharacterCard and ListCharacterCardsForSession still return it,
 	// so a chat already using it keeps working.
@@ -53,7 +57,9 @@ func ListVaultedCharacterCards(db *sql.DB) ([]CharacterCard, error) {
 func listCharacterCards(db *sql.DB, vaulted bool, limit, offset int) ([]CharacterCard, error) {
 	rows, err := db.Query(`
 		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, ''),
-			(SELECT COUNT(*) FROM session_characters sc WHERE sc.character_card_id = cc.id), cc.is_vaulted
+			(SELECT COUNT(*) FROM session_characters sc WHERE sc.character_card_id = cc.id),
+			(SELECT COUNT(*) FROM session_characters sc JOIN sessions s ON s.id = sc.session_id WHERE sc.character_card_id = cc.id AND s.is_vaulted = 1),
+			cc.is_vaulted
 		FROM character_cards cc
 		LEFT JOIN character_card_images cci ON cci.id = cc.primary_image_id
 		WHERE cc.is_vaulted = ?
@@ -67,7 +73,7 @@ func listCharacterCards(db *sql.DB, vaulted bool, limit, offset int) ([]Characte
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.ChatCount, &c.IsVaulted); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.ChatCount, &c.VaultedChatCount, &c.IsVaulted); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
@@ -103,8 +109,8 @@ func CreateCharacterCard(db *sql.DB, c CharacterCard) (int64, error) {
 		return 0, fmt.Errorf("encoding card for raw_json: %w", err)
 	}
 	res, err := db.Exec(
-		`INSERT INTO character_cards (name, description, personality, scenario, first_message, example_messages, author_note, raw_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, c.AuthorNote, string(rawJSON),
+		`INSERT INTO character_cards (name, description, personality, scenario, first_message, example_messages, author_note, raw_json, is_vaulted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.Name, c.Description, c.Personality, c.Scenario, c.FirstMessage, c.ExampleMessages, c.AuthorNote, string(rawJSON), c.IsVaulted,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("creating character card: %w", err)
