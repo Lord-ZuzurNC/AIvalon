@@ -7,7 +7,7 @@ No account system, no multi-tenancy, no network exposure by default.
 ## Scope
 
 **v1** ships text-only roleplay: chat, character cards, lorebooks, and the settings needed to point AIvalon at a local model.
-**v2** adds on-demand image generation inside a chat session.
+**v2** adds on-demand image generation inside a chat session. The code is in (backend profile, presets, generation endpoint) but unvalidated — no real pass against a live A1111 instance yet — so treat it as work in progress, not a shipped feature.
 Nothing in v1's data model should need to change shape to support v2 — see **Backend profiles** below.
 
 ## Tech stack
@@ -41,7 +41,7 @@ It is a client to whatever exposes an OpenAI-compatible `chat/completions` endpo
 A **backend profile** holds: a name, a kind (`llm` in v1; `image` added in v2), a base URL, an optional API key, and the model parameters exposed to the user (temperature, top_p, top_k, max tokens, and so on).
 Multiple profiles can exist side by side — a user can point one profile at Ollama and another at a hosted API without AIvalon caring which is which beyond the `kind`.
 Designing the `kind` field in now, even though only `llm` is used in v1, is what lets v2's image generation slot in as a new backend profile instead of a schema migration.
-The v2 `image` kind targets the **AUTOMATIC1111 (A1111) Stable Diffusion WebUI API** (`/sdapi/v1/txt2img` and friends) — picked for being the simplest of the common options, not implemented until v2.
+The v2 `image` kind targets the **AUTOMATIC1111 (A1111) Stable Diffusion WebUI API** (`/sdapi/v1/txt2img` and friends) — picked for being the simplest of the common options. The client code is written but unvalidated against a real A1111 instance; see **Scope** above.
 
 ## Stopping a generation in progress
 

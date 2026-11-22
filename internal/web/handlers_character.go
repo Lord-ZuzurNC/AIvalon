@@ -51,12 +51,33 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 		renderVaultLocked(w, r, h.DB)
 		return
 	}
-	cards, pager, err := h.listPage(r)
+	images, err := db.ListCharacterCardImages(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	images, err := db.ListCharacterCardImages(h.DB, id)
+	if card.IsVaulted {
+		// Render the Vault's own page underneath the edit dialog
+		// instead of the plain Characters list — Lord's bug report:
+		// a backdrop click just closes the dialog (see templates.templ's
+		// click-to-dismiss script), and whatever page was rendered
+		// behind it is what that reveals. If it was the plain list, a
+		// single stray click "left the vault" with nothing actually
+		// hidden changing — just the wrong page sitting underneath.
+		v, err := loadVaultContents(h.DB)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		stored, err := db.GetVaultPIN(h.DB)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		render(w, r, VaultListPageWithEditingCharacter(v, stored.PINSalt, card, images))
+		return
+	}
+	cards, pager, err := h.listPage(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

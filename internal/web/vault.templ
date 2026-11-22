@@ -1,6 +1,10 @@
 package web
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+)
 
 // vaultPinHashScript hashes a PIN client-side (SHA-256 of salt+pin via
 // the Web Crypto API) before any <form class="pin-form"> on the page
@@ -349,6 +353,25 @@ func vaultTabs(v VaultContents) []vaultTab {
 // invisibly). The kind is part of the key because a character and a
 // session can share the same numeric id.
 templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind string, errID int64) {
+	@vaultListPageBody(v, salt, activeTab, errMsg, errKind, errID, nil, nil)
+}
+
+// VaultListPageWithEditingCharacter renders the Vault page itself
+// (Characters tab active) with its own character-modal pre-opened in
+// EDIT mode for a vaulted character — Lord's bug report: GET
+// /characters/{id}/edit on a vaulted card used to render the plain
+// CharacterPage with the dialog open on top, so a backdrop click
+// (closing just the dialog, see templates.templ's click-to-dismiss
+// script) revealed the plain, vault-excluding Characters list
+// underneath — "sorti du vault" by nothing more than clicking outside
+// a modal. Rendering the Vault's own page underneath instead means
+// that same dismissal reveals the Vault's Characters tab, where the
+// card (still hidden) is right there.
+templ VaultListPageWithEditingCharacter(v VaultContents, salt string, editing db.CharacterCard, editingImages []db.CharacterCardImage) {
+	@vaultListPageBody(v, salt, "characters", "", "", 0, &editing, editingImages)
+}
+
+templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string, errID int64, editingCharacter *db.CharacterCard, editingCharacterImages []db.CharacterCardImage) {
 	if activeTab == "" {
 		{{ activeTab = "chats" }}
 	}
@@ -419,13 +442,22 @@ templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind s
 		if len(v.Profiles) > 0 {
 			@sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, true)
 		}
-		<dialog id="character-modal">
+		<dialog id="character-modal" open?={ editingCharacter != nil }>
 			<article>
 				<header>
 					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
-					<strong>Add a hidden character</strong>
+					<strong>
+						if editingCharacter != nil {
+							Edit character
+						} else {
+							Add a hidden character
+						}
+					</strong>
 				</header>
-				@characterCardForm(nil, true)
+				@characterCardForm(editingCharacter, true)
+				if editingCharacter != nil {
+					@characterImageGallery(editingCharacter.ID, editingCharacter.ImagePath, editingCharacterImages)
+				}
 			</article>
 		</dialog>
 		@lorebookCreateModal(true)

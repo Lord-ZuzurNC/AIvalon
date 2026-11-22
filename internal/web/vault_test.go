@@ -66,6 +66,9 @@ func deletePost(h http.HandlerFunc, id int64, cookie *http.Cookie) *httptest.Res
 func TestVaultedDirectURLsRefusedUntilUnlocked(t *testing.T) {
 	f := newFixture(t)
 	gate := NewVaultGate()
+	if err := db.SetVaultPIN(f.db, "h", "salt", 4); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.SetCharacterCardVaulted(f.db, f.cardA, true); err != nil {
 		t.Fatal(err)
 	}

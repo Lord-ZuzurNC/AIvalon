@@ -26,7 +26,7 @@ func TestAppSettings(t *testing.T) {
 		t.Fatal("seeded migration template and DefaultSystemPromptTemplate constant have drifted apart")
 	}
 
-	wantWhitelist := []string{"character-tavern.com", "aicharactercards.com", "charavault.net", "sillytavern.us", "www.characterhub.org", "taverncard.com"}
+	wantWhitelist := []string{"character-tavern.com", "aicharactercards.com", "charavault.net", "www.characterhub.org", "taverncard.com", "github.com", "chub.ai"}
 	if strings.Join(got.PNGImportWhitelist, ",") != strings.Join(wantWhitelist, ",") {
 		t.Fatalf("seeded whitelist = %q", got.PNGImportWhitelist)
 	}

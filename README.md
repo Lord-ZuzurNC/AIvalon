@@ -3,18 +3,21 @@
 A local, single-user web app for AI roleplay.
 It replaces rate-limited hosted apps like OOC: you talk to an LLM that runs on your own machine, through persona cards and lorebooks you control, and nothing leaves your computer.
 
->**Status: early development.**
->The server, database, and page shell boot and are verified working; the actual features (chat, character/persona/lorebook management, the LLM client) are not built yet.
->This README describes the app AIvalon is becoming, not a finished product — check `docs/DESIGN.md` for what's actually decided versus still open.
+> **Status: pre-release, no empty shells left.**
+> Chat, character cards, personas, lorebooks, backend profiles, and the Vault work end-to-end against a real LLM backend.
+> Image generation (A1111 backend, presets) is code-complete but **not yet validated** — no real test pass against a live A1111 instance — treat it as work in progress.
+> No binary release exists yet; building from source is the only install path. `docs/DESIGN.md` is still the source of truth for what's settled versus still open.
 
 ## What it does
 
-- **Character cards**, following the Character Card V2/V3 spec (the same format used across the existing SillyTavern-adjacent ecosystem): import one from the web, or make your own.
-- **Personas**: your own self-profile as the human player, separate from the characters the AI plays.
-- **Lorebooks** (World Info): shared lore for a session, kept separate from character cards on purpose.
-- **Chat**, with multiple character cards in one session for group roleplay.
-- **Any OpenAI-compatible LLM backend**: point it at Ollama, a llama.cpp server, or a hosted API — AIvalon never embeds inference itself.
-- **v2 (later)**: on-demand image generation via an A1111-compatible backend.
+- **Character cards**, following the Character Card V2/V3 spec (the same format used across the existing SillyTavern-adjacent ecosystem): import from a PNG (with the card embedded in a `tEXt` chunk) or plain JSON, from a file or a URL, or write one by hand. Multiple reference images per card, with one promotable to primary/avatar.
+- **Personas**: your own self-profile as the human player, separate from the characters the AI plays. Optional — a session with none picked falls back to a built-in default.
+- **Lorebooks** (World Info): shared lore kept separate from character cards on purpose, with per-entry trigger strategy (`constant` or whole-word `selective`), insertion order, and probability. Importable the same way as character cards.
+- **Chat**, with multiple character cards in one session for group roleplay: streamed token-by-token over SSE, with per-message regenerate, edit, branch (fork the conversation from any point), and delete, plus session duplication and a custom background per session.
+- **Any OpenAI-compatible LLM backend**: point one or more backend profiles at Ollama, a llama.cpp server, or a hosted API, with a connection test/ping from Settings — AIvalon never embeds inference itself.
+- **On-demand image generation** *(work in progress, not yet validated)*, against an AUTOMATIC1111 (A1111) Stable Diffusion WebUI backend. Named image presets (steps, CFG scale, sampler, size, seed, negative prompt, style suffix) are managed once in Settings — three built-ins ship (Realistic, Manga/Anime, Cyberpunk) — and a session just picks one; the in-chat dialog only ever asks for the prompt. The code path exists but hasn't had a real pass against a live A1111 instance yet.
+- **The Vault**: a PIN-gated space to pull a character card, lorebook, or session out of casual view. Four-digit PIN, re-prompted every time the Vault is opened, with a lockout after repeated wrong guesses to keep brute-forcing it slow.
+- **Settings**: backend profiles, personas, the system prompt template, a context budget (character cap on what's sent per reply), and the hostname whitelist for "import a card from a URL".
 
 Full rationale for every one of these choices is in `docs/DESIGN.md`.
 
@@ -39,6 +42,7 @@ No pre-built release exists yet, so building from source is currently the only w
    | High-end (~24B) | [Dolphin3.0-Mistral-24B](https://huggingface.co/dphn/Dolphin3.0-Mistral-24B)                                    | ~16-20 GB at Q4-Q6 | Dense 24B, the established pick for long-form creative/roleplay output once you have the VRAM for it.                           |
 
    "Abliterated" means the model's refusal/alignment layer has been removed — the usual reason a model is listed here instead of its plain instruct version is that standard instruct models tend to break character and insert safety disclaimers mid-scene. Swap in the non-abliterated GGUF for the same base model if you'd rather keep that layer; AIvalon doesn't care which you point it at.
+4. **(Optional, WIP feature) An A1111 instance**, only needed for the image generation feature — any AUTOMATIC1111-compatible Stable Diffusion WebUI reachable over HTTP, local or remote. Not yet validated end-to-end; see Status above.
 
 ### Build and run
 
@@ -49,8 +53,15 @@ go build -o aivalon ./cmd/aivalon
 ./aivalon
 ```
 
-AIvalon listens on `http://127.0.0.1:4140` and is not reachable from the network by default.
-Point it at your LLM backend from the Settings page once that page exists — for now, the four sections are an empty shell (see Status above).
+AIvalon listens on `http://127.0.0.1:4140` and is not reachable from the network by default (`AIVALON_ADDR` overrides this for same-LAN access — see `docs/DESIGN.md`).
+First run: open Settings, add a backend profile pointing at your LLM server, then create a Persona and a Character and start a chat.
+
+### Environment variables
+
+| Variable       | Default          | Purpose                                                                                                                       |
+| -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `AIVALON_ADDR` | `127.0.0.1:4140` | Listen address. Setting a non-loopback address relaxes the DNS-rebinding guard for private-LAN Host headers on the same port. |
+| `AIVALON_DB`   | `aivalon.db`     | SQLite file path, so two instances don't fight over the same database.                                                        |
 
 ## Tech stack (summary)
 
@@ -58,12 +69,25 @@ Point it at your LLM backend from the Settings page once that page exists — fo
 - **SQLite** (`modernc.org/sqlite`, pure Go, no cgo) for storage; `goose` for migrations.
 - **htmx** + server-rendered Go templates (`templ`) for the UI — no separate JavaScript build, no Node/npm dependency.
 - **Server-Sent Events** for streaming chat tokens.
-- Talks to any OpenAI-compatible `chat/completions` API; never embeds an inference engine itself.
+- Talks to any OpenAI-compatible `chat/completions` API and to an A1111-compatible `/sdapi/v1/txt2img` endpoint; never embeds an inference or image-generation engine itself.
 
 Full reasoning for every choice above — including what was considered and rejected — lives in `docs/DESIGN.md`.
+
+## Development
+
+```sh
+go install github.com/a-h/templ/cmd/templ@latest   # regenerate .templ -> _templ.go after editing a template
+go install github.com/pressly/goose/v3/cmd/goose@latest   # add/run DB migrations
+
+templ generate && go build -o aivalon ./cmd/aivalon
+go test ./...
+```
+
+Migrations live as plain `.sql` files in `internal/db/migrations/`; add a new one rather than editing an existing migration. Generated `_templ.go` files are committed, so a bare `go build` works without the `templ` CLI installed — only editing a `.templ` file requires it.
 
 ## License
 
 AGPLv3 — see `LICENSE`.
 Running AIvalon locally, for yourself, carries no obligation.
 Modifying it and running it as a network service for other people means publishing those modifications.
+</content>
