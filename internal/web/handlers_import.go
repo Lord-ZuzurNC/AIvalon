@@ -369,9 +369,10 @@ func fetchImportURL(rawURL string, whitelist []string) (raw []byte, filename str
 // failure it stops rather than leaving a silent partial import; the
 // lorebook itself still exists with whatever got in before the error,
 // enough to retry (delete and re-import) rather than losing nothing
-// at all.
-func createLorebookWithEntries(sqlDB *sql.DB, name string, entries []db.LorebookEntry) (int64, error) {
-	id, err := db.CreateLorebook(sqlDB, db.Lorebook{Name: name})
+// at all. vaulted mirrors the Vault's own "+" (see WorldHandlers.Create):
+// an import triggered from inside the Vault lands already hidden.
+func createLorebookWithEntries(sqlDB *sql.DB, name string, entries []db.LorebookEntry, vaulted bool) (int64, error) {
+	id, err := db.CreateLorebook(sqlDB, db.Lorebook{Name: name, IsVaulted: vaulted})
 	if err != nil {
 		return 0, err
 	}
@@ -413,28 +414,31 @@ func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
 // Lorebook plus all its entries. If the upload actually parses as a
 // Character Card instead, it offers to finish the import in
 // Character rather than just failing (see ImportCrossConfirmPage).
+// vault=1 (the Vault page's own import dialog) lands the new lorebook
+// already hidden, same convention as every other create-from-the-
+// vault form (see WorldHandlers.Create).
 func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request) {
 	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.importLorebookUpload(w, r, raw, filename)
+	h.importLorebookUpload(w, r, raw, filename, r.FormValue("vault") == "1")
 }
 
 // ResumeCharacterImport finishes, as a Character, an upload that was
 // first dropped into World's lorebook importer by mistake.
 func (h CharacterHandlers) ResumeCharacterImport(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	raw, filename, ok := h.Cache.Take(r.FormValue("token"))
+	raw, filename, vaulted, ok := h.Cache.Take(r.FormValue("token"))
 	if !ok {
 		http.Error(w, "this import link expired — upload the file again", http.StatusBadRequest)
 		return
 	}
-	h.importCharacterUpload(w, r, raw, filename)
+	h.importCharacterUpload(w, r, raw, filename, vaulted)
 }
 
-func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
 	originalRaw := raw // kept in case it's a PNG — reused as the lorebook's own cover, see below
 	raw, err := extractJSONFromUpload(raw)
 	if err != nil {
@@ -444,7 +448,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 	name, entries, ok := parseLorebookJSON(raw)
 	if !ok {
 		if card, _, charOK := parseCharacterJSON(raw); charOK {
-			token, err := h.Cache.Stash(originalRaw, filename)
+			token, err := h.Cache.Stash(originalRaw, filename, vaulted)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -456,7 +460,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 			render(w, r, ImportCrossConfirmPage(
 				"Worlds",
 				fmt.Sprintf("This is a Character Card JSON (%q), not a Lorebook — import it in Character instead?", who),
-				"/characters/import/resume", "/world", token,
+				"/characters/import/resume", vaultHome("worlds", vaulted), token,
 			))
 			return
 		}
@@ -471,7 +475,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	id, err := createLorebookWithEntries(h.DB, uniqueName(name, taken), entries)
+	id, err := createLorebookWithEntries(h.DB, uniqueName(name, taken), entries, vaulted)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -481,6 +485,10 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 		// lorebook's cover too. A failure here doesn't undo the import
 		// that already succeeded; the lorebook just keeps no image.
 		_ = h.saveImageFromBytes(originalRaw, id)
+	}
+	if vaulted {
+		http.Redirect(w, r, vaultHome("worlds", true), http.StatusSeeOther)
+		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)
 }
@@ -492,29 +500,31 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 // makes both and leaves attaching the lorebook to a session as usual,
 // same as any other independently-created book). If the upload
 // actually parses as a bare lorebook instead, it offers to finish the
-// import in World (see ImportCrossConfirmPage).
+// import in World (see ImportCrossConfirmPage). vault=1 (the Vault
+// page's own import dialog) lands the new character — and its
+// embedded lorebook, if any — already hidden.
 func (h CharacterHandlers) ImportCharacterJSON(w http.ResponseWriter, r *http.Request) {
 	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.importCharacterUpload(w, r, raw, filename)
+	h.importCharacterUpload(w, r, raw, filename, r.FormValue("vault") == "1")
 }
 
 // ResumeLorebookImport finishes, as a Lorebook, an upload that was
 // first dropped into Character's importer by mistake.
 func (h WorldHandlers) ResumeLorebookImport(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	raw, filename, ok := h.Cache.Take(r.FormValue("token"))
+	raw, filename, vaulted, ok := h.Cache.Take(r.FormValue("token"))
 	if !ok {
 		http.Error(w, "this import link expired — upload the file again", http.StatusBadRequest)
 		return
 	}
-	h.importLorebookUpload(w, r, raw, filename)
+	h.importLorebookUpload(w, r, raw, filename, vaulted)
 }
 
-func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string) {
+func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
 	originalRaw := raw // kept in case it's a PNG — reused as the character's (and its embedded lorebook's) own image, see below
 	raw, err := extractJSONFromUpload(raw)
 	if err != nil {
@@ -524,7 +534,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 	card, book, ok := parseCharacterJSON(raw)
 	if !ok {
 		if _, entries, lbOK := parseLorebookJSON(raw); lbOK {
-			token, err := h.Cache.Stash(originalRaw, filename)
+			token, err := h.Cache.Stash(originalRaw, filename, vaulted)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -533,7 +543,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 			render(w, r, ImportCrossConfirmPage(
 				"Characters",
 				fmt.Sprintf("This is a Lorebook JSON (%q, %d entries), not a Character Card — import it in World instead?", who, len(entries)),
-				"/world/import/resume", "/characters", token,
+				"/world/import/resume", vaultHome("characters", vaulted), token,
 			))
 			return
 		}
@@ -543,6 +553,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 	if card.Name == "" {
 		card.Name = nameFromUpload(filename)
 	}
+	card.IsVaulted = vaulted
 	takenCards, err := existingCharacterNames(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -572,7 +583,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		lorebookID, err := createLorebookWithEntries(h.DB, uniqueName(bookName, taken), lorebookEntriesFromCharacterBook(*book))
+		lorebookID, err := createLorebookWithEntries(h.DB, uniqueName(bookName, taken), lorebookEntriesFromCharacterBook(*book), vaulted)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("imported character %q but its embedded lorebook failed: %v", card.Name, err), http.StatusInternalServerError)
 			return
@@ -585,6 +596,10 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 				_ = db.UpdateLorebookImagePath(h.DB, lorebookID, imagePath)
 			}
 		}
+	}
+	if vaulted {
+		http.Redirect(w, r, vaultHome("characters", true), http.StatusSeeOther)
+		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/characters/%d/edit", charID), http.StatusSeeOther)
 }

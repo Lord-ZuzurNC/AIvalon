@@ -34,13 +34,18 @@ func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
 func (h WorldHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	r.ParseMultipartForm(maxUploadSize)
-	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name"), IsVaulted: r.FormValue("vault") == "1"})
+	vaulted := r.FormValue("vault") == "1"
+	id, err := db.CreateLorebook(h.DB, db.Lorebook{Name: r.FormValue("name"), IsVaulted: vaulted})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if err := h.saveImage(w, r, id); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if vaulted {
+		http.Redirect(w, r, vaultHome("worlds", true), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)

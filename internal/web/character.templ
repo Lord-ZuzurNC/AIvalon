@@ -83,7 +83,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 				}
 			</article>
 		</dialog>
-		@ImportModal("character-import-modal", "/characters/import")
+		@ImportModal("character-import-modal", "/characters/import", false)
 		@tabsScript()
 	}
 }

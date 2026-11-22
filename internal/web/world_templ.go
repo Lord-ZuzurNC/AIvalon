@@ -191,7 +191,7 @@ func WorldPage(books []db.Lorebook, pager Pager) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ImportModal("lorebook-import-modal", "/world/import").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ImportModal("lorebook-import-modal", "/world/import", false).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

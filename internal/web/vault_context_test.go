@@ -164,13 +164,20 @@ func TestVaultTabCreateMakesVaultedCharacterAndLorebook(t *testing.T) {
 	var b strings.Builder
 	VaultListPage(v, "salt").Render(t.Context(), &b)
 	page := b.String()
-	for _, id := range []string{"session-modal", "character-modal", "lorebook-modal"} {
+	for _, id := range []string{"session-modal", "character-modal", "lorebook-modal", "character-import-modal-vault", "lorebook-import-modal-vault"} {
 		if !strings.Contains(page, `data-modal-id="`+id+`"`) || !strings.Contains(page, `<dialog id="`+id+`"`) {
 			t.Errorf("vault page lacks %s + button or dialog", id)
 		}
 	}
-	if strings.Count(page, `<input type="hidden" name="vault" value="1">`) != 3 {
-		t.Errorf("want 3 vault=1 create forms, got %d", strings.Count(page, `name="vault" value="1"`))
+	// 3 create forms (session/character/lorebook) + 2 import forms
+	// (computer tab + URL tab) each for Characters and Worlds = 7.
+	if n := strings.Count(page, `<input type="hidden" name="vault" value="1">`); n != 7 {
+		t.Errorf("want 7 vault=1 forms (3 create + 4 import), got %d", n)
+	}
+	// Each ImportModal has 2 forms (computer tab + URL tab) sharing
+	// one action.
+	if strings.Count(page, `action="/characters/import"`) != 2 || strings.Count(page, `action="/world/import"`) != 2 {
+		t.Error("vault page should post its import forms to the same /characters/import and /world/import routes as the plain pages")
 	}
 }
 

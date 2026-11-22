@@ -311,9 +311,11 @@ type vaultItem struct {
 // {kind} segment of its /vault/{kind}/{id}/out route.
 // Create is the id of the dialog its "+" opens ("" = no "+", the
 // Chats tab with no backend profile to start a session on yet).
+// Import is the id of the dialog its "⤓" opens ("" = no import —
+// only Characters/Worlds get one; a session isn't a file you import).
 type vaultTab struct {
-	Kind, Label, Noun, Empty, Create string
-	Items                            []vaultItem
+	Kind, Label, Noun, Empty, Create, Import string
+	Items                                    []vaultItem
 }
 
 func vaultTabs(v VaultContents) []vaultTab {
@@ -323,6 +325,7 @@ func vaultTabs(v VaultContents) []vaultTab {
 		{Kind: "worlds", Label: "Worlds", Noun: "lorebook", Empty: "No hidden lorebooks — move one here from its options menu in Worlds (list view)."},
 	}
 	tabs[1].Create, tabs[2].Create = "character-modal", "lorebook-modal"
+	tabs[1].Import, tabs[2].Import = "character-import-modal-vault", "lorebook-import-modal-vault"
 	if len(v.Profiles) > 0 {
 		tabs[0].Create = "session-modal"
 	}
@@ -366,9 +369,14 @@ templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind s
 			</div>
 			for _, t := range vaultTabs(v) {
 				<div data-tab-panel={ t.Kind } role="tabpanel" hidden?={ activeTab != t.Kind }>
-					if t.Create != "" {
+					if t.Create != "" || t.Import != "" {
 						<div class="vault-tab-actions">
-							<button type="button" class="create-button" aria-label={ "New hidden " + t.Noun } title={ "New hidden " + t.Noun } data-modal-id={ t.Create } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+							if t.Import != "" {
+								<button type="button" class="import-trigger" aria-label={ "Import a hidden " + t.Noun } title={ "Import a hidden " + t.Noun } data-modal-id={ t.Import } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">⤓</button>
+							}
+							if t.Create != "" {
+								<button type="button" class="create-button" aria-label={ "New hidden " + t.Noun } title={ "New hidden " + t.Noun } data-modal-id={ t.Create } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+							}
 						</div>
 					}
 					if len(t.Items) == 0 {
@@ -421,6 +429,8 @@ templ VaultListPageWithError(v VaultContents, salt, activeTab, errMsg, errKind s
 			</article>
 		</dialog>
 		@lorebookCreateModal(true)
+		@ImportModal("character-import-modal-vault", "/characters/import", true)
+		@ImportModal("lorebook-import-modal-vault", "/world/import", true)
 		@tabsScript()
 		@vaultPinHashScript()
 		@pinPadScript()

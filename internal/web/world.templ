@@ -54,7 +54,7 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 		}
 
 		@lorebookCreateModal(false)
-		@ImportModal("lorebook-import-modal", "/world/import")
+		@ImportModal("lorebook-import-modal", "/world/import", false)
 		@tabsScript()
 	}
 }

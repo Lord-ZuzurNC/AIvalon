@@ -235,7 +235,7 @@ func CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.CharacterC
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = ImportModal("character-import-modal", "/characters/import").Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = ImportModal("character-import-modal", "/characters/import", false).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -652,7 +652,12 @@ templ tabsScript() {
 // tabs post to the same action, so the cross-import confirmation and
 // every other bit of handlers_import.go's pipeline apply identically
 // regardless of which tab was used.
-templ ImportModal(modalID, action string) {
+//
+// vaulted mirrors characterCardForm/lorebookCreateModal's own "vault"
+// field — the Vault page's Characters/Worlds tabs reuse this exact
+// dialog (their own instance, own modalID) with vaulted=true so
+// whatever gets imported lands already hidden, same as their "+".
+templ ImportModal(modalID, action string, vaulted bool) {
 	<dialog id={ modalID }>
 		<article>
 			<header>
@@ -666,12 +671,18 @@ templ ImportModal(modalID, action string) {
 				</div>
 				<div data-tab-panel="computer">
 					<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
+						if vaulted {
+							<input type="hidden" name="vault" value="1"/>
+						}
 						<input type="file" name="file" accept=".json,application/json,.png,image/png" required="required"/>
 						<button type="submit">Import</button>
 					</form>
 				</div>
 				<div data-tab-panel="url" hidden="hidden">
 					<form method="post" action={ templ.URL(action) }>
+						if vaulted {
+							<input type="hidden" name="vault" value="1"/>
+						}
 						<label>
 							URL
 							<input type="url" name="url" placeholder="https://example.com/card.json or .png" required="required"/>
