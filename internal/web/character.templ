@@ -20,7 +20,7 @@ func truncate(s string, n int) string {
 }
 
 templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
-	@Layout("Character", "Character") {
+	@Layout("Character", "Characters") {
 		@PageHeaderWithViewAndCreate("Character", "character", "character-import-modal", "character-modal", "Add a character")
 		if len(cards) == 0 {
 			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
@@ -50,6 +50,7 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 								<td>{ truncate(c.Description, 120) }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
+										{Label: "Hide into vault", Action: fmt.Sprintf("/vault/characters/%d/in", c.ID)},
 										{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
 									})
 								</td>

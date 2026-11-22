@@ -125,18 +125,65 @@ func (h VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 }
 
 // renderList is shared by Setup and Unlock's success path: both end
-// with the vaulted session list, not a redirect to GET /vault — a
+// with the vault's contents, not a redirect to GET /vault — a
 // redirect would land back on the always-re-prompt unlock form (see
 // Show's comment) instead of actually showing what unlocking was for.
-// salt is threaded through so the list's own per-session "remove from
+// salt is threaded through so the list's own per-item "remove from
 // vault" forms can hash their PIN client-side too.
 func (h VaultHandlers) renderList(w http.ResponseWriter, r *http.Request, salt string) {
-	sessions, err := db.ListVaultedSessions(h.DB)
+	v, err := loadVaultContents(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, VaultListPage(sessions, salt))
+	render(w, r, VaultListPage(v, salt))
+}
+
+// VaultContents is everything hidden in the vault, one slice per tab.
+type VaultContents struct {
+	Sessions   []db.Session
+	Characters []db.CharacterCard
+	Lorebooks  []db.Lorebook
+}
+
+func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
+	var v VaultContents
+	var err error
+	if v.Sessions, err = db.ListVaultedSessions(sqlDB); err != nil {
+		return v, err
+	}
+	if v.Characters, err = db.ListVaultedCharacterCards(sqlDB); err != nil {
+		return v, err
+	}
+	v.Lorebooks, err = db.ListVaultedLorebooks(sqlDB)
+	return v, err
+}
+
+// vaultKinds maps the {kind} path segment of /vault/{kind}/{id}/in|out
+// to that entity's setter, the list page it lives on outside the vault,
+// and the noun used in the wrong-PIN message.
+var vaultKinds = map[string]struct {
+	set  func(*sql.DB, int64, bool) error
+	home string
+	noun string
+}{
+	"chats":      {db.SetSessionVaulted, "/chat", "session"},
+	"characters": {db.SetCharacterCardVaulted, "/characters", "character"},
+	"worlds":     {db.SetLorebookVaulted, "/world", "lorebook"},
+}
+
+// renderVaultLocked is the refusal every vaulted item's own direct URL
+// gives a browser that hasn't unlocked the vault: 403 plus the unlock
+// pad — hiding an item from its browse list alone would be cosmetic,
+// not real protection, if /characters/{id}/edit still opened it.
+func renderVaultLocked(w http.ResponseWriter, r *http.Request, sqlDB *sql.DB) {
+	salt := ""
+	if stored, err := db.GetVaultPIN(sqlDB); err == nil {
+		salt = stored.PINSalt
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	VaultUnlockPage("", salt).Render(r.Context(), w)
 }
 
 // Lock clears this browser's unlock cookie — an explicit "re-lock
@@ -146,20 +193,25 @@ func (h VaultHandlers) Lock(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chat", http.StatusSeeOther)
 }
 
-// MoveIn hides a session in the vault — no PIN needed going in, per
+// MoveIn hides a session/character/lorebook in the vault — no PIN needed going in, per
 // Lord's own framing: entering is just "hide this", leaving is the
 // part that needs to prove it's really you.
 func (h VaultHandlers) MoveIn(w http.ResponseWriter, r *http.Request) {
+	kind, ok := vaultKinds[r.PathValue("kind")]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	if err := db.SetSessionVaulted(h.DB, id, true); err != nil {
+	if err := kind.set(h.DB, id, true); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/chat", http.StatusSeeOther)
+	http.Redirect(w, r, kind.home, http.StatusSeeOther)
 }
 
 // MoveOut requires the PIN to be retyped — checked fresh against the
@@ -169,6 +221,12 @@ func (h VaultHandlers) MoveIn(w http.ResponseWriter, r *http.Request) {
 // different confirmations per Lord's spec. Like Unlock, it's a
 // pre-hashed pin_hash that arrives here, not the raw PIN.
 func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
+	kindKey := r.PathValue("kind")
+	kind, ok := vaultKinds[kindKey]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", http.StatusBadRequest)
@@ -187,18 +245,18 @@ func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
 	pinHash := r.FormValue("pin_hash")
 	if pinHash == "" || !verifyHash(pinHash, stored.PINHash) {
 		h.Gate.recordFailure()
-		sessions, err := db.ListVaultedSessions(h.DB)
+		v, err := loadVaultContents(h.DB)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		render(w, r, VaultListPageWithError(sessions, stored.PINSalt, "Wrong PIN — session stays in the vault.", id))
+		render(w, r, VaultListPageWithError(v, stored.PINSalt, "Wrong PIN — "+kind.noun+" stays in the vault.", kindKey, id))
 		return
 	}
 	h.Gate.recordSuccess()
-	if err := db.SetSessionVaulted(h.DB, id, false); err != nil {
+	if err := kind.set(h.DB, id, false); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/chat", http.StatusSeeOther)
+	http.Redirect(w, r, kind.home, http.StatusSeeOther)
 }

@@ -1,10 +1,6 @@
 package web
 
-import (
-	"fmt"
-
-	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
-)
+import "fmt"
 
 // vaultPinHashScript hashes a PIN client-side (SHA-256 of salt+pin via
 // the Web Crypto API) before any <form class="pin-form"> on the page
@@ -232,7 +228,7 @@ templ lockIcon() {
 }
 
 templ VaultSetupPage(errMsg, salt string) {
-	@Layout("Vault", "Chat") {
+	@Layout("Vault", "Vault") {
 		<h1>Vault</h1>
 		<p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>
 		if errMsg != "" {
@@ -258,7 +254,7 @@ templ VaultSetupPage(errMsg, salt string) {
 }
 
 templ VaultUnlockPage(errMsg, salt string) {
-	@Layout("Vault", "Chat") {
+	@Layout("Vault", "Vault") {
 		<h1>Vault</h1>
 		<dialog class="pin-pad-modal" data-autoopen="true" data-cancel-redirect="/chat">
 			<form method="post" action="/vault/unlock" class="pin-form">
@@ -272,18 +268,55 @@ templ VaultUnlockPage(errMsg, salt string) {
 	}
 }
 
-templ VaultListPage(sessions []db.Session, salt string) {
-	@VaultListPageWithError(sessions, salt, "", 0)
+templ VaultListPage(v VaultContents, salt string) {
+	@VaultListPageWithError(v, salt, "", "", 0)
 }
 
-// errSessionID identifies which vaulted session's own Unhide dialog a
-// wrong-PIN retry belongs to (0 means no error) — MoveOut re-renders
-// this whole page on failure, so only *that* session's dialog gets
-// reopened (data-autoopen) with the error message inside it; every
-// other session's dialog stays closed as normal.
-templ VaultListPageWithError(sessions []db.Session, salt, errMsg string, errSessionID int64) {
-	@Layout("Vault", "Chat") {
-		@BackLink("/chat", "Chat")
+// vaultItem is one row of a Vault tab, whatever its kind.
+type vaultItem struct {
+	ID    int64
+	Title string
+	Href  string
+}
+
+// vaultTab is one of the Vault page's three tabs; Kind is also the
+// {kind} segment of its /vault/{kind}/{id}/out route.
+type vaultTab struct {
+	Kind, Label, Noun, Empty string
+	Items                    []vaultItem
+}
+
+func vaultTabs(v VaultContents) []vaultTab {
+	tabs := []vaultTab{
+		{Kind: "chats", Label: "Chats", Noun: "session", Empty: "Nothing in the vault — move a session here from its own options menu in Chats."},
+		{Kind: "characters", Label: "Characters", Noun: "character", Empty: "No hidden characters — move one here from its options menu in Characters (list view)."},
+		{Kind: "worlds", Label: "Worlds", Noun: "lorebook", Empty: "No hidden lorebooks — move one here from its options menu in Worlds (list view)."},
+	}
+	for _, s := range v.Sessions {
+		tabs[0].Items = append(tabs[0].Items, vaultItem{s.ID, s.Title, fmt.Sprintf("/chat/%d", s.ID)})
+	}
+	for _, c := range v.Characters {
+		tabs[1].Items = append(tabs[1].Items, vaultItem{c.ID, c.Name, fmt.Sprintf("/characters/%d/edit", c.ID)})
+	}
+	for _, l := range v.Lorebooks {
+		tabs[2].Items = append(tabs[2].Items, vaultItem{l.ID, l.Name, fmt.Sprintf("/world/%d", l.ID)})
+	}
+	return tabs
+}
+
+// errKind+errID identify which item's own Unhide dialog a wrong-PIN
+// retry belongs to (errKind "" means no error) — MoveOut re-renders
+// this whole page on failure, so only *that* item's dialog gets
+// reopened (data-autoopen) with the error message inside it, and its
+// tab is the one shown (a dialog inside a [hidden] panel would open
+// invisibly). The kind is part of the key because a character and a
+// session can share the same numeric id.
+templ VaultListPageWithError(v VaultContents, salt, errMsg, errKind string, errID int64) {
+	{{ activeTab := errKind }}
+	if activeTab == "" {
+		{{ activeTab = "chats" }}
+	}
+	@Layout("Vault", "Vault") {
 		<div class="vault-heading">
 			<h1>Vault</h1>
 			<form method="post" action="/vault/lock" class="vault-lock-form">
@@ -292,31 +325,43 @@ templ VaultListPageWithError(sessions []db.Session, salt, errMsg string, errSess
 				</button>
 			</form>
 		</div>
-		if len(sessions) == 0 {
-			<p><em>Nothing in the vault — move a session here from its own options menu in Chat.</em></p>
-		} else {
-			<ul class="list-with-actions">
-				for _, s := range sessions {
-					{{ dialogID := fmt.Sprintf("unhide-modal-%d", s.ID) }}
-					{{ isErrTarget := s.ID == errSessionID }}
-					<li>
-						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
-						<button type="button" data-open-dialog={ dialogID }>Unhide</button>
-						<dialog id={ dialogID } class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", isErrTarget) }>
-							<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%d/out", s.ID)) } class="vault-out-form pin-form">
-								<input type="hidden" name="salt" value={ salt }/>
-								<input type="hidden" name="pin_hash"/>
-								if isErrTarget {
-									@pinPad("pin_hash", "PIN to unhide this session", dialogID, errMsg)
-								} else {
-									@pinPad("pin_hash", "PIN to unhide this session", dialogID, "")
-								}
-							</form>
-						</dialog>
-					</li>
+		<div class="tabs">
+			<div role="tablist" class="tab-list">
+				for _, t := range vaultTabs(v) {
+					<button type="button" role="tab" class="tab-btn" data-tab-target={ t.Kind } aria-selected={ fmt.Sprintf("%t", activeTab == t.Kind) } onclick="switchTabs(this)">{ fmt.Sprintf("%s (%d)", t.Label, len(t.Items)) }</button>
 				}
-			</ul>
-		}
+			</div>
+			for _, t := range vaultTabs(v) {
+				<div data-tab-panel={ t.Kind } role="tabpanel" hidden?={ activeTab != t.Kind }>
+					if len(t.Items) == 0 {
+						<p><em>{ t.Empty }</em></p>
+					} else {
+						<ul class="list-with-actions">
+							for _, it := range t.Items {
+								{{ dialogID := fmt.Sprintf("unhide-modal-%s-%d", t.Kind, it.ID) }}
+								{{ isErrTarget := t.Kind == errKind && it.ID == errID }}
+								<li>
+									<a href={ templ.URL(it.Href) }>{ it.Title }</a>
+									<button type="button" data-open-dialog={ dialogID }>Unhide</button>
+									<dialog id={ dialogID } class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", isErrTarget) }>
+										<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%s/%d/out", t.Kind, it.ID)) } class="vault-out-form pin-form">
+											<input type="hidden" name="salt" value={ salt }/>
+											<input type="hidden" name="pin_hash"/>
+											if isErrTarget {
+												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, errMsg)
+											} else {
+												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, "")
+											}
+										</form>
+									</dialog>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			}
+		</div>
+		@tabsScript()
 		@vaultPinHashScript()
 		@pinPadScript()
 	}

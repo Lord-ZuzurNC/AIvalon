@@ -12,6 +12,7 @@ import (
 type CharacterHandlers struct {
 	DB    *sql.DB
 	Cache *ImportCache
+	Gate  *VaultGate
 }
 
 func (h CharacterHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,10 @@ func (h CharacterHandlers) EditForm(w http.ResponseWriter, r *http.Request) {
 	card, err := db.GetCharacterCard(h.DB, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if card.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	cards, pager, err := h.listPage(r)
@@ -238,7 +243,7 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Character", card.Name, fmt.Sprintf("/characters/%d/delete", id), "/characters", sessions))
+		render(w, r, DeleteConfirmPage("Characters", card.Name, fmt.Sprintf("/characters/%d/delete", id), "/characters", sessions))
 		return
 	}
 	// Gallery rows cascade-delete with the character (ON DELETE

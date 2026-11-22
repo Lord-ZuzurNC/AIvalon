@@ -33,18 +33,32 @@ type CharacterCard struct {
 	// ChatCount is populated by ListCharacterCards only: how many
 	// sessions include this card (and would be deleted along with it).
 	ChatCount int
+	// IsVaulted hides the card from ListCharacterCards (browsing) only —
+	// GetCharacterCard and ListCharacterCardsForSession still return it,
+	// so a chat already using it keeps working.
+	IsVaulted bool
 }
 
-// ListCharacterCards returns one page of cards, ordered by name. limit < 0
-// means "no limit" — see ListLorebooks.
+// ListCharacterCards returns one page of non-vaulted cards, ordered by
+// name. limit < 0 means "no limit" — see ListLorebooks.
 func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) {
+	return listCharacterCards(db, false, limit, offset)
+}
+
+// ListVaultedCharacterCards is the vault's own character list.
+func ListVaultedCharacterCards(db *sql.DB) ([]CharacterCard, error) {
+	return listCharacterCards(db, true, -1, 0)
+}
+
+func listCharacterCards(db *sql.DB, vaulted bool, limit, offset int) ([]CharacterCard, error) {
 	rows, err := db.Query(`
 		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, ''),
-			(SELECT COUNT(*) FROM session_characters sc WHERE sc.character_card_id = cc.id)
+			(SELECT COUNT(*) FROM session_characters sc WHERE sc.character_card_id = cc.id), cc.is_vaulted
 		FROM character_cards cc
 		LEFT JOIN character_card_images cci ON cci.id = cc.primary_image_id
+		WHERE cc.is_vaulted = ?
 		ORDER BY cc.name, cc.id
-		LIMIT ? OFFSET ?`, limit, offset)
+		LIMIT ? OFFSET ?`, vaulted, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("listing character cards: %w", err)
 	}
@@ -53,7 +67,7 @@ func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) 
 	var cards []CharacterCard
 	for rows.Next() {
 		var c CharacterCard
-		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.ChatCount); err != nil {
+		if err := rows.Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.ChatCount, &c.IsVaulted); err != nil {
 			return nil, fmt.Errorf("scanning character card: %w", err)
 		}
 		cards = append(cards, c)
@@ -63,7 +77,7 @@ func ListCharacterCards(db *sql.DB, limit, offset int) ([]CharacterCard, error) 
 
 func CountCharacterCards(db *sql.DB) (int, error) {
 	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM character_cards`).Scan(&n); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM character_cards WHERE is_vaulted = 0`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("counting character cards: %w", err)
 	}
 	return n, nil
@@ -72,11 +86,11 @@ func CountCharacterCards(db *sql.DB) (int, error) {
 func GetCharacterCard(db *sql.DB, id int64) (CharacterCard, error) {
 	var c CharacterCard
 	err := db.QueryRow(`
-		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, '')
+		SELECT cc.id, cc.name, cc.description, cc.personality, cc.scenario, cc.first_message, cc.example_messages, cc.author_note, COALESCE(cci.image_path, ''), cc.is_vaulted
 		FROM character_cards cc
 		LEFT JOIN character_card_images cci ON cci.id = cc.primary_image_id
 		WHERE cc.id = ?`, id,
-	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath)
+	).Scan(&c.ID, &c.Name, &c.Description, &c.Personality, &c.Scenario, &c.FirstMessage, &c.ExampleMessages, &c.AuthorNote, &c.ImagePath, &c.IsVaulted)
 	if err != nil {
 		return CharacterCard{}, fmt.Errorf("getting character card %d: %w", id, err)
 	}

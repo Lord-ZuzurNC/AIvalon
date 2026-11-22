@@ -13,6 +13,7 @@ import (
 type WorldHandlers struct {
 	DB    *sql.DB
 	Cache *ImportCache
+	Gate  *VaultGate
 }
 
 func (h WorldHandlers) List(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +50,10 @@ func (h WorldHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	book, entries, err := h.loadBook(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if book.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	render(w, r, LorebookPage(book, entries, nil, newPager(r, fmt.Sprintf("/world/%d", book.ID), len(entries), listPageSize)))
@@ -116,7 +121,7 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("World", book.Name, fmt.Sprintf("/world/%d/delete", id), "/world", sessions))
+		render(w, r, DeleteConfirmPage("Worlds", book.Name, fmt.Sprintf("/world/%d/delete", id), "/world", sessions))
 		return
 	}
 	orphanedImages, err := db.DeleteLorebook(h.DB, id)
@@ -135,6 +140,10 @@ func (h WorldHandlers) EntryEditForm(w http.ResponseWriter, r *http.Request) {
 	book, entries, err := h.loadBook(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if book.IsVaulted && !h.Gate.Unlocked(r) {
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	entryID, err := strconv.ParseInt(r.PathValue("entryID"), 10, 64)

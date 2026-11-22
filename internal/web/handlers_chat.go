@@ -141,11 +141,7 @@ func (h ChatHandlers) Show(w http.ResponseWriter, r *http.Request) {
 	// hiding it from /chat's list is cosmetic, not real: anyone who
 	// knows or bookmarks /chat/{id} could still open it straight away.
 	if session.IsVaulted && !h.Gate.Unlocked(r) {
-		salt := ""
-		if stored, err := db.GetVaultPIN(h.DB); err == nil {
-			salt = stored.PINSalt
-		}
-		render(w, r, VaultUnlockPage("", salt))
+		renderVaultLocked(w, r, h.DB)
 		return
 	}
 	display, err := h.displayMessages(session, messages)

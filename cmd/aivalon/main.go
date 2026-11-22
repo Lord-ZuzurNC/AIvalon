@@ -77,7 +77,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 		http.Redirect(w, r, "/chat", http.StatusFound)
 	})
 
-	world := web.WorldHandlers{DB: sqlDB, Cache: importCache}
+	world := web.WorldHandlers{DB: sqlDB, Cache: importCache, Gate: vaultGate}
 	mux.HandleFunc("GET /world", world.List)
 	mux.HandleFunc("POST /world", world.Create)
 	mux.HandleFunc("POST /world/import", world.ImportLorebookJSON)
@@ -114,7 +114,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /settings/image-presets/{id}", settings.ImagePresetUpdate)
 	mux.HandleFunc("POST /settings/image-presets/{id}/delete", settings.ImagePresetDelete)
 
-	character := web.CharacterHandlers{DB: sqlDB, Cache: importCache}
+	character := web.CharacterHandlers{DB: sqlDB, Cache: importCache, Gate: vaultGate}
 	mux.HandleFunc("GET /characters", character.List)
 	mux.HandleFunc("POST /characters", character.Create)
 	mux.HandleFunc("POST /characters/import", character.ImportCharacterJSON)
@@ -146,8 +146,9 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /vault/setup", vault.Setup)
 	mux.HandleFunc("POST /vault/unlock", vault.Unlock)
 	mux.HandleFunc("POST /vault/lock", vault.Lock)
-	mux.HandleFunc("POST /vault/{id}/in", vault.MoveIn)
-	mux.HandleFunc("POST /vault/{id}/out", vault.MoveOut)
+	// {kind} is chats|characters|worlds — see vaultKinds.
+	mux.HandleFunc("POST /vault/{kind}/{id}/in", vault.MoveIn)
+	mux.HandleFunc("POST /vault/{kind}/{id}/out", vault.MoveOut)
 
 	return mux
 }

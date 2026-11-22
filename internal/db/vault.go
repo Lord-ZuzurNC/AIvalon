@@ -54,6 +54,22 @@ func SetSessionVaulted(db *sql.DB, sessionID int64, vaulted bool) error {
 	return nil
 }
 
+func SetCharacterCardVaulted(db *sql.DB, id int64, vaulted bool) error {
+	_, err := db.Exec(`UPDATE character_cards SET is_vaulted = ? WHERE id = ?`, vaulted, id)
+	if err != nil {
+		return fmt.Errorf("setting character card %d vaulted=%v: %w", id, vaulted, err)
+	}
+	return nil
+}
+
+func SetLorebookVaulted(db *sql.DB, id int64, vaulted bool) error {
+	_, err := db.Exec(`UPDATE lorebooks SET is_vaulted = ? WHERE id = ?`, vaulted, id)
+	if err != nil {
+		return fmt.Errorf("setting lorebook %d vaulted=%v: %w", id, vaulted, err)
+	}
+	return nil
+}
+
 // ListVaultedSessions is the vault's own session list — the mirror of
 // ListSessions' "WHERE is_vaulted = 0" filter.
 func ListVaultedSessions(db *sql.DB) ([]Session, error) {

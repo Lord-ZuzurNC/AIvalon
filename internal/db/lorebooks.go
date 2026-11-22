@@ -23,6 +23,9 @@ type Lorebook struct {
 	// ChatCount is populated by ListLorebooks only: how many sessions
 	// use this book (and would be deleted along with it).
 	ChatCount int
+	// IsVaulted mirrors CharacterCard.IsVaulted: hidden from
+	// ListLorebooks only, GetLorebook still resolves it.
+	IsVaulted bool
 }
 
 // LorebookEntry.TriggerStrategy is "constant" (always included whenever
@@ -48,14 +51,25 @@ type LorebookEntry struct {
 // ListLorebooks returns one page of lorebooks, ordered by name. limit < 0
 // means "no limit" (SQLite's own LIMIT -1), for callers that need every
 // row (name de-duplication on import, the new-session picker).
+// Vaulted lorebooks are excluded (see ListVaultedLorebooks).
 func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
+	return listLorebooks(db, false, limit, offset)
+}
+
+// ListVaultedLorebooks is the vault's own lorebook list.
+func ListVaultedLorebooks(db *sql.DB) ([]Lorebook, error) {
+	return listLorebooks(db, true, -1, 0)
+}
+
+func listLorebooks(db *sql.DB, vaulted bool, limit, offset int) ([]Lorebook, error) {
 	rows, err := db.Query(`
-		SELECT l.id, l.name, l.image_path, COUNT(e.id), (SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id)
+		SELECT l.id, l.name, l.image_path, COUNT(e.id), (SELECT COUNT(*) FROM sessions s WHERE s.lorebook_id = l.id), l.is_vaulted
 		FROM lorebooks l
 		LEFT JOIN lorebook_entries e ON e.lorebook_id = l.id
+		WHERE l.is_vaulted = ?
 		GROUP BY l.id, l.name, l.image_path
 		ORDER BY l.name, l.id
-		LIMIT ? OFFSET ?`, limit, offset)
+		LIMIT ? OFFSET ?`, vaulted, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("listing lorebooks: %w", err)
 	}
@@ -64,7 +78,7 @@ func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
 	var books []Lorebook
 	for rows.Next() {
 		var l Lorebook
-		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount, &l.ChatCount); err != nil {
+		if err := rows.Scan(&l.ID, &l.Name, &l.ImagePath, &l.EntryCount, &l.ChatCount, &l.IsVaulted); err != nil {
 			return nil, fmt.Errorf("scanning lorebook: %w", err)
 		}
 		books = append(books, l)
@@ -74,7 +88,7 @@ func ListLorebooks(db *sql.DB, limit, offset int) ([]Lorebook, error) {
 
 func CountLorebooks(db *sql.DB) (int, error) {
 	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM lorebooks`).Scan(&n); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM lorebooks WHERE is_vaulted = 0`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("counting lorebooks: %w", err)
 	}
 	return n, nil
@@ -82,7 +96,7 @@ func CountLorebooks(db *sql.DB) (int, error) {
 
 func GetLorebook(db *sql.DB, id int64) (Lorebook, error) {
 	var l Lorebook
-	err := db.QueryRow(`SELECT id, name, image_path FROM lorebooks WHERE id = ?`, id).Scan(&l.ID, &l.Name, &l.ImagePath)
+	err := db.QueryRow(`SELECT id, name, image_path, is_vaulted FROM lorebooks WHERE id = ?`, id).Scan(&l.ID, &l.Name, &l.ImagePath, &l.IsVaulted)
 	if err != nil {
 		return Lorebook{}, fmt.Errorf("getting lorebook %d: %w", id, err)
 	}

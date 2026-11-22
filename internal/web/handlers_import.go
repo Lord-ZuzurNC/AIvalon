@@ -454,7 +454,7 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 				who = nameFromUpload(filename)
 			}
 			render(w, r, ImportCrossConfirmPage(
-				"World",
+				"Worlds",
 				fmt.Sprintf("This is a Character Card JSON (%q), not a Lorebook — import it in Character instead?", who),
 				"/characters/import/resume", "/world", token,
 			))
@@ -531,7 +531,7 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 			}
 			who := nameFromUpload(filename)
 			render(w, r, ImportCrossConfirmPage(
-				"Character",
+				"Characters",
 				fmt.Sprintf("This is a Lorebook JSON (%q, %d entries), not a Character Card — import it in World instead?", who, len(entries)),
 				"/world/import/resume", "/characters", token,
 			))

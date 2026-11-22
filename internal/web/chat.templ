@@ -65,14 +65,13 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 }
 
 templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
-	@Layout("Chat", "Chat") {
+	@Layout("Chat", "Chats") {
 		if len(profiles) == 0 {
 			<div class="page-header">
 				<h1>Chat</h1>
-				<a href="/vault" class="vault-trigger" aria-label="Vault" title="Vault">🔒</a>
 			</div>
 		} else {
-			@PageHeaderWithVaultAndCreate("Chat", "session-modal", "New session")
+			@PageHeaderWithCreate("Chat", "session-modal", "New session")
 		}
 		if len(sessions) == 0 {
 			<p><em>No sessions yet — start one below.</em></p>
@@ -84,7 +83,7 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
 							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
-							{Label: "Hide into vault", Action: fmt.Sprintf("/vault/%d/in", s.ID)},
+							{Label: "Hide into vault", Action: fmt.Sprintf("/vault/chats/%d/in", s.ID)},
 							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
 						})
 					</li>
@@ -246,7 +245,7 @@ templ imageIcon() {
 }
 
 templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption, info SessionInfo, imageForm ImageGenForm) {
-	@Layout(session.Title, "Chat") {
+	@Layout(session.Title, "Chats") {
 		<div
 			if session.BackgroundImagePath != "" {
 				style={ fmt.Sprintf("background-image:url(/static/%s);background-size:cover;background-position:center;background-attachment:fixed;", session.BackgroundImagePath) }

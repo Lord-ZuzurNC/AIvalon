@@ -225,8 +225,12 @@ func TestSettingsImagePresetCRUD(t *testing.T) {
 	// visible error, submitted values kept, nothing written.
 	cyber, _ := presetByName(t, f, "Cyberpunk")
 	for name, post := range map[string]func() *httptest.ResponseRecorder{
-		"create": func() *httptest.ResponseRecorder { return postForm(h.ImagePresetCreate, 0, presetForm("cyberpunk", 99)) },
-		"update": func() *httptest.ResponseRecorder { return postForm(h.ImagePresetUpdate, p.ID, presetForm("CYBERPUNK", 99)) },
+		"create": func() *httptest.ResponseRecorder {
+			return postForm(h.ImagePresetCreate, 0, presetForm("cyberpunk", 99))
+		},
+		"update": func() *httptest.ResponseRecorder {
+			return postForm(h.ImagePresetUpdate, p.ID, presetForm("CYBERPUNK", 99))
+		},
 	} {
 		w = post()
 		body := w.Body.String()
