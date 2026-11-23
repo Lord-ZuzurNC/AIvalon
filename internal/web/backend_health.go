@@ -64,19 +64,31 @@ func hostPort(baseURL string) (host, port string, err error) {
 	return host, port, nil
 }
 
-// testBackendConnection is the "Test" button: an actual HTTP request
-// against the OpenAI-compatible /models endpoint most backends (an
-// OpenAI-style proxy, Ollama, llama.cpp's server, LM Studio, ...)
-// expose, carrying the API key when one's set — a real exercise of
-// the whole path (DNS, TCP, TLS, auth), not just the socket-level
-// reachability pingBackend checks every 5s. Returns the listed
-// model IDs (nil if the response's shape couldn't be parsed — still
-// a success, since plenty of backends answer 200 without a standard
-// body) so the caller can offer them as picks (see TestResult/
-// modelFieldSelect) instead of free text.
+// testBackendConnection is the "Test" button: an actual HTTP request,
+// carrying the API key when one's set — a real exercise of the whole
+// path (DNS, TCP, TLS, auth), not just the socket-level reachability
+// pingBackend checks every 5s. Returns the listed model IDs (nil if
+// the response's shape couldn't be parsed — still a success, since
+// plenty of backends answer 200 without a standard body) so the
+// caller can offer them as picks (see TestResult/modelFieldSelect)
+// instead of free text.
+//
+// The probed path and response shape depend on profile.Kind:
+//   - "llm" (default): the OpenAI-compatible /models endpoint most
+//     backends (an OpenAI-style proxy, Ollama, llama.cpp's server,
+//     LM Studio, ...) expose, body shaped {"data": [{"id": ...}]}.
+//   - "image": A1111/Forge's /sdapi/v1/sd-models — A1111 never had a
+//     bare /models route, so reusing the llm path always 404s here.
+//     Body is a bare array of {"title": ...}; title (not model_name)
+//     is what BackendProfile.Model/override_settings.sd_model_checkpoint
+//     expects, so that's what gets returned.
 func testBackendConnection(profile db.BackendProfile) (models []string, err error) {
 	base := strings.TrimRight(profile.BaseURL, "/")
-	req, err := http.NewRequest(http.MethodGet, base+"/models", nil)
+	path := "/models"
+	if profile.Kind == "image" {
+		path = "/sdapi/v1/sd-models"
+	}
+	req, err := http.NewRequest(http.MethodGet, base+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
@@ -93,6 +105,22 @@ func testBackendConnection(profile db.BackendProfile) (models []string, err erro
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
+
+	if profile.Kind == "image" {
+		var items []struct {
+			Title string `json:"title"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+			return nil, nil
+		}
+		for _, it := range items {
+			if it.Title != "" {
+				models = append(models, it.Title)
+			}
+		}
+		return models, nil
+	}
+
 	var payload struct {
 		Data []struct {
 			ID string `json:"id"`

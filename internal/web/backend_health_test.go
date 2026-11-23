@@ -1,8 +1,13 @@
 package web
 
 import (
+	"encoding/json"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
 func TestHostPort(t *testing.T) {
@@ -63,5 +68,55 @@ func TestPingBackend(t *testing.T) {
 
 	if err := pingBackend("http://" + deadAddr + "/v1"); err == nil {
 		t.Fatal("expected ping to fail against a closed port")
+	}
+}
+
+// TestTestBackendConnection_ImageKind locks in the A1111/Forge-specific
+// path: no bare /models route exists on that API, so an "image" profile
+// must probe /sdapi/v1/sd-models and read "title" (not "model_name") —
+// title is the exact string override_settings.sd_model_checkpoint wants.
+func TestTestBackendConnection_ImageKind(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode([]map[string]string{
+			{"title": "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors", "model_name": "Juggernaut-XL_v9_RunDiffusionPhoto_v2"},
+		})
+	}))
+	defer srv.Close()
+
+	models, err := testBackendConnection(db.BackendProfile{Kind: "image", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("testBackendConnection: %v", err)
+	}
+	if gotPath != "/sdapi/v1/sd-models" {
+		t.Fatalf("probed path = %q, want /sdapi/v1/sd-models", gotPath)
+	}
+	if len(models) != 1 || models[0] != "Juggernaut-XL_v9_RunDiffusionPhoto_v2.safetensors" {
+		t.Fatalf("models = %v, want the one title", models)
+	}
+}
+
+// TestTestBackendConnection_LLMKind confirms the pre-existing /models
+// behaviour is untouched by the image-kind branch above.
+func TestTestBackendConnection_LLMKind(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]string{{"id": "llama3"}},
+		})
+	}))
+	defer srv.Close()
+
+	models, err := testBackendConnection(db.BackendProfile{Kind: "llm", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("testBackendConnection: %v", err)
+	}
+	if gotPath != "/models" {
+		t.Fatalf("probed path = %q, want /models", gotPath)
+	}
+	if len(models) != 1 || models[0] != "llama3" {
+		t.Fatalf("models = %v, want [llama3]", models)
 	}
 }
