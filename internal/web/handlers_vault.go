@@ -179,8 +179,17 @@ func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
 	if v.Lorebooks, err = db.ListVaultedLorebooks(sqlDB); err != nil {
 		return v, err
 	}
-	if v.Profiles, err = db.ListBackendProfiles(sqlDB); err != nil {
+	if profiles, err := db.ListBackendProfiles(sqlDB); err != nil {
 		return v, err
+	} else {
+		// Same LLM-only filter as ChatHandlers.List — a vaulted session
+		// still needs to chat, so an "image" kind backend has no business
+		// in this picker either.
+		for _, p := range profiles {
+			if p.Kind == "llm" {
+				v.Profiles = append(v.Profiles, p)
+			}
+		}
 	}
 	if v.Personas, err = db.ListPersonas(sqlDB); err != nil {
 		return v, err

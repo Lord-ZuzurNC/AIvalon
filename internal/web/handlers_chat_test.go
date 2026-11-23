@@ -1,6 +1,11 @@
 package web
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -156,5 +161,51 @@ func TestBuildNarratorMessagesKeepsSystemPromptOverBudget(t *testing.T) {
 	}
 	if dropped != 2 || len(msgs) != 2 || msgs[1].Content != "latest" {
 		t.Fatalf("expected system + latest only, got dropped=%d msgs=%+v", dropped, msgs)
+	}
+}
+
+// TestChatCreate_RejectsImageKindBackend is the regression test for
+// Lord's real report: nothing stopped a session from being created on
+// an "image" kind backend (A1111/Forge), which then has no chat API to
+// talk to at all. Create must reject it server-side even if a stale
+// client somehow still offers one (the picker itself is now filtered
+// too — see ChatHandlers.List's llmProfiles filter).
+func TestChatCreate_RejectsImageKindBackend(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	imageProfile, err := db.CreateBackendProfile(sqlDB, db.BackendProfile{Name: "Forge", Kind: "image", BaseURL: "http://127.0.0.1:7860"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	llmProfile, err := db.CreateBackendProfile(sqlDB, db.BackendProfile{Name: "Ollama", Kind: "llm", BaseURL: "http://127.0.0.1:11434"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := ChatHandlers{DB: sqlDB}
+	create := func(profileID int64) *httptest.ResponseRecorder {
+		form := url.Values{"backend_profile_id": {strconv.FormatInt(profileID, 10)}, "title": {"Test"}}
+		req := httptest.NewRequest(http.MethodPost, "/chat", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		h.Create(w, req)
+		return w
+	}
+
+	if w := create(imageProfile); w.Code != http.StatusBadRequest {
+		t.Fatalf("creating a session on an image-kind backend: status = %d, want 400", w.Code)
+	}
+	if n, err := db.CountSessions(sqlDB); err != nil || n != 0 {
+		t.Fatalf("an image-kind backend must not create a session, got n=%d err=%v", n, err)
+	}
+
+	if w := create(llmProfile); w.Code != http.StatusSeeOther {
+		t.Fatalf("creating a session on an llm-kind backend: status = %d, want 303", w.Code)
+	}
+	if n, err := db.CountSessions(sqlDB); err != nil || n != 1 {
+		t.Fatalf("expected exactly one session after the valid create, got n=%d err=%v", n, err)
 	}
 }

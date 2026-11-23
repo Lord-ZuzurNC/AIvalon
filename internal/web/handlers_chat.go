@@ -52,6 +52,16 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	// Chat's own picker is LLM-only: an "image" kind backend (A1111/
+	// Forge) doesn't speak the chat-completions shape a session needs
+	// to talk — see imageGenForm's mirror-image filter for the image
+	// side, and Create's Kind check for the server-side half of this.
+	llmProfiles := make([]db.BackendProfile, 0, len(profiles))
+	for _, p := range profiles {
+		if p.Kind == "llm" {
+			llmProfiles = append(llmProfiles, p)
+		}
+	}
 	personas, err := db.ListPersonas(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -67,7 +77,7 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatListPage(sessions, pager, profiles, personas, characters, lorebooks))
+	render(w, r, ChatListPage(sessions, pager, llmProfiles, personas, characters, lorebooks))
 }
 
 func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -75,6 +85,15 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	profileID, err := strconv.ParseInt(r.FormValue("backend_profile_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "a backend profile is required", http.StatusBadRequest)
+		return
+	}
+	// A session's backend must be able to chat — reject anything that
+	// isn't Kind "llm" (an "image" profile picked here is exactly the
+	// bug the picker filter above also exists to prevent at the UI
+	// level; this is the server-side half, same shape as GenerateImage's
+	// own Kind check for the image side).
+	if profile, err := db.GetBackendProfile(h.DB, profileID); err != nil || profile.Kind != "llm" {
+		http.Error(w, "pick an LLM backend profile", http.StatusBadRequest)
 		return
 	}
 	title := strings.TrimSpace(r.FormValue("title"))
