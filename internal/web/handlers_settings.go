@@ -280,6 +280,19 @@ func (h SettingsHandlers) updateAppSettings(w http.ResponseWriter, r *http.Reque
 	http.Redirect(w, r, "/settings", http.StatusSeeOther)
 }
 
+// imageProfiles filters to backend profiles an image preset (or the
+// in-chat generation dialog) can actually target — mirrors the
+// llm-only filter ChatHandlers.List applies for the opposite case.
+func imageProfiles(all []db.BackendProfile) []db.BackendProfile {
+	out := make([]db.BackendProfile, 0, len(all))
+	for _, p := range all {
+		if p.Kind == "image" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // render loads every list (all small) and renders the one Settings page
 // with whichever form (if any) is being edited — same page, independent
 // edit states. imagePresetErr is shown above the image preset form

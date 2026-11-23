@@ -440,7 +440,7 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 			}
 		</div>
 		if len(v.Profiles) > 0 {
-			@sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, true)
+			@sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, v.ImagePresets, true)
 		}
 		<dialog id="character-modal" open?={ editingCharacter != nil }>
 			<article>

@@ -77,7 +77,12 @@ func (h ChatHandlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ChatListPage(sessions, pager, llmProfiles, personas, characters, lorebooks))
+	presets, err := db.ListImagePresets(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	render(w, r, ChatListPage(sessions, pager, llmProfiles, personas, characters, lorebooks, presets))
 }
 
 func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +113,16 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 	if lorebookID, err := strconv.ParseInt(r.FormValue("lorebook_id"), 10, 64); err == nil {
 		session.LorebookID = lorebookID
 	}
+	// Default image preset (optional) — same validation SetImagePreset
+	// already applies: a 0/empty value is left unset (defaultImageParams),
+	// anything else must actually exist.
+	if presetID, err := strconv.ParseInt(r.FormValue("image_preset_id"), 10, 64); err == nil && presetID != 0 {
+		if _, err := db.GetImagePreset(h.DB, presetID); err != nil {
+			http.Error(w, "no such image preset", http.StatusBadRequest)
+			return
+		}
+		session.ImagePresetID = presetID
+	}
 
 	id, err := db.CreateSession(h.DB, session)
 	if err != nil {
@@ -134,7 +149,7 @@ func (h ChatHandlers) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if i == 0 {
 			if card, err := db.GetCharacterCard(h.DB, cardID); err == nil {
-				firstMessage = card.FirstMessage
+				firstMessage = substituteCardMacros(card.FirstMessage, h.resolvePersona(session).Name, card.Name)
 				firstCharacterID = cardID
 			}
 		}
@@ -859,9 +874,23 @@ func buildNarratorPrompt(template string, persona db.Persona, characters []db.Ch
 	prompt := template
 	prompt = strings.ReplaceAll(prompt, "{{persona_name}}", persona.Name)
 	prompt = strings.ReplaceAll(prompt, "{{persona_description}}", persona.Description)
-	prompt = strings.ReplaceAll(prompt, "{{characters}}", renderCharactersBlock(characters))
+	prompt = strings.ReplaceAll(prompt, "{{characters}}", renderCharactersBlock(characters, persona.Name))
 	prompt = strings.ReplaceAll(prompt, "{{lorebook}}", lorebookContent)
 	return prompt
+}
+
+// substituteCardMacros replaces the two SillyTavern/Character-Card-V2
+// macros card authors write directly into a card's own text fields
+// (Description, Personality, Scenario, AuthorNote, FirstMessage) —
+// distinct from buildNarratorPrompt's {{persona_name}}/{{characters}}/
+// etc., which are AIvalon's own system-prompt-TEMPLATE placeholders.
+// {{user}} becomes whoever's playing (the persona), {{char}} becomes
+// this specific card's own name — so a group chat substitutes a
+// different {{char}} per character, not one shared value.
+func substituteCardMacros(text, personaName, charName string) string {
+	text = strings.ReplaceAll(text, "{{user}}", personaName)
+	text = strings.ReplaceAll(text, "{{char}}", charName)
+	return text
 }
 
 // renderCharactersBlock is the only part of the prompt still built in Go
@@ -869,25 +898,26 @@ func buildNarratorPrompt(template string, persona db.Persona, characters []db.Ch
 // code, not a placeholder, and the empty case (act as GM, invent
 // characters) only makes sense as a substitute for an actual character
 // list, not something to leave as a template edit.
-func renderCharactersBlock(characters []db.CharacterCard) string {
+func renderCharactersBlock(characters []db.CharacterCard, personaName string) string {
 	if len(characters) == 0 {
 		return "No characters are predefined for this session. Act as the game master: " +
 			"introduce and voice whichever characters the scene naturally calls for, inventing " +
 			"names and personalities as you go, and keep each one consistent once introduced " +
 			"rather than reinventing them from one reply to the next."
 	}
+	macro := func(c db.CharacterCard, text string) string { return substituteCardMacros(text, personaName, c.Name) }
 	var b strings.Builder
 	b.WriteString("These are the fixed characters who live in this world, as described by their character cards:")
 	for _, c := range characters {
-		fmt.Fprintf(&b, "\n%s: %s", c.Name, c.Description)
+		fmt.Fprintf(&b, "\n%s: %s", c.Name, macro(c, c.Description))
 		if c.Personality != "" {
-			fmt.Fprintf(&b, "\nPersonality: %s", c.Personality)
+			fmt.Fprintf(&b, "\nPersonality: %s", macro(c, c.Personality))
 		}
 		if c.Scenario != "" {
-			fmt.Fprintf(&b, "\nScenario: %s", c.Scenario)
+			fmt.Fprintf(&b, "\nScenario: %s", macro(c, c.Scenario))
 		}
 		if c.AuthorNote != "" {
-			fmt.Fprintf(&b, "\nAuthor's note on how to play %s: %s", c.Name, c.AuthorNote)
+			fmt.Fprintf(&b, "\nAuthor's note on how to play %s: %s", c.Name, macro(c, c.AuthorNote))
 		}
 	}
 	return b.String()

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 	"github.com/Lord-ZuzurNC/AIvalon/internal/imageclient"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/llmclient"
 )
 
 const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
@@ -343,6 +344,115 @@ func TestGenerateImageUsesSessionPreset(t *testing.T) {
 	postForm(chat.SetImagePreset, f.session, url.Values{"image_preset_id": {"0"}})
 	if v := presetCol(); v.Valid {
 		t.Fatalf("(Default) stored %d, want NULL", v.Int64)
+	}
+}
+
+// mockLLM answers chat/completions SSE with reply token-by-token (one
+// token per rune group isn't needed — a single data: line is enough
+// for these tests) and reports the last request's decoded messages.
+func mockLLM(t *testing.T, reply string) (*httptest.Server, func() []llmclient.Message) {
+	t.Helper()
+	var (
+		mu   sync.Mutex
+		last []llmclient.Message
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Messages []llmclient.Message `json:"messages"`
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		mu.Lock()
+		last = body.Messages
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":%q}}]}\n\n", reply)
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	return srv, func() []llmclient.Message {
+		mu.Lock()
+		defer mu.Unlock()
+		return last
+	}
+}
+
+// TestSuggestImagePromptUsesLLMAndSubstitutesMacros is Lord's "one
+// click" request: the session's own LLM backend writes a candidate
+// prompt, and the character context it's given must already have
+// {{user}}/{{char}} resolved — a macro leak into this side-channel
+// request would be just as wrong as leaking into the chat itself.
+func TestSuggestImagePromptUsesLLMAndSubstitutesMacros(t *testing.T) {
+	f := newFixture(t)
+	if err := db.UpdateCharacterCard(f.db, db.CharacterCard{ID: f.cardA, Name: "Merlin", Description: "{{char}} watches over {{user}}."}); err != nil {
+		t.Fatal(err)
+	}
+	srv, received := mockLLM(t, "an old wizard in a stone tower, warm candlelight, detailed robes")
+	llmProfile, err := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "chat-llm", Kind: "llm", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE sessions SET backend_profile_id = ? WHERE id = ?`, llmProfile, f.session); err != nil {
+		t.Fatal(err)
+	}
+
+	h := ChatHandlers{DB: f.db}
+	w := postForm(h.SuggestImagePrompt, f.session, nil)
+	body := w.Body.String()
+	if !strings.Contains(body, "an old wizard in a stone tower, warm candlelight, detailed robes") {
+		t.Fatalf("suggested prompt missing from the response fragment: %s", body)
+	}
+	if !strings.Contains(body, `id="image-prompt-field"`) {
+		t.Fatalf("response isn't the swappable fragment: %s", body)
+	}
+
+	msgs := received()
+	if len(msgs) < 2 {
+		t.Fatalf("expected at least a system+user message sent to the LLM, got %+v", msgs)
+	}
+	joined := msgs[0].Content + "\n" + msgs[1].Content
+	if strings.Contains(joined, "{{user}}") || strings.Contains(joined, "{{char}}") {
+		t.Fatalf("a literal macro leaked into the prompt-writing LLM request:\n%s", joined)
+	}
+	if !strings.Contains(joined, "Merlin watches over Hero.") {
+		t.Fatalf("substituted character text missing from the LLM request:\n%s", joined)
+	}
+	if !strings.Contains(joined, "hello") { // f.cardA's "hello" message, seeded by newFixture
+		t.Fatalf("recent conversation missing from the LLM request:\n%s", joined)
+	}
+}
+
+// TestGenerateImageUsesPresetLinkedBackend is Lord's exact request:
+// once a preset is tied to a backend (ImagePreset.BackendProfileID),
+// that link wins over whatever the dialog's form posts — simulating a
+// stale/manual pick of a DIFFERENT image backend to prove the preset
+// really overrides it, not just happens to agree with it.
+func TestGenerateImageUsesPresetLinkedBackend(t *testing.T) {
+	f := newFixture(t)
+	t.Chdir(t.TempDir())
+	realSrv, realReceived := mockA1111(t, tinyPNGBase64)
+	staleSrv, staleReceived := mockA1111(t, tinyPNGBase64)
+	real, _ := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "Forge-Juggernaut", Kind: "image", BaseURL: realSrv.URL, Model: "Juggernaut-XL_v9.safetensors"})
+	stale, _ := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "Forge-Pony", Kind: "image", BaseURL: staleSrv.URL, Model: "ponyDiffusionV6XL.safetensors"})
+
+	preset := db.ImagePreset{Name: "Realistic2", Steps: 30, CFGScale: 6, Width: 512, Height: 768, SamplerName: "DPM++ 2M Karras", Seed: -1, BackendProfileID: real}
+	preset.ID, _ = db.CreateImagePreset(f.db, preset)
+	if err := db.SetSessionImagePreset(f.db, f.session, preset.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// The form still names the OTHER (stale) backend — as a leftover
+	// hidden/selected value from before the preset was linked — and it
+	// must be ignored.
+	chat := ChatHandlers{DB: f.db}
+	if w := postForm(chat.GenerateImage, f.session, imageForm(stale)); w.Header().Get("HX-Redirect") == "" {
+		t.Fatalf("generation failed: %s", w.Body.String())
+	}
+
+	if got := realReceived(); got.Steps != 30 || got.SamplerName != "DPM++ 2M Karras" {
+		t.Fatalf("the preset's own backend (Forge-Juggernaut) never got the request: %+v", got)
+	}
+	if got := staleReceived(); got.Prompt != "" {
+		t.Fatalf("the stale form backend (Forge-Pony) got hit instead of being overridden: %+v", got)
 	}
 }
 

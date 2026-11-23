@@ -210,7 +210,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 							}
 						</strong>
 					</header>
-					@imagePresetForm(editingImagePreset, imagePresetErr)
+					@imagePresetForm(editingImagePreset, imagePresetErr, imageProfiles(profiles))
 				</article>
 			</dialog>
 		</div>
@@ -350,7 +350,7 @@ templ backendProfileForm(editing *db.BackendProfile) {
 // imagePresetForm edits one ImagePreset. editing == nil is a blank
 // "add" form pre-filled with defaultImageParams; editing.ID == 0 is a
 // rejected "add" re-rendered with what was submitted.
-templ imagePresetForm(editing *db.ImagePreset, errMsg string) {
+templ imagePresetForm(editing *db.ImagePreset, errMsg string, imageProfiles []db.BackendProfile) {
 	{{
 	action := "/settings/image-presets"
 	p := defaultImageParams
@@ -418,6 +418,16 @@ templ imagePresetForm(editing *db.ImagePreset, errMsg string) {
 			Seed
 			<input type="number" name="seed" value={ strconv.FormatInt(p.Seed, 10) } min="-1" step="1" required="required"/>
 			<small>-1 = random each time; reuse a seed (shown under each image) to reproduce it.</small>
+		</label>
+		<label>
+			Backend
+			<select name="backend_profile_id">
+				<option value="0" selected?={ p.BackendProfileID == 0 }>(Choose at generation time)</option>
+				for _, bp := range imageProfiles {
+					<option value={ fmt.Sprintf("%d", bp.ID) } selected?={ p.BackendProfileID == bp.ID }>{ bp.Name }</option>
+				}
+			</select>
+			<small>Locks this preset to one image backend (its checkpoint) — the "Generate image" dialog then skips asking which backend to use. Leave on "(Choose at generation time)" to keep picking manually.</small>
 		</label>
 		<button type="submit">
 			if editing != nil && editing.ID != 0 {

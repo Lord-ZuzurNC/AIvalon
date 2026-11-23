@@ -139,6 +139,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /chat/{id}/background", chat.SetBackground)
 	mux.HandleFunc("GET /chat/{id}/stream", chat.Stream)
 	mux.HandleFunc("POST /chat/{id}/images", chat.GenerateImage)
+	mux.HandleFunc("POST /chat/{id}/images/suggest-prompt", chat.SuggestImagePrompt)
 	mux.HandleFunc("POST /chat/{id}/image-preset", chat.SetImagePreset)
 
 	vault := web.VaultHandlers{DB: sqlDB, Gate: vaultGate}

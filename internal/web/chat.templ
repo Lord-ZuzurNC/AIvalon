@@ -64,7 +64,7 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 	</div>
 }
 
-templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook) {
+templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook, presets []db.ImagePreset) {
 	@Layout("Chat", "Chats") {
 		if len(profiles) == 0 {
 			<div class="page-header">
@@ -99,7 +99,7 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 				first.
 			</p>
 		} else {
-			@sessionModal(profiles, personas, characters, lorebooks, false)
+			@sessionModal(profiles, personas, characters, lorebooks, presets, false)
 		}
 	}
 }
@@ -109,7 +109,7 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 // vaulted and plain characters/lorebooks; the vaulted ones carry a
 // vault marker — the only place the two kinds are ever listed side
 // by side, so two same-named items stay distinguishable).
-templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook, vaulted bool) {
+templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook, presets []db.ImagePreset, vaulted bool) {
 	<dialog id="session-modal">
 		<article>
 			<header>
@@ -147,6 +147,18 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 						}
 					</select>
 				</label>
+				if len(presets) > 0 {
+					<label>
+						Default image preset (optional — can be changed per-generation)
+						<select name="image_preset_id">
+							<option value="0">(none — pick a backend each time)</option>
+							for _, p := range presets {
+								<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
+							}
+						</select>
+						<small>If the preset is locked to a backend, the "Generate image" dialog skips asking which one to use.</small>
+					</label>
+				}
 				<fieldset>
 					<legend>Characters (optional, pick several for a group chat)</legend>
 					@characterPickerStrip(characters, "character_ids")
@@ -323,7 +335,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			<div class="chat-input-toolbar">
 				@generateImageButton(hasLLMReply(messages))
 			</div>
-			@imageGenModal(session.ID, imageForm, imageForm.activePresetName(session.ImagePresetID))
+			@imageGenModal(session.ID, imageForm, imageForm.activePreset(session.ImagePresetID))
 			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) } class="chat-input-row">
 				<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
 				<button type="submit" class="send-button" aria-label="Send">
@@ -581,7 +593,7 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 // errors land in #image-result, success HX-Redirects to the session.
 // Only the prompt (and backend, if several) is asked here: everything
 // else comes server-side from the session's chosen preset.
-templ imageGenModal(sessionID int64, f ImageGenForm, presetName string) {
+templ imageGenModal(sessionID int64, f ImageGenForm, preset db.ImagePreset) {
 	<dialog id="image-modal">
 		<article>
 			<header>
@@ -604,7 +616,9 @@ templ imageGenModal(sessionID int64, f ImageGenForm, presetName string) {
 					hx-indicator="#image-spinner"
 					hx-disabled-elt="find button[type='submit']"
 				>
-					if len(f.Profiles) == 1 {
+					if preset.BackendProfileID != 0 {
+						<input type="hidden" name="backend_profile_id" value={ fmt.Sprintf("%d", preset.BackendProfileID) }/>
+					} else if len(f.Profiles) == 1 {
 						<input type="hidden" name="backend_profile_id" value={ fmt.Sprintf("%d", f.Profiles[0].ID) }/>
 					} else {
 						<label>
@@ -619,13 +633,29 @@ templ imageGenModal(sessionID int64, f ImageGenForm, presetName string) {
 					}
 					<label>
 						Prompt
-						<textarea name="prompt" rows="3" required="required"></textarea>
-						<small>What to draw.</small>
+						<div class="test-row">
+							<button
+								type="button"
+								class="secondary"
+								hx-post={ fmt.Sprintf("/chat/%d/images/suggest-prompt", sessionID) }
+								hx-target="#image-prompt-field"
+								hx-swap="outerHTML"
+								hx-indicator="#suggest-spinner"
+							>✨ Suggest a prompt</button>
+							<span id="suggest-spinner" class="htmx-indicator">Thinking…</span>
+						</div>
+						@imagePromptSuggestion("", "")
+						<small>What to draw — written by hand, or by “Suggest a prompt” then edited.</small>
 					</label>
 					<p>
 						<small>
-							if presetName != "" {
-								Using preset “{ presetName }” (its style suffix is appended to the prompt).
+							if preset.Name != "" {
+								Using preset “{ preset.Name }” (its style suffix is appended to the prompt)
+								if preset.BackendProfileID != 0 {
+									— backend locked by this preset, no picker needed.
+								} else {
+									.
+								}
 							} else {
 								No preset chosen — using the defaults (20 steps, CFG 7, 512×512, Euler a, random seed).
 							}
@@ -641,4 +671,17 @@ templ imageGenModal(sessionID int64, f ImageGenForm, presetName string) {
 			}
 		</article>
 	</dialog>
+}
+
+// imagePromptSuggestion is the swappable fragment inside the prompt
+// label — SuggestImagePrompt replaces it via htmx with either a filled
+// textarea (ready to review/edit, never auto-submitted) or an error,
+// without touching the rest of the dialog/form state.
+templ imagePromptSuggestion(value, errMsg string) {
+	<div id="image-prompt-field">
+		if errMsg != "" {
+			<p class="danger-text" role="alert">{ errMsg }</p>
+		}
+		<textarea name="prompt" rows="3" required="required">{ value }</textarea>
+	</div>
 }

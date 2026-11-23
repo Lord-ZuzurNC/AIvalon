@@ -52,6 +52,11 @@ func (h SettingsHandlers) saveImagePreset(w http.ResponseWriter, r *http.Request
 	r.ParseForm()
 	p, err := imagePresetFromForm(r)
 	p.ID = id
+	if err == nil && p.BackendProfileID != 0 {
+		if bp, e := db.GetBackendProfile(h.DB, p.BackendProfileID); e != nil || bp.Kind != "image" {
+			err = errors.New("the selected backend is not a valid image backend")
+		}
+	}
 	if err == nil {
 		if id == 0 {
 			_, err = db.CreateImagePreset(h.DB, p)
@@ -97,6 +102,7 @@ func imagePresetFromForm(r *http.Request) (db.ImagePreset, error) {
 		NegativePrompt: strings.TrimSpace(r.FormValue("negative_prompt")),
 		SamplerName:    strings.TrimSpace(r.FormValue("sampler_name")),
 	}
+	p.BackendProfileID, _ = strconv.ParseInt(r.FormValue("backend_profile_id"), 10, 64)
 	var errs []string
 	intField := func(name string, lo, hi int) int {
 		v, e := strconv.Atoi(r.FormValue(name))

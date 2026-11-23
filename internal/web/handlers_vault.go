@@ -165,6 +165,7 @@ type VaultContents struct {
 	Personas       []db.Persona
 	PickCharacters []db.CharacterCard
 	PickLorebooks  []db.Lorebook
+	ImagePresets   []db.ImagePreset
 }
 
 func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
@@ -192,6 +193,9 @@ func loadVaultContents(sqlDB *sql.DB) (VaultContents, error) {
 		}
 	}
 	if v.Personas, err = db.ListPersonas(sqlDB); err != nil {
+		return v, err
+	}
+	if v.ImagePresets, err = db.ListImagePresets(sqlDB); err != nil {
 		return v, err
 	}
 	plainCards, err := db.ListCharacterCards(sqlDB, -1, 0)

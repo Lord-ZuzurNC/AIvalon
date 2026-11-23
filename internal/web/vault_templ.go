@@ -1068,7 +1068,7 @@ func vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string,
 				return templ_7745c5c3_Err
 			}
 			if len(v.Profiles) > 0 {
-				templ_7745c5c3_Err = sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, true).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, v.ImagePresets, true).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

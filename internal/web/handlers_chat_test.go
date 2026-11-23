@@ -105,18 +105,52 @@ func TestRenderCharactersBlockIncludesAuthorNote(t *testing.T) {
 	// a separate per-session feature — it's a note some card authors put
 	// IN the character card's own JSON (the V2/V3 spec's creator_notes).
 	merlin := db.CharacterCard{Name: "Merlin", Description: "A wizard.", AuthorNote: "Best run with a verbose model."}
-	got := renderCharactersBlock([]db.CharacterCard{merlin})
+	got := renderCharactersBlock([]db.CharacterCard{merlin}, "Z")
 	if !strings.Contains(got, "Best run with a verbose model.") {
 		t.Errorf("author note missing from characters block:\n%s", got)
 	}
 
 	t.Run("omitted entirely when a card has none, no empty label left behind", func(t *testing.T) {
 		gorak := db.CharacterCard{Name: "Gorak", Description: "A guard."}
-		got := renderCharactersBlock([]db.CharacterCard{gorak})
+		got := renderCharactersBlock([]db.CharacterCard{gorak}, "Z")
 		if strings.Contains(got, "Author's note") {
 			t.Errorf("shouldn't mention an author's note when the card has none:\n%s", got)
 		}
 	})
+}
+
+// TestRenderCharactersBlockSubstitutesCardMacros is Lord's exact report:
+// a card author writes {{user}}/{{char}} directly into Description/
+// Personality/Scenario/AuthorNote (standard Character Card V2/V3
+// convention) expecting the consuming app to resolve them — AIvalon
+// must substitute both before they ever reach the LLM, not forward the
+// literal placeholder as context. Each character resolves {{char}} to
+// its OWN name, not a shared value — the point of the per-card macro
+// closure in renderCharactersBlock.
+func TestRenderCharactersBlockSubstitutesCardMacros(t *testing.T) {
+	merlin := db.CharacterCard{
+		Name:        "Merlin",
+		Description: "{{char}} has watched over {{user}} since childhood.",
+		Personality: "Warm towards {{user}}.",
+		Scenario:    "{{user}} just arrived at {{char}}'s tower.",
+		AuthorNote:  "Always address {{user}} by name.",
+	}
+	got := renderCharactersBlock([]db.CharacterCard{merlin}, "Z")
+	if strings.Contains(got, "{{user}}") || strings.Contains(got, "{{char}}") {
+		t.Fatalf("a literal macro leaked into the LLM-facing block:\n%s", got)
+	}
+	for _, want := range []string{"Merlin has watched over Z", "Warm towards Z.", "Z just arrived at Merlin's tower", "Always address Z by name."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing substituted text %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestSubstituteCardMacros(t *testing.T) {
+	got := substituteCardMacros("{{char}} greets {{user}} warmly.", "Z", "Merlin")
+	if got != "Merlin greets Z warmly." {
+		t.Fatalf("got %q", got)
+	}
 }
 
 func TestTruncateHistoryToBudget(t *testing.T) {
@@ -207,5 +241,56 @@ func TestChatCreate_RejectsImageKindBackend(t *testing.T) {
 	}
 	if n, err := db.CountSessions(sqlDB); err != nil || n != 1 {
 		t.Fatalf("expected exactly one session after the valid create, got n=%d err=%v", n, err)
+	}
+}
+
+// TestChatCreate_DefaultImagePreset is the session-creation half of
+// Lord's preset→backend request: picking a default preset right in
+// the "New session" form must stick on the created session, and an
+// unknown preset ID must be refused rather than silently ignored.
+func TestChatCreate_DefaultImagePreset(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	llmProfile, err := db.CreateBackendProfile(sqlDB, db.BackendProfile{Name: "Ollama", Kind: "llm", BaseURL: "http://127.0.0.1:11434"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preset, err := db.CreateImagePreset(sqlDB, db.ImagePreset{Name: "Realistic3", Steps: 20, CFGScale: 7, Width: 512, Height: 512, SamplerName: "Euler a", Seed: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := ChatHandlers{DB: sqlDB}
+	create := func(presetID int64) *httptest.ResponseRecorder {
+		form := url.Values{"backend_profile_id": {strconv.FormatInt(llmProfile, 10)}, "title": {"Test"}, "image_preset_id": {strconv.FormatInt(presetID, 10)}}
+		req := httptest.NewRequest(http.MethodPost, "/chat", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		h.Create(w, req)
+		return w
+	}
+
+	// An unknown preset ID is refused, nothing created.
+	if w := create(999999); w.Code != http.StatusBadRequest {
+		t.Fatalf("unknown preset id: status = %d, want 400", w.Code)
+	}
+	if n, err := db.CountSessions(sqlDB); err != nil || n != 0 {
+		t.Fatalf("an unknown preset must not create a session, got n=%d err=%v", n, err)
+	}
+
+	// A real preset sticks on the created session.
+	if w := create(preset); w.Code != http.StatusSeeOther {
+		t.Fatalf("valid preset: status = %d, want 303, body hint: %s", w.Code, w.Body.String())
+	}
+	sessions, err := db.ListSessions(sqlDB, -1, 0)
+	if err != nil || len(sessions) != 1 {
+		t.Fatalf("ListSessions: %v, %+v", err, sessions)
+	}
+	got, err := db.GetSession(sqlDB, sessions[0].ID)
+	if err != nil || got.ImagePresetID != preset {
+		t.Fatalf("session.ImagePresetID = %d, err = %v, want %d", got.ImagePresetID, err, preset)
 	}
 }
