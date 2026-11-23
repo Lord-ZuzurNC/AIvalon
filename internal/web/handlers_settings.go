@@ -111,7 +111,7 @@ func (h SettingsHandlers) ProfilePing(w http.ResponseWriter, r *http.Request) {
 // Update already applies.
 func (h SettingsHandlers) ProfileTest(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
-	profile := db.BackendProfile{BaseURL: r.FormValue("base_url"), APIKey: r.FormValue("api_key")}
+	profile := db.BackendProfile{Kind: r.FormValue("kind"), BaseURL: r.FormValue("base_url"), APIKey: r.FormValue("api_key")}
 	if profile.APIKey == "" {
 		if idStr := r.FormValue("id"); idStr != "" {
 			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {

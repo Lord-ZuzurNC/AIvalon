@@ -5,6 +5,8 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
@@ -118,5 +120,30 @@ func TestTestBackendConnection_LLMKind(t *testing.T) {
 	}
 	if len(models) != 1 || models[0] != "llama3" {
 		t.Fatalf("models = %v, want [llama3]", models)
+	}
+}
+
+// TestProfileTest_ThreadsKindFromForm is the regression test for the
+// real bug: testBackendConnection branching on Kind is useless if the
+// "Test connection" HTTP handler never reads "kind" off the form in
+// the first place. ProfileTest must build its probe profile with the
+// form's kind, not leave it at the Go zero value "".
+func TestProfileTest_ThreadsKindFromForm(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		json.NewEncoder(w).Encode([]map[string]string{{"title": "ponyDiffusionV6XL.safetensors"}})
+	}))
+	defer srv.Close()
+
+	form := url.Values{"kind": {"image"}, "base_url": {srv.URL}}
+	req := httptest.NewRequest(http.MethodPost, "/settings/backend-profiles/test", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+
+	(SettingsHandlers{}).ProfileTest(w, req)
+
+	if gotPath != "/sdapi/v1/sd-models" {
+		t.Fatalf("ProfileTest probed %q, want /sdapi/v1/sd-models — kind=image from the form never reached the profile", gotPath)
 	}
 }
