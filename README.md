@@ -1,38 +1,24 @@
 # AIvalon
 
+🇫🇷 [Lire en français](README_fr.md)
+
 A local, single-user web app for AI roleplay.
-It replaces rate-limited hosted apps like OOC: you talk to an LLM that runs on your own machine, through persona cards and lorebooks you control, and nothing leaves your computer.
+It replaces rate-limited hosted apps: you talk to an LLM that runs on your own machine, through persona cards and lorebooks you control, and nothing leaves your computer.
 
-> **Status: pre-release, no empty shells left.**
-> Chat, character cards, personas, lorebooks, backend profiles, and the Vault work end-to-end against a real LLM backend.
-> Image generation (A1111 backend, presets) is code-complete but **not yet validated** — no real test pass against a live A1111 instance — treat it as work in progress.
-> No binary release exists yet; building from source is the only install path. `docs/DESIGN.md` is still the source of truth for what's settled versus still open.
+> **Status: 0.1, image generation off by default.**
+> Chat, character cards, personas, lorebooks, backend profiles, and the Vault (PIN-gated, fully encrypted at rest) work end-to-end against a real LLM backend.
+> Image generation (against an AUTOMATIC1111/Forge backend) is code-complete but **disabled by default in this release** — it hasn't had a real validation pass yet. `docs/DESIGN.md` is the source of truth for what's settled versus still open.
 
-## What it does
+## Getting started
 
-- **Character cards**, following the Character Card V2/V3 spec (the same format used across the existing SillyTavern-adjacent ecosystem): import from a PNG (with the card embedded in a `tEXt` chunk) or plain JSON, from a file or a URL, or write one by hand. Multiple reference images per card, with one promotable to primary/avatar.
-- **Personas**: your own self-profile as the human player, separate from the characters the AI plays. Optional — a session with none picked falls back to a built-in default.
-- **Lorebooks** (World Info): shared lore kept separate from character cards on purpose, with per-entry trigger strategy (`constant` or whole-word `selective`), insertion order, and probability. Importable the same way as character cards.
-- **Chat**, with multiple character cards in one session for group roleplay: streamed token-by-token over SSE, with per-message regenerate, edit, branch (fork the conversation from any point), and delete, plus session duplication and a custom background per session.
-- **Any OpenAI-compatible LLM backend**: point one or more backend profiles at Ollama, a llama.cpp server, or a hosted API, with a connection test/ping from Settings — AIvalon never embeds inference itself.
-- **On-demand image generation** *(work in progress, not yet validated)*, against an AUTOMATIC1111 (A1111) Stable Diffusion WebUI backend. Named image presets (steps, CFG scale, sampler, size, seed, negative prompt, style suffix) are managed once in Settings — three built-ins ship (Realistic, Manga/Anime, Cyberpunk) — and a session just picks one; the in-chat dialog only ever asks for the prompt. The code path exists but hasn't had a real pass against a live A1111 instance yet.
-- **The Vault**: a PIN-gated space to pull a character card, lorebook, or session out of casual view. Four-digit PIN, re-prompted every time the Vault is opened, with a lockout after repeated wrong guesses to keep brute-forcing it slow.
-- **Settings**: backend profiles, personas, the system prompt template, a context budget (character cap on what's sent per reply), and the hostname whitelist for "import a card from a URL".
+Everything below works the same on Windows and Linux — screenshots are from Linux, the Windows side just has a `.exe` and double-clicks instead of a terminal.
 
-Full rationale for every one of these choices is in `docs/DESIGN.md`.
+### 1. Get a local LLM running (llama.cpp)
 
-## Installing (for users)
+AIvalon never embeds inference itself — it talks to any OpenAI-compatible backend over HTTP. [llama.cpp](https://github.com/ggml-org/llama.cpp)'s server is the straightforward local option and what these instructions use; [Ollama](https://ollama.com/) also works if you'd rather manage models that way.
 
-No pre-built release exists yet, so building from source is currently the only way to run it.
-
-### Prerequisites
-
-1. **Go 1.22 or newer**, only to build the binary — [go.dev/dl](https://go.dev/dl/).
-2. **A local LLM backend.** Pick one:
-   - [Ollama](https://ollama.com/) — simplest to set up, has an OpenAI-compatible API built in.
-   - [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-server` — more control over quantization and GPU offload.
-   - Any other server exposing an OpenAI-compatible `chat/completions` endpoint (including a paid hosted API, if you'd rather not run a model locally at all).
-3. **A model**, in GGUF format for Ollama/llama.cpp. Pick the tier that matches your GPU's VRAM:
+1. Download a prebuilt archive from [llama.cpp's Releases page](https://github.com/ggml-org/llama.cpp/releases) matching your OS and GPU: `cuda` for an Nvidia card, `vulkan` as a safe cross-vendor fallback (AMD/Intel/Nvidia alike), plain `cpu` if you have no GPU worth using. Unzip it anywhere — there's nothing to install. The server executable inside is called `llama-server` on most builds (some newer ones expose it as a unified `llama` CLI with a `serve` subcommand instead — same thing, adjust the command below accordingly).
+2. Grab a model in **GGUF** format. Pick the tier that matches your GPU's VRAM:
 
    | Tier            | Model                                                                                                           | VRAM (approx.)     | Notes                                                                                                                           |
    | --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -42,7 +28,86 @@ No pre-built release exists yet, so building from source is currently the only w
    | High-end (~24B) | [Dolphin3.0-Mistral-24B](https://huggingface.co/dphn/Dolphin3.0-Mistral-24B)                                    | ~16-20 GB at Q4-Q6 | Dense 24B, the established pick for long-form creative/roleplay output once you have the VRAM for it.                           |
 
    "Abliterated" means the model's refusal/alignment layer has been removed — the usual reason a model is listed here instead of its plain instruct version is that standard instruct models tend to break character and insert safety disclaimers mid-scene. Swap in the non-abliterated GGUF for the same base model if you'd rather keep that layer; AIvalon doesn't care which you point it at.
-4. **(Optional, WIP feature) An A1111 instance**, only needed for the image generation feature — any AUTOMATIC1111-compatible Stable Diffusion WebUI reachable over HTTP, local or remote. Not yet validated end-to-end; see Status above.
+3. Put the `.gguf` file(s) in a folder, then launch the server pointed at it:
+
+   ```sh
+   llama-server -cmoe -rea off --sleep-idle-seconds 15 -c 8192 --models-dir <path to your models folder>
+   ```
+
+   What each flag does:
+   - `--models-dir` runs llama.cpp in **router mode**, serving every model in that folder — this is what lets AIvalon's "Test connection" detect and list them below.
+   - `-cmoe` (`--cpu-moe`) keeps Mixture-of-Experts weights on the CPU — saves VRAM on MoE models, a harmless no-op on dense ones.
+   - `-rea off` (`--reasoning off`) turns off chain-of-thought "thinking" output — you want the model's in-character reply, not its visible reasoning trace, for roleplay.
+   - `--sleep-idle-seconds 15` unloads the model from VRAM after 15 seconds idle, freeing the GPU for anything else in the meantime.
+   - `-c 8192` (`--ctx-size`) is the context window, in tokens. Keep AIvalon's own context budget (Settings → System prompt) comfortably under this.
+
+   Leave this running in its own terminal (or as a background service, once you're past trying things out).
+
+### 2. Get AIvalon
+
+Download the release archive for your OS, extract it anywhere, and run the executable inside — no installer, no separate runtime to set up. See the `LISEZ-MOI.txt`/`README.txt` next to the binary for the one or two platform-specific notes (keeping the `web/` folder alongside it, Windows SmartScreen on an unsigned binary).
+
+AIvalon listens on `http://127.0.0.1:4140` by default — open that in a browser.
+
+### 3. First-run settings
+
+Open **Settings → Backend profiles → Add a profile**, name it, point **Base URL** at your llama.cpp server (e.g. `http://127.0.0.1:9931/v1`), then hit **Test connection** — a successful test lists every model the server found and turns the Model field into a dropdown so you can pick one instead of typing it by hand. For roleplay, **Temperature ≈ 1.0** and **Top P ≈ 0.9** are a reasonable starting point — more coherent than default sampling, without being flat.
+
+![Settings — backend profile, tested and model selected](docs/screenshots/02-settings-backend-profile.png)
+
+Then, on the **Your persona** tab, add yourself as a persona — who you are to the AI, separate from the characters it plays. Optional: a chat with none picked just uses a built-in "User" default.
+
+![Settings — adding a persona](docs/screenshots/03-settings-persona.png)
+
+### 4. Import a character (and its lorebook)
+
+Character cards use the open SillyTavern-compatible format, so anything exported from sites built around it works here too. As an example: [Veyra on Character Tavern](https://character-tavern.com/character/baconery/veyra) — hit the purple **Download character card** button (PNG, lorebook included). That one download gives you both a character *and* a lorebook, since the card has a world/lore section embedded in it.
+
+Go to **Characters**, click the ⤓ import button, and drop the PNG in:
+
+![Importing a character card](docs/screenshots/04-character-import.png)
+
+The character lands in your list, and its embedded lorebook shows up on its own in **Worlds** — nothing extra to do:
+
+![Characters list, after import](docs/screenshots/05-characters-list.png)
+![Worlds list — the lorebook that came with the card](docs/screenshots/06-worlds-list.png)
+
+### 5. Start your first chat
+
+Go to **Chat → New session**: pick a title (e.g. "Veyra"), your backend profile, your persona, the character(s) you just imported, and the lorebook, then **Start chat**.
+
+![New chat, everything picked](docs/screenshots/07-new-chat-modal.png)
+
+![Chat started — the character's opening line](docs/screenshots/08-chat-started.png)
+
+## The Vault
+
+A PIN-gated space to pull a character card, lorebook, or whole session out of casual view — a 4, 6, or 8-digit PIN of your choice, re-prompted every time you open the Vault or take something back out of it (a lockout kicks in after repeated wrong guesses). Everything hidden in there — session images, character portraits, lorebook covers — is **encrypted at rest** (AES-256-GCM), not just hidden behind a UI gate: looking directly at the files on disk gets you ciphertext, not a picture.
+
+![Vault — PIN setup](docs/screenshots/09-vault-setup.png)
+![Vault — a hidden character, ready to unhide](docs/screenshots/10-vault-hidden-character.png)
+
+## What it does
+
+- **Character cards**, following the Character Card V2/V3 spec (the same format used across the existing SillyTavern-adjacent ecosystem): import from a PNG (with the card embedded in a `tEXt` chunk) or plain JSON, from a file or a URL, or write one by hand. Multiple reference images per card, with one promotable to primary/avatar.
+- **Personas**: your own self-profile as the human player, separate from the characters the AI plays. Optional — a session with none picked falls back to a built-in default.
+- **Lorebooks** (World Info): shared lore kept separate from character cards on purpose, with per-entry trigger strategy (`constant` or whole-word `selective`), insertion order, and probability. Importable the same way as character cards, and auto-extracted from a card that embeds one.
+- **Chat**, with multiple character cards in one session for group roleplay: streamed token-by-token over SSE, with per-message regenerate, edit, branch (fork the conversation from any point), and delete, plus session duplication and a custom background per session.
+- **Any OpenAI-compatible LLM backend**: point one or more backend profiles at Ollama, a llama.cpp server, or a hosted API, with a connection test/ping from Settings — AIvalon never embeds inference itself.
+- **On-demand image generation** *(disabled by default in 0.1, not yet validated)*, against an AUTOMATIC1111 (A1111)/Forge Stable Diffusion WebUI backend. Named image presets (steps, CFG scale, sampler, size, seed, negative prompt, style suffix) are managed once in Settings, and a session just picks one; the in-chat dialog only ever asks for the prompt.
+- **The Vault** — see above.
+- **Settings**: backend profiles, personas, the system prompt template, a context budget (character cap on what's sent per reply), and the hostname whitelist for "import a card from a URL".
+
+Full rationale for every one of these choices is in `docs/DESIGN.md`.
+
+## Installing (for developers / building from source)
+
+The section above is for everyone else — this one is for building AIvalon itself rather than running a release.
+
+### Prerequisites
+
+1. **Go 1.22 or newer** — [go.dev/dl](https://go.dev/dl/).
+2. A local LLM backend to test against (see Getting Started above).
 
 ### Build and run
 
@@ -53,9 +118,6 @@ go build -o aivalon ./cmd/aivalon
 ./aivalon
 ```
 
-AIvalon listens on `http://127.0.0.1:4140` and is not reachable from the network by default (`AIVALON_ADDR` overrides this for same-LAN access — see `docs/DESIGN.md`).
-First run: open Settings, add a backend profile pointing at your LLM server, then create a Persona and a Character and start a chat.
-
 ### Environment variables
 
 | Variable       | Default          | Purpose                                                                                                                       |
@@ -65,7 +127,7 @@ First run: open Settings, add a backend profile pointing at your LLM server, the
 
 ## Tech stack (summary)
 
-- **Go**, single static binary, no runtime to install for end users once releases exist.
+- **Go**, single static binary — no runtime to install for end users.
 - **SQLite** (`modernc.org/sqlite`, pure Go, no cgo) for storage; `goose` for migrations.
 - **htmx** + server-rendered Go templates (`templ`) for the UI — no separate JavaScript build, no Node/npm dependency.
 - **Server-Sent Events** for streaming chat tokens.
@@ -90,4 +152,3 @@ Migrations live as plain `.sql` files in `internal/db/migrations/`; add a new on
 AGPLv3 — see `LICENSE`.
 Running AIvalon locally, for yourself, carries no obligation.
 Modifying it and running it as a network service for other people means publishing those modifications.
-</content>
