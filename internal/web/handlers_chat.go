@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"html"
@@ -762,25 +763,53 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 		}
 		lorebookContent = resolveLorebookContent(entries, lastUserMessageContent(history), defaultProbabilityRoll)
 	}
-	chatMessages, dropped := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history, settings.ContextBudgetChars)
-	if dropped > 0 {
+	chatMessages, dropped, stillOverBudget := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history, settings.ContextBudgetChars)
+	if dropped > 0 || stillOverBudget {
 		// Never silent: logged server-side, and shown on the chat page
 		// via an out-of-band swap into its #context-trim-notice live
 		// region (same SSE+OOB mechanism as Stream's final swap, through
 		// emitRaw so newlines can't break the event framing).
-		log.Printf("session %d: left %d oldest message(s) out of the prompt to fit the %d-char context budget", session.ID, dropped, settings.ContextBudgetChars)
+		if stillOverBudget {
+			log.Printf("session %d: system prompt alone exceeds the %d-char context budget even after dropping %d message(s) — sending it oversized anyway", session.ID, settings.ContextBudgetChars, dropped)
+		} else {
+			log.Printf("session %d: left %d oldest message(s) out of the prompt to fit the %d-char context budget", session.ID, dropped, settings.ContextBudgetChars)
+		}
 		var notice strings.Builder
-		if err := ContextTrimNotice(dropped).Render(r.Context(), &notice); err == nil {
+		if err := ContextTrimNotice(dropped, stillOverBudget).Render(r.Context(), &notice); err == nil {
 			flusher, _ := w.(http.Flusher)
 			emitRaw(w, flusher, notice.String())
 		}
 	}
 	var full strings.Builder
-	err = llmclient.StreamChat(r.Context(), profile, chatMessages, func(token string) {
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	var abortedPattern string
+	err = llmclient.StreamChat(ctx, profile, chatMessages, func(token string) {
 		full.WriteString(token)
 		emit(token)
+		if abortedPattern != "" {
+			return // already stopping; the backend may send a few more tokens before cancel lands
+		}
+		if pattern, repeats := repeatedTailRun(lastRunes(full.String(), 600), runawayPeriodMin, runawayPeriodMax, runawayMinRepeats); repeats > 0 {
+			abortedPattern = pattern
+			log.Printf("session %d: aborting generation — tail repeated %q %dx in a row (context likely overflowed/corrupted)", session.ID, pattern, repeats)
+			cancel()
+		}
 	})
-	if err != nil {
+	if abortedPattern != "" {
+		// Our own cancel(), not a real backend failure — strip the
+		// repeated junk off the end before saving so it doesn't poison
+		// next turn's context budget too, and tell Lord why the reply
+		// cuts off instead of leaving it looking like it just stopped.
+		trimmed := stripTrailingRepeats(full.String(), abortedPattern)
+		full.Reset()
+		full.WriteString(trimmed)
+		var notice strings.Builder
+		if rendErr := RunawayRepetitionNotice().Render(r.Context(), &notice); rendErr == nil {
+			flusher, _ := w.(http.Flusher)
+			emitRaw(w, flusher, notice.String())
+		}
+	} else if err != nil {
 		emitError(err)
 		return db.ChatMessage{}, false
 	}
@@ -811,7 +840,7 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 // budgetChars (AppSettings.ContextBudgetChars, 0 = unlimited) caps the
 // total size — see truncateHistoryToBudget. The second return value is
 // how many of the oldest history messages were left out to fit.
-func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage, budgetChars int) ([]llmclient.Message, int) {
+func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage, budgetChars int) ([]llmclient.Message, int, bool) {
 	system := llmclient.Message{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}
 	mapped := make([]llmclient.Message, 0, len(history))
 	for _, m := range history {
@@ -820,11 +849,14 @@ func buildNarratorMessages(template string, persona db.Persona, characters []db.
 		}
 		mapped = append(mapped, llmclient.Message{Role: historyRole(m), Content: namePrefixed(m, characters)})
 	}
-	kept, dropped := truncateHistoryToBudget(mapped, utf8.RuneCountInString(system.Content), budgetChars)
-	return append([]llmclient.Message{system}, kept...), dropped
+	kept, dropped, stillOverBudget := truncateHistoryToBudget(mapped, utf8.RuneCountInString(system.Content), budgetChars)
+	return append([]llmclient.Message{system}, kept...), dropped, stillOverBudget
 }
 
 func trimNoticeText(dropped int) string {
+	if dropped == 0 {
+		return ""
+	}
 	if dropped == 1 {
 		return "1 earlier message was left out to fit the context budget —"
 	}
@@ -843,9 +875,9 @@ func trimNoticeText(dropped int) string {
 //     not disposable history (shrinking it is the user's call).
 //   - the most recent message (the turn being answered) is always kept,
 //     so the model is never sent a prompt with nothing to reply to.
-func truncateHistoryToBudget(history []llmclient.Message, systemChars, budgetChars int) ([]llmclient.Message, int) {
+func truncateHistoryToBudget(history []llmclient.Message, systemChars, budgetChars int) ([]llmclient.Message, int, bool) {
 	if budgetChars <= 0 {
-		return history, 0
+		return history, 0, false
 	}
 	total := systemChars
 	for _, m := range history {
@@ -856,7 +888,82 @@ func truncateHistoryToBudget(history []llmclient.Message, systemChars, budgetCha
 		total -= utf8.RuneCountInString(history[dropped].Content)
 		dropped++
 	}
-	return history[dropped:], dropped
+	// Even after dropping every message but the last, the system
+	// prompt (persona + character cards + lorebook — e.g. a long
+	// world/lore card) can alone exceed budgetChars; that's never
+	// trimmed (see the doc comment above), so this reports it rather
+	// than silently sending an oversized prompt that the LLM backend
+	// then has to cope with on its own (commonly by context-shifting,
+	// which can corrupt the exchange's structure and degenerate into
+	// repetition — Lord: "l'App enchaîne les World: World: World:").
+	return history[dropped:], dropped, total > budgetChars
+}
+
+// runawayPeriodMin/Max bound the length (in runes) of the repeating
+// unit repeatedTailRun looks for; runawayMinRepeats is how many times
+// in a row it must repeat, back-to-back with no gap, before streamWorldReply
+// cuts the generation off. Picked to catch the observed failure (a short
+// phrase like "World: " looping dozens of times after context overflow/
+// corruption) without ever tripping on legitimate prose, which doesn't
+// repeat an exact short span 8+ times consecutively.
+const (
+	runawayPeriodMin  = 2
+	runawayPeriodMax  = 40
+	runawayMinRepeats = 8
+)
+
+// lastRunes returns the trailing n runes of s (or all of s if shorter)
+// — used to bound repeatedTailRun's input to a fixed-size window so
+// it stays cheap to call on every streamed token regardless of how
+// long the reply has grown so far.
+func lastRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[len(r)-n:])
+}
+
+// repeatedTailRun reports whether s ends in some substring of length
+// [minPeriod, maxPeriod] runes repeated at least minRepeats times with
+// no gap — e.g. "...World: World: World: World: World: World: World:
+// World: " for period≈8 ("World: "), repeats=8. Returns ("", 0) if no
+// such run is found. Only the tail matters (a runaway loop keeps
+// growing from the end), so callers should pass a bounded suffix of
+// the full buffer, not the whole thing, to keep this cheap to call on
+// every streamed token.
+func repeatedTailRun(s string, minPeriod, maxPeriod, minRepeats int) (string, int) {
+	r := []rune(s)
+	n := len(r)
+	for period := minPeriod; period <= maxPeriod; period++ {
+		need := period * minRepeats
+		if n < need {
+			continue
+		}
+		pattern := string(r[n-period:])
+		repeats := 1
+		for i := 2; i*period <= n; i++ {
+			if string(r[n-i*period:n-(i-1)*period]) != pattern {
+				break
+			}
+			repeats = i
+		}
+		if repeats >= minRepeats {
+			return pattern, repeats
+		}
+	}
+	return "", 0
+}
+
+// stripTrailingRepeats removes every trailing exact, back-to-back
+// occurrence of pattern from s — used once a generation is cut off
+// for repeating, so the saved message keeps the real reply (if any)
+// without the garbage loop that triggered the cutoff.
+func stripTrailingRepeats(s, pattern string) string {
+	for pattern != "" && strings.HasSuffix(s, pattern) {
+		s = s[:len(s)-len(pattern)]
+	}
+	return s
 }
 
 // buildNarratorPrompt fills in the user-editable system prompt template

@@ -97,3 +97,40 @@ func TestGenerateImageBadInfoKeepsRequestedSeed(t *testing.T) {
 		t.Fatalf("res.Seed=%d err=%v", res.Seed, err)
 	}
 }
+
+// TestUnloadCheckpoint is the VRAM-release call GenerateImage's caller
+// fires after a successful generation (Lord's report: Forge used to
+// hold the checkpoint in VRAM indefinitely, starving llama.cpp on the
+// next chat turn). Confirmed for real against Lord's live Forge
+// instance before writing this (POST /sdapi/v1/unload-checkpoint, ~
+// 7.1 GB actually freed) — this test just locks in the request shape.
+func TestUnloadCheckpoint(t *testing.T) {
+	var gotPath, gotMethod, gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod, gotAuth = r.URL.Path, r.Method, r.Header.Get("Authorization")
+		json.NewEncoder(w).Encode(map[string]any{})
+	}))
+	defer srv.Close()
+
+	err := UnloadCheckpoint(context.Background(), db.BackendProfile{BaseURL: srv.URL + "/", APIKey: "k"})
+	if err != nil {
+		t.Fatalf("UnloadCheckpoint: %v", err)
+	}
+	if gotPath != "/sdapi/v1/unload-checkpoint" || gotMethod != http.MethodPost {
+		t.Fatalf("got %s %s", gotMethod, gotPath)
+	}
+	if gotAuth != "Bearer k" {
+		t.Fatalf("Authorization = %q", gotAuth)
+	}
+}
+
+func TestUnloadCheckpointHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "no model loaded", http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	err := UnloadCheckpoint(context.Background(), db.BackendProfile{BaseURL: srv.URL})
+	if err == nil || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("err = %v", err)
+	}
+}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -100,7 +101,12 @@ func (h VaultHandlers) Setup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if err := h.Gate.grantUnlock(w); err != nil {
+	// Setup's form never collects enc_key_hash (see vault.templ) — a
+	// PIN change here doesn't re-key already-encrypted files, so
+	// granting a key from this flow would just be wrong for anything
+	// encrypted under the *previous* PIN. Decrypting still needs a
+	// real /vault/unlock after this.
+	if err := h.Gate.grantUnlock(w, nil); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -129,9 +135,29 @@ func (h VaultHandlers) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Gate.recordSuccess()
-	if err := h.Gate.grantUnlock(w); err != nil {
+	// enc_key_hash (vault.templ's vaultPinHashScript): a second,
+	// domain-separated hash of the same PIN, used as the AES key for
+	// vaulted files — decoded here, never logged or stored, only kept
+	// in the in-memory unlock token (see VaultGate.grantUnlock).
+	// Malformed/missing isn't fatal to unlocking the vault's UI, it
+	// just means this browser's session can't decrypt vaulted files
+	// until a fresh, well-formed unlock.
+	encKey, _ := decodeVaultEncKeyHex(r.FormValue("enc_key_hash"))
+	if err := h.Gate.grantUnlock(w, encKey); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// Catches anything a vaulted entity's image left in plaintext —
+	// MoveIn without a key available at that moment, an edit that hit
+	// the same gap, or (Lord's call: no separate migration step) a
+	// file that's simply been sitting there since before this feature
+	// existed. Runs on every real unlock, not just once; cheap when
+	// there's nothing to do (moveImageFile no-ops on anything already
+	// in the right state).
+	if len(encKey) > 0 {
+		if err := reconcileVaultImages(h.DB, encKey); err != nil {
+			log.Printf("vault unlock: reconciling image encryption: %v", err)
+		}
 	}
 	h.renderList(w, r, stored.PINSalt, "")
 }
@@ -258,11 +284,117 @@ func (h VaultHandlers) Lock(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/chat", http.StatusSeeOther)
 }
 
+// Reset is the nuclear option Lord asked for: delete every vaulted
+// session/character/lorebook (and their images) and the vault's own
+// PIN itself, back to "not configured". Requires the PIN fresh, same
+// "prove it's really you" rule as MoveOut — this is far more
+// destructive than any single unhide, so it gets at least that much
+// friction, not less. No enc_key_hash needed: everything's being
+// deleted regardless of its content, nothing here gets decrypted.
+func (h VaultHandlers) Reset(w http.ResponseWriter, r *http.Request) {
+	stored, err := db.GetVaultPIN(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if locked, _ := h.Gate.lockedOut(); locked {
+		http.Error(w, "too many wrong attempts, try again shortly", http.StatusTooManyRequests)
+		return
+	}
+	r.ParseForm()
+	pinHash := r.FormValue("pin_hash")
+	if pinHash == "" || !verifyHash(pinHash, stored.PINHash) {
+		h.Gate.recordFailure()
+		v, err := loadVaultContents(h.DB)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		render(w, r, VaultListPageWithError(v, stored.PINSalt, "", "Wrong PIN — nothing was deleted.", "reset", 0))
+		return
+	}
+	h.Gate.recordSuccess()
+
+	v, err := loadVaultContents(h.DB)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Characters and lorebooks first: deleting either one already
+	// deletes every session using it (db.DeleteCharacterCard/
+	// DeleteLorebook's own documented cascade, including a
+	// NON-vaulted session that happens to share a now-vaulted
+	// character/lorebook — same behavior a normal single-item delete
+	// already has; Reset doesn't special-case around it). Sessions
+	// still vaulted afterwards (not swept by that cascade) are
+	// deleted directly below — DeleteSession on an ID the cascade
+	// already removed is a harmless no-op, not an error.
+	for _, c := range v.Characters {
+		images, err := db.ListCharacterCardImages(h.DB, c.ID)
+		if err != nil {
+			log.Printf("vault reset: listing images for character %d: %v", c.ID, err)
+		}
+		orphaned, err := db.DeleteCharacterCard(h.DB, c.ID)
+		if err != nil {
+			log.Printf("vault reset: deleting character %d: %v", c.ID, err)
+			continue
+		}
+		for _, img := range images {
+			removeUploadedFile(img.ImagePath)
+		}
+		for _, p := range orphaned {
+			removeUploadedFile(p)
+		}
+	}
+	for _, bk := range v.Lorebooks {
+		orphaned, err := db.DeleteLorebook(h.DB, bk.ID)
+		if err != nil {
+			log.Printf("vault reset: deleting lorebook %d: %v", bk.ID, err)
+			continue
+		}
+		removeUploadedFile(bk.ImagePath)
+		for _, p := range orphaned {
+			removeUploadedFile(p)
+		}
+	}
+	for _, s := range v.Sessions {
+		candidates, err := db.ImagePathsForSession(h.DB, s.ID)
+		if err != nil {
+			log.Printf("vault reset: listing images for session %d: %v", s.ID, err)
+		}
+		if err := db.DeleteSession(h.DB, s.ID); err != nil {
+			log.Printf("vault reset: deleting session %d: %v", s.ID, err)
+			continue
+		}
+		if orphaned, err := db.OrphanedImagePaths(h.DB, candidates); err == nil {
+			for _, p := range orphaned {
+				removeUploadedFile(p)
+			}
+		}
+	}
+
+	if err := db.DeleteVault(h.DB); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	revokeUnlock(w)
+	http.Redirect(w, r, "/chat", http.StatusSeeOther)
+}
+
 // MoveIn hides a session/character/lorebook in the vault — no PIN needed going in, per
 // Lord's own framing: entering is just "hide this", leaving is the
 // part that needs to prove it's really you.
+//
+// Its image(s) are encrypted on the spot (moveEntityImages) when this
+// browser happens to already hold a decrypt key — e.g. hiding
+// something from inside an already-unlocked vault session. Without
+// one, "no PIN to hide" stays true: the image(s) just stay plaintext
+// until the next real /vault/unlock's reconcileVaultImages catches
+// them, rather than blocking (or silently weakening) the hide itself.
 func (h VaultHandlers) MoveIn(w http.ResponseWriter, r *http.Request) {
-	kind, ok := vaultKinds[r.PathValue("kind")]
+	kindKey := r.PathValue("kind")
+	kind, ok := vaultKinds[kindKey]
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -276,6 +408,11 @@ func (h VaultHandlers) MoveIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	if key, ok := h.Gate.EncKey(r); ok {
+		if err := moveEntityImages(h.DB, key, kindKey, id, true); err != nil {
+			log.Printf("vault MoveIn %s/%d: encrypting image(s): %v", kindKey, id, err)
+		}
+	}
 	http.Redirect(w, r, kind.home, http.StatusSeeOther)
 }
 
@@ -285,6 +422,16 @@ func (h VaultHandlers) MoveIn(w http.ResponseWriter, r *http.Request) {
 // session back out into the normal list" are deliberately two
 // different confirmations per Lord's spec. Like Unlock, it's a
 // pre-hashed pin_hash that arrives here, not the raw PIN.
+//
+// Also collects enc_key_hash (vault.templ's "Unhide" pad now sends
+// one too) to decrypt the entity's image(s) back to plaintext —
+// that's the whole point of pulling something OUT of the vault, so
+// unlike MoveIn this one really does need the key every time, not
+// best-effort. Decryption failing (wrong/missing key) doesn't block
+// the unhide itself — the flag still flips — but logs it, since an
+// image staying ciphertext after "it's not vaulted anymore" would be
+// a confusing silent gap (reconcileVaultImages only fixes the OTHER
+// direction, encrypting, never decrypts on its own).
 func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
 	kindKey := r.PathValue("kind")
 	kind, ok := vaultKinds[kindKey]
@@ -322,6 +469,11 @@ func (h VaultHandlers) MoveOut(w http.ResponseWriter, r *http.Request) {
 	if err := kind.set(h.DB, id, false); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if encKey, err := decodeVaultEncKeyHex(r.FormValue("enc_key_hash")); err == nil {
+		if err := moveEntityImages(h.DB, encKey, kindKey, id, false); err != nil {
+			log.Printf("vault MoveOut %s/%d: decrypting image(s): %v", kindKey, id, err)
+		}
 	}
 	http.Redirect(w, r, kind.home, http.StatusSeeOther)
 }

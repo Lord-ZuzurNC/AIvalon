@@ -121,7 +121,7 @@ templ characterImageGallery(characterID int64, primaryPath string, images []db.C
 				for _, img := range images {
 					if img.ImagePath != primaryPath {
 						<div class="image-gallery-item">
-							<img src={ "/static/" + img.ImagePath } alt="Character image"/>
+							<img src={ imageSrc(img.ImagePath) } alt="Character image"/>
 							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/images/%d/primary", characterID, img.ID)) }>
 								<button type="submit">Make primary</button>
 							</form>

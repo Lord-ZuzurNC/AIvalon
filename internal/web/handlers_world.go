@@ -98,15 +98,39 @@ func (h WorldHandlers) Update(w http.ResponseWriter, r *http.Request) {
 
 // saveImage is a no-op (no error, no write) when the form's "image"
 // field was left empty — see saveUploadedImage.
+//
+// A vaulted lorebook's cover is encrypted at rest (saveImageForEntity)
+// — and since a fresh upload always lands at a brand new path (the
+// cache-busting "?v=" query differs every time, and plaintext vs
+// uploads/vault/ are different directories), the previous file is
+// explicitly removed after a successful save rather than relying on
+// writeImageToDisk's same-directory "<id>.*" cleanup, which can't see
+// across that directory switch.
 func (h WorldHandlers) saveImage(w http.ResponseWriter, r *http.Request, id int64) error {
-	imagePath, err := saveUploadedImage(w, r, "image", "lorebooks", id)
+	raw, err := readUploadedImageBytes(w, r, "image")
+	if err != nil || raw == nil {
+		return err
+	}
+	book, err := db.GetLorebook(h.DB, id)
 	if err != nil {
 		return err
 	}
-	if imagePath == "" {
-		return nil
+	imagePath, err := saveImageForEntity(h.Gate, r, book.IsVaulted, raw, "lorebooks", id)
+	if err != nil {
+		return err
 	}
-	return db.UpdateLorebookImagePath(h.DB, id, imagePath)
+	if err := db.UpdateLorebookImagePath(h.DB, id, imagePath); err != nil {
+		return err
+	}
+	// Only remove the old file if it's actually a DIFFERENT disk path
+	// than the new one (strip the cache-busting "?v=" before
+	// comparing) — same plaintext dir/id/ext re-upload resolves to
+	// the identical path, and removing "the old one" would delete the
+	// file just written.
+	if stripQuery(book.ImagePath) != stripQuery(imagePath) {
+		removeUploadedFile(book.ImagePath)
+	}
+	return nil
 }
 
 // saveImageFromBytes is saveImage's counterpart for an image that

@@ -47,6 +47,42 @@ type GenerationResult struct {
 	Seed  int64  // the seed actually used — resolved by the backend when -1 was asked for
 }
 
+// unloadTimeout: freeing VRAM is near-instant (observed: tens of ms),
+// nothing like generateTimeout's "cold load can take minutes" case.
+const unloadTimeout = 15 * time.Second
+
+// UnloadCheckpoint asks the backend to free the checkpoint it's
+// holding in VRAM — A1111/Forge's own POST /sdapi/v1/unload-checkpoint,
+// confirmed live on Lord's Forge instance to actually release it
+// (measured: ~7.1 GB back on a 12 GB card). Callers treat a failure
+// here as best-effort, not fatal — the image that mattered already
+// generated successfully; this just stops the backend from sitting on
+// VRAM indefinitely afterwards. Fixes Lord's report: once an image
+// finished, Forge never let the memory go, so the next chat message
+// to llama.cpp OOM'd.
+func UnloadCheckpoint(ctx context.Context, profile db.BackendProfile) error {
+	url := strings.TrimRight(profile.BaseURL, "/") + "/sdapi/v1/unload-checkpoint"
+	ctx, cancel := context.WithTimeout(ctx, unloadTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return fmt.Errorf("building request: %w", err)
+	}
+	if profile.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+profile.APIKey)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("calling image backend: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("image backend returned %s: %s", resp.Status, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
 func GenerateImage(ctx context.Context, profile db.BackendProfile, params GenerationParams) (GenerationResult, error) {
 	body := struct {
 		GenerationParams

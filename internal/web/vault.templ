@@ -35,6 +35,15 @@ templ vaultPinHashScript() {
 					var pinInput = pinInputs[i];
 					var hashField = form.querySelector('input[name="' + pinInput.dataset.hashField + '"]');
 					hashField.value = await aivalonSha256Hex(salt + pinInput.value);
+					// encHashField (only the real vault-unlock pad sets
+					// data-enc-hash-field): a second hash of the same PIN,
+					// domain-separated so it can never be the same value
+					// as the auth hash above — see vault_crypto.go.
+					var encHashFieldName = pinInput.dataset.encHashField;
+					if (encHashFieldName) {
+						var encHashField = form.querySelector('input[name="' + encHashFieldName + '"]');
+						encHashField.value = await aivalonSha256Hex("aivalon-vault-enc:" + salt + pinInput.value);
+					}
 					pinInput.value = "";
 					pinInput.removeAttribute("name");
 				}
@@ -189,7 +198,16 @@ templ pinPadScript() {
 // layer" once opened via showModal(), so an error message left
 // outside it in the normal page flow ends up visually underneath it;
 // Lord caught "Wrong PIN" going invisible that way.
-templ pinPad(hashField, placeholder, dialogID, errMsg string) {
+//
+// encHashField: "" for everything except the real vault-unlock pad.
+// When set, vaultPinHashScript also derives the vault's file-
+// encryption key from this same PIN (domain-separated from the auth
+// hash so the stored pin_hash can never double as the key — see
+// vault_crypto.go) and writes it hex-encoded into a same-named hidden
+// input the caller provides. The per-item "Unhide" pads don't need
+// this: they run inside an already-unlocked vault session, which is
+// already holding the key from the real unlock.
+templ pinPad(hashField, placeholder, dialogID, errMsg, encHashField string) {
 	<div class="pin-pad" data-max-len="8">
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
@@ -201,6 +219,9 @@ templ pinPad(hashField, placeholder, dialogID, errMsg string) {
 			pattern="[0-9]*"
 			data-pin
 			data-hash-field={ hashField }
+			if encHashField != "" {
+				data-enc-hash-field={ encHashField }
+			}
 			autocomplete="current-password"
 			autofocus="autofocus"
 			required="required"
@@ -291,7 +312,8 @@ templ VaultUnlockPage(errMsg, salt string) {
 			<form method="post" action="/vault/unlock" class="pin-form">
 				<input type="hidden" name="salt" value={ salt }/>
 				<input type="hidden" name="pin_hash"/>
-				@pinPad("pin_hash", "PIN", "", errMsg)
+				<input type="hidden" name="enc_key_hash"/>
+				@pinPad("pin_hash", "PIN", "", errMsg, "enc_key_hash")
 			</form>
 		</dialog>
 		@vaultPinHashScript()
@@ -383,7 +405,22 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 					@lockIcon()
 				</button>
 			</form>
+			<button type="button" class="icon-btn" aria-label="Delete the vault and everything in it" title="Delete the vault and everything in it" data-open-dialog="reset-vault-modal">
+				@trashIcon()
+			</button>
 		</div>
+		<dialog id="reset-vault-modal" class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", errKind == "reset") }>
+			<form method="post" action="/vault/reset" class="pin-form">
+				<p class="danger-text"><strong>This will delete everything in the vault</strong> — every hidden chat, character and world, and the vault itself. There is no undo.</p>
+				<input type="hidden" name="salt" value={ salt }/>
+				<input type="hidden" name="pin_hash"/>
+				if errKind == "reset" {
+					@pinPad("pin_hash", "PIN to delete the vault", "reset-vault-modal", errMsg, "")
+				} else {
+					@pinPad("pin_hash", "PIN to delete the vault", "reset-vault-modal", "", "")
+				}
+			</form>
+		</dialog>
 		<div class="tabs">
 			<div role="tablist" class="tab-list">
 				for _, t := range vaultTabs(v) {
@@ -405,11 +442,12 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 					if len(t.Items) == 0 {
 						<p><em>{ t.Empty }</em></p>
 					} else {
-						<ul class="list-with-actions">
+						@searchFilterInput("vault-" + t.Kind)
+						<ul class="list-with-actions" data-search-scope={ "vault-" + t.Kind }>
 							for _, it := range t.Items {
 								{{ dialogID := fmt.Sprintf("unhide-modal-%s-%d", t.Kind, it.ID) }}
 								{{ isErrTarget := t.Kind == errKind && it.ID == errID }}
-								<li>
+								<li data-search-name={ it.Title }>
 									<a href={ templ.URL(it.Href) }>{ it.Title }</a>
 									<div class="vault-item-actions">
 										<button type="button" class="icon-btn icon-btn-gold" aria-label={ "Unhide " + it.Title } title={ "Unhide " + it.Title } data-open-dialog={ dialogID }>
@@ -425,10 +463,11 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 										<form method="post" action={ templ.URL(fmt.Sprintf("/vault/%s/%d/out", t.Kind, it.ID)) } class="vault-out-form pin-form">
 											<input type="hidden" name="salt" value={ salt }/>
 											<input type="hidden" name="pin_hash"/>
+											<input type="hidden" name="enc_key_hash"/>
 											if isErrTarget {
-												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, errMsg)
+												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, errMsg, "enc_key_hash")
 											} else {
-												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, "")
+												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, "", "enc_key_hash")
 											}
 										</form>
 									</dialog>
@@ -439,6 +478,7 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 				</div>
 			}
 		</div>
+		@searchFilterScript()
 		if len(v.Profiles) > 0 {
 			@sessionModal(v.Profiles, v.Personas, v.PickCharacters, v.PickLorebooks, v.ImagePresets, true)
 		}

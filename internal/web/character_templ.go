@@ -327,9 +327,9 @@ func characterImageGallery(characterID int64, primaryPath string, images []db.Ch
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var10 string
-					templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression("/static/" + img.ImagePath).ResolveURL(ctx)
+					templ_7745c5c3_Var10, templ_7745c5c3_Err = templruntime.NewAttributeExpression(imageSrc(img.ImagePath)).ResolveURL(ctx)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 124, Col: 44}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/character.templ`, Line: 124, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 					if templ_7745c5c3_Err != nil {

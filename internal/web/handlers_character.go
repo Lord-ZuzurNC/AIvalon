@@ -141,19 +141,34 @@ func (h CharacterHandlers) Update(w http.ResponseWriter, r *http.Request) {
 // auto-becomes its primary (there's nothing to choose between yet);
 // every later upload joins the gallery as secondary until explicitly
 // promoted via PromoteImage.
+//
+// A vaulted character's image is encrypted at rest (saveImageForEntity)
+// using whatever decrypt key this request's unlock token is holding —
+// a freshly-created character is never vaulted yet, so this only
+// actually branches when editing one already hidden in the vault.
 func (h CharacterHandlers) saveImage(w http.ResponseWriter, r *http.Request, id int64) error {
 	imageID, err := db.CreateCharacterCardImage(h.DB, id, "")
 	if err != nil {
 		return err
 	}
-	imagePath, err := saveUploadedImage(w, r, "image", "characters", imageID)
+	raw, err := readUploadedImageBytes(w, r, "image")
 	if err != nil {
 		_ = db.DeleteCharacterCardImage(h.DB, imageID)
 		return err
 	}
-	if imagePath == "" {
+	if raw == nil {
 		// Nothing was actually uploaded — drop the placeholder row.
 		return db.DeleteCharacterCardImage(h.DB, imageID)
+	}
+	card, err := db.GetCharacterCard(h.DB, id)
+	if err != nil {
+		_ = db.DeleteCharacterCardImage(h.DB, imageID)
+		return err
+	}
+	imagePath, err := saveImageForEntity(h.Gate, r, card.IsVaulted, raw, "characters", imageID)
+	if err != nil {
+		_ = db.DeleteCharacterCardImage(h.DB, imageID)
+		return err
 	}
 	if err := db.UpdateCharacterCardImagePath(h.DB, imageID, imagePath); err != nil {
 		return err

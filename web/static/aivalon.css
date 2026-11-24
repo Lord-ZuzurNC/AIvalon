@@ -825,6 +825,8 @@ html.sidebar-collapsed #sidebar-toggle {
 
 .vault-tab-actions {
 	display: flex;
+	align-items: center;
+	gap: 20px;
 	justify-content: flex-end;
 	margin-bottom: 0.5rem;
 }

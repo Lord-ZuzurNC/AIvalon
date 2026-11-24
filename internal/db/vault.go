@@ -46,6 +46,18 @@ func SetVaultPIN(db *sql.DB, hash, salt string, digits int) error {
 	return nil
 }
 
+// DeleteVault removes the singleton PIN row — the vault goes back to
+// "not configured" (Show renders the Setup form again). Callers
+// (VaultHandlers.Reset) are responsible for deleting the vaulted
+// content itself first; this alone doesn't touch sessions/characters/
+// lorebooks at all.
+func DeleteVault(db *sql.DB) error {
+	if _, err := db.Exec(`DELETE FROM vault WHERE id = 1`); err != nil {
+		return fmt.Errorf("deleting vault PIN: %w", err)
+	}
+	return nil
+}
+
 func SetSessionVaulted(db *sql.DB, sessionID int64, vaulted bool) error {
 	_, err := db.Exec(`UPDATE sessions SET is_vaulted = ? WHERE id = ?`, vaulted, sessionID)
 	if err != nil {

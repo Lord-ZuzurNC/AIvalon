@@ -416,7 +416,7 @@ templ BackLink(href, label string) {
 // look the same every time you load it, not shuffle on refresh.
 templ Avatar(imagePath, name string) {
 	if imagePath != "" {
-		<img class="avatar" src={ "/static/" + imagePath } alt={ name }/>
+		<img class="avatar" src={ imageSrc(imagePath) } alt={ name }/>
 	} else {
 		{{ initial := "" }}
 		if len(name) > 0 {
@@ -473,7 +473,7 @@ templ vignetteCard(href, imagePath, name, deleteAction, vaultAction string, chat
 // the element's own display type doesn't matter.
 templ vignetteFace(imagePath, name string) {
 	if imagePath != "" {
-		<img class="vignette-image" src={ "/static/" + imagePath } alt=""/>
+		<img class="vignette-image" src={ imageSrc(imagePath) } alt=""/>
 	} else {
 		{{ initial := "" }}
 		if len(name) > 0 {
@@ -549,7 +549,7 @@ templ ImageField(imagePath, name string) {
 	<details open?={ imagePath != "" }>
 		<summary>Image</summary>
 		if imagePath != "" {
-			<img class="image-field-preview" src={ "/static/" + imagePath } alt={ name }/>
+			<img class="image-field-preview" src={ imageSrc(imagePath) } alt={ name }/>
 		}
 		<input type="file" name="image" accept="image/png,image/jpeg,image/gif,image/webp"/>
 	</details>

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -38,6 +39,17 @@ func (f ImageGenForm) activePreset(presetID int64) db.ImagePreset {
 // defaultImageParams is what a session with no preset chosen generates
 // with — A1111's own txt2img defaults.
 var defaultImageParams = db.ImagePreset{Steps: 20, CFGScale: 7, Width: 512, Height: 512, SamplerName: "Euler a", Seed: -1}
+
+// DemoMode disables real image generation (AIVALON_DEMO=1, see
+// cmd/aivalon/main.go) for distributing a trial build that doesn't
+// need a reachable A1111/Forge instance — Lord's ask: the "Generate
+// image" button stays visible (same disabled styling the UI already
+// uses when there's nothing to generate from yet) rather than being
+// hidden, so a demo viewer can see the feature exists. A package-level
+// var rather than threading a new param through every chat template:
+// it's a whole-process setting, fixed for the lifetime of the server,
+// same shape as defaultImageParams above.
+var DemoMode bool
 
 func (h ChatHandlers) imageGenForm() (ImageGenForm, error) {
 	var f ImageGenForm
@@ -74,6 +86,10 @@ func (h ChatHandlers) GenerateImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fail := func(err error) { render(w, r, TestResult(err, nil, "")) }
+	if DemoMode {
+		fail(errors.New("image generation is disabled in this demo build"))
+		return
+	}
 
 	r.ParseForm()
 	prompt := strings.TrimSpace(r.FormValue("prompt"))
@@ -129,7 +145,26 @@ func (h ChatHandlers) GenerateImage(w http.ResponseWriter, r *http.Request) {
 		fail(err)
 		return
 	}
-	path, err := saveImageBytes(result.Image, "generated", msgID)
+	// A vaulted session's generated image is encrypted at rest — Lord:
+	// "si on va dans static/uploads on voit tout, il n'y a pas trop
+	// d'intérêt d'avoir un vault". Needs the decrypt key this browser's
+	// unlock token is holding (see VaultGate.EncKey); Setup's PIN-change
+	// path grants an unlock without one (see handlers_vault.go), so
+	// that's a real failure mode here, not just a theoretical one —
+	// surfaced with a message that says what to do about it, not a
+	// generic 500.
+	var path string
+	if session.IsVaulted {
+		encKey, ok := h.Gate.EncKey(r)
+		if !ok {
+			_ = db.DeleteMessage(h.DB, msgID)
+			fail(errors.New("can't encrypt this for the vault right now — close the vault and unlock it again (just setting the PIN doesn't hand over the encryption key), then retry"))
+			return
+		}
+		path, err = saveVaultImageBytes(encKey, result.Image, "generated", msgID)
+	} else {
+		path, err = saveImageBytes(result.Image, "generated", msgID)
+	}
 	if err == nil {
 		err = db.SetMessageImagePath(h.DB, msgID, path)
 	}
@@ -137,6 +172,15 @@ func (h ChatHandlers) GenerateImage(w http.ResponseWriter, r *http.Request) {
 		_ = db.DeleteMessage(h.DB, msgID)
 		fail(fmt.Errorf("saving generated image: %w", err))
 		return
+	}
+
+	// Free the checkpoint from VRAM now that the image is saved —
+	// best-effort, never blocks the redirect on it. Fixes Lord's
+	// report: Forge used to keep the checkpoint loaded indefinitely
+	// after a generation, leaving llama.cpp no room and OOMing on the
+	// next chat message.
+	if unloadErr := imageclient.UnloadCheckpoint(r.Context(), profile); unloadErr != nil {
+		log.Printf("session %d: couldn't unload the image backend's checkpoint after generating: %v", sessionID, unloadErr)
 	}
 
 	dest := fmt.Sprintf("/chat/%d", sessionID)
@@ -204,6 +248,10 @@ func (h ChatHandlers) SuggestImagePrompt(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	fail := func(msg string) { render(w, r, imagePromptSuggestion("", msg)) }
+	if DemoMode {
+		fail("prompt suggestion is disabled in this demo build")
+		return
+	}
 
 	session, messages, err := h.loadSession(r)
 	if err != nil {
@@ -248,7 +296,12 @@ func (h ChatHandlers) SuggestImagePrompt(w http.ResponseWriter, r *http.Request)
 func buildImagePromptInstruction(persona db.Persona, characters []db.CharacterCard, messages []db.ChatMessage) []llmclient.Message {
 	const system = "You write prompts for a Stable Diffusion image generator. " +
 		"Reply with ONLY a comma-separated list of visual tags/phrases describing what the image should show — " +
-		"appearance, pose, expression, setting, lighting. No narration, no quotes, no explanation, under 60 words."
+		"appearance, pose, expression, setting, lighting. No narration, no quotes, no explanation, under 60 words. " +
+		"Stable Diffusion does not know fictional proper names: NEVER write a character's name (e.g. \"Headmaster Alaric\") " +
+		"— describe how they look instead (age, build, clothing, notable features). If the source material gives no " +
+		"physical description for a named character, invent a brief plausible one rather than falling back to the name. " +
+		"Favor a wide establishing shot of the actual setting and any crowd present over a single close-up portrait, " +
+		"unless the scene is clearly about one character alone."
 	recent := messages
 	if n := len(messages); n > 6 {
 		recent = messages[n-6:]

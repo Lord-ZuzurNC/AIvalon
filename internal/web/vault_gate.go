@@ -40,13 +40,23 @@ const (
 // handler structs from main.go.
 type VaultGate struct {
 	mu             sync.Mutex
-	tokens         map[string]time.Time // unlock token -> expiry
+	tokens         map[string]vaultUnlock // unlock token -> expiry + enc key
 	failedAttempts int
 	lockedUntil    time.Time
 }
 
+// vaultUnlock is what an unlock token buys: how long it's good for,
+// and (when the unlock form sent one — see vault.templ's
+// encHashField) the derived file-encryption key, held in memory only
+// for as long as the token lives. Never written to disk — see
+// vault_crypto.go.
+type vaultUnlock struct {
+	expiry time.Time
+	encKey []byte
+}
+
 func NewVaultGate() *VaultGate {
-	return &VaultGate{tokens: make(map[string]time.Time)}
+	return &VaultGate{tokens: make(map[string]vaultUnlock)}
 }
 
 // Unlocked reports whether r carries a still-valid unlock cookie.
@@ -57,20 +67,39 @@ func (g *VaultGate) Unlocked(r *http.Request) bool {
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	expiry, ok := g.tokens[c.Value]
-	return ok && time.Now().Before(expiry)
+	u, ok := g.tokens[c.Value]
+	return ok && time.Now().Before(u.expiry)
 }
 
-// grantUnlock issues a fresh token, stores its expiry, and sets the
-// cookie on w.
-func (g *VaultGate) grantUnlock(w http.ResponseWriter) error {
+// EncKey returns the file-encryption key bound to r's unlock token,
+// if any — "any" because a token granted without one (Setup's PIN-
+// change path doesn't collect it; see vault.templ) simply has none,
+// and callers that need to encrypt/decrypt a vaulted file must treat
+// that as "can't right now", not crash.
+func (g *VaultGate) EncKey(r *http.Request) ([]byte, bool) {
+	c, err := r.Cookie(vaultCookieName)
+	if err != nil {
+		return nil, false
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	u, ok := g.tokens[c.Value]
+	if !ok || time.Now().After(u.expiry) || len(u.encKey) == 0 {
+		return nil, false
+	}
+	return u.encKey, true
+}
+
+// grantUnlock issues a fresh token, stores its expiry (and encKey, if
+// the caller has one — "" means none), and sets the cookie on w.
+func (g *VaultGate) grantUnlock(w http.ResponseWriter, encKey []byte) error {
 	token, err := randomHex(32)
 	if err != nil {
 		return err
 	}
 	expiry := time.Now().Add(vaultUnlockTTL)
 	g.mu.Lock()
-	g.tokens[token] = expiry
+	g.tokens[token] = vaultUnlock{expiry: expiry, encKey: encKey}
 	g.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{
 		Name:     vaultCookieName,

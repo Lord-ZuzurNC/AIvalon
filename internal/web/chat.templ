@@ -20,8 +20,8 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 		<div class="message-header">
 			if m.ImagePath != "" {
 				<figure class="message-image-figure">
-					<a href={ templ.URL("/static/" + m.ImagePath) } target="_blank" rel="noopener">
-						<img src={ "/static/" + m.ImagePath } alt={ m.Content } loading="lazy"/>
+					<a href={ templ.URL(imageSrc(m.ImagePath)) } target="_blank" rel="noopener">
+						<img src={ imageSrc(m.ImagePath) } alt={ m.Content } loading="lazy"/>
 					</a>
 					<figcaption><small>{ m.Content }</small></figcaption>
 				</figure>
@@ -218,13 +218,38 @@ templ characterPickerStrip(characters []db.CharacterCard, name string) {
 	}
 }
 
-// ContextTrimNotice is the out-of-band SSE payload Stream sends when
-// truncateHistoryToBudget left messages out of this reply's prompt.
-// innerHTML (not a full replace) so #context-trim-notice stays the same
-// live-region node and screen readers announce the new text.
-templ ContextTrimNotice(dropped int) {
+// RunawayRepetitionNotice is the out-of-band SSE payload streamWorldReply
+// sends when it auto-stopped a generation that started repeating the
+// same short phrase back-to-back (repeatedTailRun) — almost always a
+// sign the context overflowed/got corrupted upstream. Same swap target
+// as ContextTrimNotice so whichever fires last is what's shown.
+templ RunawayRepetitionNotice() {
 	<div id="context-trim-notice" hx-swap-oob="innerHTML">
-		<small>{ trimNoticeText(dropped) } <a href="/settings">adjust it in Settings</a>{ " if needed." }</small>
+		<small class="danger-text">⚠ Generation stopped early — the backend started repeating itself in a loop (usually means the context overflowed or got corrupted). The saved reply has the loop trimmed off.</small>
+	</div>
+}
+
+// ContextTrimNotice is the out-of-band SSE payload Stream sends when
+// truncateHistoryToBudget left messages out of this reply's prompt, or
+// when even dropping everything but the live turn didn't fit (the
+// system prompt — persona/characters/lorebook — is big enough alone
+// to exceed the budget; that part is never cut, see
+// truncateHistoryToBudget's doc comment). The second case is the loud
+// warning Lord asked for: silently sending an oversized prompt lets
+// the LLM backend's own context-shift handling corrupt the exchange,
+// which is how a huge lore card turns into an endless "World: World:
+// World:" repetition loop that only stops when the backend is killed.
+// innerHTML (not a full replace) so #context-trim-notice stays the
+// same live-region node and screen readers announce the new text.
+templ ContextTrimNotice(dropped int, stillOverBudget bool) {
+	<div id="context-trim-notice" hx-swap-oob="innerHTML">
+		if stillOverBudget {
+			<small class="danger-text">
+				⚠ Even after dropping { fmt.Sprintf("%d", dropped) } earlier message(s), the character/lorebook content alone is still bigger than the context budget — this prompt went out oversized and the backend may degenerate (repeat itself, run on, or error). Shrink the card/lorebook or raise the budget in <a href="/settings">Settings</a>.
+			</small>
+		} else {
+			<small>{ trimNoticeText(dropped) } <a href="/settings">adjust it in Settings</a>{ " if needed." }</small>
+		}
 	</div>
 }
 
@@ -333,7 +358,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			     this reply's prompt had to leave old messages out. -->
 			<div id="context-trim-notice" class="context-trim-notice" role="status" aria-live="polite"></div>
 			<div class="chat-input-toolbar">
-				@generateImageButton(hasLLMReply(messages))
+				@generateImageButton(hasLLMReply(messages) && !DemoMode)
 			</div>
 			@imageGenModal(session.ID, imageForm, imageForm.activePreset(session.ImagePresetID))
 			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) } class="chat-input-row">
@@ -544,10 +569,10 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 						if m.ImagePath != "" {
 							{{ hasImages = true }}
 							<div class="image-gallery-item">
-								<a href={ templ.URL("/static/" + m.ImagePath) } target="_blank" rel="noopener">
-									<img src={ "/static/" + m.ImagePath } alt={ m.Content } loading="lazy"/>
-								</a>
-								<a href={ templ.URL("/static/" + m.ImagePath) } download role="button" class="secondary">Download</a>
+								<a href={ templ.URL(imageSrc(m.ImagePath)) } target="_blank" rel="noopener">
+										<img src={ imageSrc(m.ImagePath) } alt={ m.Content } loading="lazy"/>
+									</a>
+									<a href={ templ.URL(imageSrc(m.ImagePath)) } download role="button" class="secondary">Download</a>
 							</div>
 						}
 					}

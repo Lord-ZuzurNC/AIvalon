@@ -32,7 +32,28 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// demoModeDefault is baked in at link time for the release/ builds via
+// -ldflags "-X main.demoModeDefault=1" (see release build instructions
+// in docs/ or the release script) — 0.1 ships with image generation
+// off by default (Lord: "la gen d'image n'est pas viable là" — the
+// VRAM contention with llama.cpp isn't solved yet). A plain `go build`
+// (Lord's own dev loop, still actively debugging image gen) leaves
+// this at "0": image gen stays on unless AIVALON_DEMO=1 is set, same
+// as before. AIVALON_DEMO always overrides this default either way,
+// so a release binary can still be forced back on for testing.
+var demoModeDefault = "0"
+
 func main() {
+	// AIVALON_DEMO=1/0 overrides demoModeDefault either way; unset
+	// falls back to whatever this binary was linked with. See
+	// web.DemoMode's doc comment for why the UI stays visible, just
+	// inert, instead of hiding the button outright.
+	demo := demoModeDefault == "1"
+	if v, ok := os.LookupEnv("AIVALON_DEMO"); ok {
+		demo = v == "1"
+	}
+	web.DemoMode = demo
+
 	sqlDB, err := db.Open(dbPath)
 	if err != nil {
 		log.Fatalf("database: %v", err)
@@ -147,9 +168,13 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /vault/setup", vault.Setup)
 	mux.HandleFunc("POST /vault/unlock", vault.Unlock)
 	mux.HandleFunc("POST /vault/lock", vault.Lock)
+	mux.HandleFunc("POST /vault/reset", vault.Reset)
 	// {kind} is chats|characters|worlds — see vaultKinds.
 	mux.HandleFunc("POST /vault/{kind}/{id}/in", vault.MoveIn)
 	mux.HandleFunc("POST /vault/{kind}/{id}/out", vault.MoveOut)
+	// Decrypting counterpart to the plain static file server — see
+	// imageSrc/VaultHandlers.Image in vault_crypto.go.
+	mux.HandleFunc("GET /vault/image/{path...}", vault.Image)
 
 	return mux
 }

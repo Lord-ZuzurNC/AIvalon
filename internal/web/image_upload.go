@@ -28,6 +28,20 @@ var allowedImageExt = map[string]string{
 }
 
 func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir string, entityID int64) (string, error) {
+	raw, err := readUploadedImageBytes(w, r, formField)
+	if err != nil || raw == nil {
+		return "", err
+	}
+	return saveImageBytes(raw, subdir, entityID)
+}
+
+// readUploadedImageBytes is saveUploadedImage's first half, split out
+// so a vaulted entity's upload (saveImageForEntity) can decide
+// plaintext vs encrypted AFTER seeing the bytes, instead of
+// saveUploadedImage always writing plaintext straight to disk itself.
+// Returns (nil, nil) — not an error — when the field was simply left
+// empty, same as saveUploadedImage always has.
+func readUploadedImageBytes(w http.ResponseWriter, r *http.Request, formField string) ([]byte, error) {
 	// ParseMultipartForm's own maxMemory argument only bounds how much
 	// gets buffered in RAM before spilling to a temp file — it does
 	// NOT cap the request body's total size, so without this a 25MiB+
@@ -37,18 +51,18 @@ func saveUploadedImage(w http.ResponseWriter, r *http.Request, formField, subdir
 	// outright once the limit is crossed.
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		return "", fmt.Errorf("parsing multipart form: %w", err)
+		return nil, fmt.Errorf("parsing multipart form: %w", err)
 	}
 	file, header, err := r.FormFile(formField)
 	if err == http.ErrMissingFile {
-		return "", nil
+		return nil, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("reading upload: %w", err)
+		return nil, fmt.Errorf("reading upload: %w", err)
 	}
 	defer file.Close()
 	_ = header // filename itself is untrusted/unused — ext comes from sniffing, name from entityID
-	return writeImageToDisk(file, subdir, entityID)
+	return io.ReadAll(file)
 }
 
 // saveImageBytes is saveUploadedImage's counterpart for an image that
@@ -110,6 +124,43 @@ func writeImageToDisk(src io.ReadSeeker, subdir string, entityID int64) (string,
 	return fmt.Sprintf("%s?v=%d", relPath, time.Now().UnixNano()), nil
 }
 
+// saveVaultImageBytes is saveImageBytes' encrypted counterpart, used
+// when the owning session/entity is vaulted (Lord: "chiffre tout ce
+// qui est dans le vault" — the path convention vault_crypto.go
+// documents). Written under uploads/vault/<subdir>/ instead of
+// uploads/<subdir>/, filename suffixed ".enc" so it's visibly not a
+// real image even to a casual look at the folder. The returned path
+// is only ever meant to be resolved through VaultHandlers.Image
+// (the "/vault/image/" route), never "/static/" directly — that
+// would just hand back ciphertext.
+func saveVaultImageBytes(encKey, raw []byte, subdir string, entityID int64) (string, error) {
+	ext, err := sniffImageExt(bytes.NewReader(raw))
+	if err != nil {
+		return "", err
+	}
+	ciphertext, err := encryptVaultBytes(encKey, raw)
+	if err != nil {
+		return "", fmt.Errorf("encrypting for the vault: %w", err)
+	}
+
+	dir := filepath.Join("web", "static", "uploads", "vault", subdir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("creating upload dir: %w", err)
+	}
+	removeExistingUploads(dir, entityID)
+
+	diskPath := filepath.Join(dir, fmt.Sprintf("%d%s.enc", entityID, ext))
+	// 0o600, not the 0o666-minus-umask os.Create would give a plain
+	// upload — these bytes are meant to be unreadable without the
+	// PIN, so don't lean on the umask to get there.
+	if err := os.WriteFile(diskPath, ciphertext, 0o600); err != nil {
+		return "", fmt.Errorf("writing %s: %w", diskPath, err)
+	}
+
+	relPath := filepath.ToSlash(filepath.Join("uploads", "vault", subdir, fmt.Sprintf("%d%s.enc", entityID, ext)))
+	return fmt.Sprintf("%s?v=%d", relPath, time.Now().UnixNano()), nil
+}
+
 // removeExistingUploads deletes any file already named "<entityID>.*" in
 // dir. Errors are ignored — a missing file (the common case: nothing
 // uploaded yet) isn't a problem worth failing the new upload over.
@@ -118,6 +169,16 @@ func removeExistingUploads(dir string, entityID int64) {
 	for _, m := range matches {
 		_ = os.Remove(m)
 	}
+}
+
+// stripQuery removes a trailing "?v=..." cache-busting query string
+// (added by writeImageToDisk/saveVaultImageBytes) so two stored paths
+// can be compared by the disk file they actually point to.
+func stripQuery(relPath string) string {
+	if i := strings.IndexByte(relPath, '?'); i != -1 {
+		return relPath[:i]
+	}
+	return relPath
 }
 
 // removeUploadedFile deletes the on-disk file behind a stored
@@ -130,10 +191,7 @@ func removeUploadedFile(relPath string) {
 	if relPath == "" {
 		return
 	}
-	if i := strings.IndexByte(relPath, '?'); i != -1 {
-		relPath = relPath[:i]
-	}
-	_ = os.Remove(filepath.Join("web", "static", relPath))
+	_ = os.Remove(filepath.Join("web", "static", stripQuery(relPath)))
 }
 
 func sniffImageExt(file io.ReadSeeker) (string, error) {

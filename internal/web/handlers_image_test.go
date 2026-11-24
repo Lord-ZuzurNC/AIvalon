@@ -12,8 +12,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
@@ -24,7 +26,11 @@ import (
 const tinyPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
 // mockA1111 answers txt2img with imageB64 and seed 4242 in info; the
-// returned func reports the body of the last request it received.
+// returned func reports the body of the last txt2img request it
+// received. Also answers unload-checkpoint (GenerateImage calls it
+// right after a successful generation, see UnloadCheckpoint) with a
+// bare 200 so it doesn't get mistaken for — or overwrite — the
+// txt2img body callers are asserting against.
 func mockA1111(t *testing.T, imageB64 string) (*httptest.Server, func() imageclient.GenerationParams) {
 	t.Helper()
 	var (
@@ -32,6 +38,10 @@ func mockA1111(t *testing.T, imageB64 string) (*httptest.Server, func() imagecli
 		last imageclient.GenerationParams
 	)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sdapi/v1/unload-checkpoint" {
+			json.NewEncoder(w).Encode(map[string]any{})
+			return
+		}
 		var got imageclient.GenerationParams
 		json.NewDecoder(r.Body).Decode(&got)
 		mu.Lock()
@@ -123,7 +133,7 @@ func TestGenerateImageEndToEnd(t *testing.T) {
 	}
 
 	// And it never reaches the LLM prompt.
-	chatMessages, _ := buildNarratorMessages("sys", db.DefaultPersona, nil, "", messages, 0)
+	chatMessages, _, _ := buildNarratorMessages("sys", db.DefaultPersona, nil, "", messages, 0)
 	for _, m := range chatMessages {
 		if strings.Contains(m.Content, "a castle on a hill") {
 			t.Fatalf("image message leaked into the LLM history: %+v", m)
@@ -373,6 +383,98 @@ func mockLLM(t *testing.T, reply string) (*httptest.Server, func() []llmclient.M
 		mu.Lock()
 		defer mu.Unlock()
 		return last
+	}
+}
+
+// TestGenerateImageUnloadsCheckpointAfterSuccess is Lord's VRAM
+// complaint: after an image finishes, Forge used to keep the
+// checkpoint loaded forever, starving llama.cpp on the next chat
+// message. GenerateImage must call the backend's unload-checkpoint
+// endpoint once the image is safely saved.
+func TestGenerateImageUnloadsCheckpointAfterSuccess(t *testing.T) {
+	f := newFixture(t)
+	t.Chdir(t.TempDir())
+	var unloadCalls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sdapi/v1/unload-checkpoint" {
+			atomic.AddInt32(&unloadCalls, 1)
+			json.NewEncoder(w).Encode(map[string]any{})
+			return
+		}
+		info, _ := json.Marshal(map[string]any{"seed": 4242})
+		json.NewEncoder(w).Encode(map[string]any{"images": []string{tinyPNGBase64}, "info": string(info)})
+	}))
+	t.Cleanup(srv.Close)
+	profileID, _ := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "sd", Kind: "image", BaseURL: srv.URL})
+	h := ChatHandlers{DB: f.db}
+
+	if w := postForm(h.GenerateImage, f.session, imageForm(profileID)); w.Header().Get("HX-Redirect") == "" {
+		t.Fatalf("generation failed: %s", w.Body.String())
+	}
+	if n := atomic.LoadInt32(&unloadCalls); n != 1 {
+		t.Fatalf("unload-checkpoint called %d times, want exactly 1", n)
+	}
+}
+
+// TestGenerateImageUnloadFailureDoesntFailTheRequest: unload is
+// best-effort — the image already generated and saved successfully,
+// so a broken/old backend without this endpoint must not turn a good
+// generation into a user-facing failure.
+func TestGenerateImageUnloadFailureDoesntFailTheRequest(t *testing.T) {
+	f := newFixture(t)
+	t.Chdir(t.TempDir())
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/sdapi/v1/unload-checkpoint" {
+			http.Error(w, "no such endpoint", http.StatusNotFound)
+			return
+		}
+		info, _ := json.Marshal(map[string]any{"seed": 4242})
+		json.NewEncoder(w).Encode(map[string]any{"images": []string{tinyPNGBase64}, "info": string(info)})
+	}))
+	t.Cleanup(srv.Close)
+	profileID, _ := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "sd", Kind: "image", BaseURL: srv.URL})
+	h := ChatHandlers{DB: f.db}
+
+	if w := postForm(h.GenerateImage, f.session, imageForm(profileID)); w.Header().Get("HX-Redirect") == "" {
+		t.Fatalf("a 404 on unload must not fail the already-successful generation: %s", w.Body.String())
+	}
+}
+
+// TestDemoModeDisablesGeneration is Lord's demo-build request: with
+// DemoMode on, both image endpoints must refuse without ever reaching
+// a real backend — t.Cleanup resets the package var so this doesn't
+// leak into other tests run in the same binary.
+func TestDemoModeDisablesGeneration(t *testing.T) {
+	DemoMode = true
+	t.Cleanup(func() { DemoMode = false })
+
+	f := newFixture(t)
+	profileID, _ := db.CreateBackendProfile(f.db, db.BackendProfile{Name: "sd", Kind: "image", BaseURL: "http://127.0.0.1:1"})
+	h := ChatHandlers{DB: f.db}
+
+	w := postForm(h.GenerateImage, f.session, imageForm(profileID))
+	if w.Header().Get("HX-Redirect") != "" || !strings.Contains(w.Body.String(), "disabled in this demo build") {
+		t.Fatalf("GenerateImage under DemoMode: redirect %q, body %s", w.Header().Get("HX-Redirect"), w.Body.String())
+	}
+	if n := f.count(t, `SELECT COUNT(*) FROM messages WHERE session_id = ? AND role = 'image'`, f.session); n != 0 {
+		t.Fatalf("DemoMode still created an image message: %d", n)
+	}
+
+	w = postForm(h.SuggestImagePrompt, f.session, nil)
+	if !strings.Contains(w.Body.String(), "disabled in this demo build") {
+		t.Fatalf("SuggestImagePrompt under DemoMode: body %s", w.Body.String())
+	}
+
+	// The button itself renders disabled too — not just the endpoint.
+	r := httptest.NewRequest("GET", "/x", nil)
+	r.SetPathValue("id", fmt.Sprint(f.session))
+	page := httptest.NewRecorder()
+	h.Show(page, r)
+	if !strings.Contains(page.Body.String(), `id="generate-image-btn"`) {
+		t.Fatal("the Generate image button must still be present (visible, just inert)")
+	}
+	if !regexp.MustCompile(`id="generate-image-btn"[^>]*\bdisabled\b`).MatchString(page.Body.String()) {
+		t.Fatal("the Generate image button must render disabled under DemoMode")
 	}
 }
 

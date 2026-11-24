@@ -12,11 +12,21 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
 
-// unlockedCookie returns a cookie gate accepts as "vault unlocked".
+// unlockedCookie returns a cookie gate accepts as "vault unlocked",
+// with no file-encryption key attached — fine for tests that only
+// care about the unlock gate itself, not vaulted-file crypto.
 func unlockedCookie(t *testing.T, gate *VaultGate) *http.Cookie {
 	t.Helper()
+	return unlockedCookieWithKey(t, gate, nil)
+}
+
+// unlockedCookieWithKey is unlockedCookie's counterpart for tests
+// that need the gate to actually hold a decrypt key for this token
+// (see VaultGate.EncKey).
+func unlockedCookieWithKey(t *testing.T, gate *VaultGate, encKey []byte) *http.Cookie {
+	t.Helper()
 	rec := httptest.NewRecorder()
-	if err := gate.grantUnlock(rec); err != nil {
+	if err := gate.grantUnlock(rec, encKey); err != nil {
 		t.Fatal(err)
 	}
 	return rec.Result().Cookies()[0]
@@ -179,7 +189,7 @@ func TestVaultPageTabsListEachKind(t *testing.T) {
 		"worlds":     fmt.Sprintf(`/vault/worlds/%d/out`, f.lorebook),
 	} {
 		p := panel(kind)
-		if !strings.Contains(p, want) || strings.Count(p, "<li>") != 1 {
+		if !strings.Contains(p, want) || strings.Count(p, "<li ") != 1 {
 			t.Errorf("%s panel: want exactly one item posting to %s", kind, want)
 		}
 	}
