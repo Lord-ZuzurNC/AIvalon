@@ -25,7 +25,8 @@ const frenchCharacterJSON = `{
 		"description": "Un sage sorcier vivant dans une tour isolée au cœur de la forêt enchantée.",
 		"personality": "Il est calme, patient et plein de sagesse ancienne.",
 		"scenario": "Il enseigne la magie à son apprentie dans la tour.",
-		"first_mes": "Bonjour, jeune apprenti. Es-tu prêt pour ta première leçon de magie ?"
+		"first_mes": "Bonjour, jeune apprenti. Es-tu prêt pour ta première leçon de magie ?",
+		"creator_notes": "Fonctionne mieux avec un modèle 13B ou plus."
 	}
 }`
 
@@ -203,6 +204,19 @@ func TestConfirmLanguageImport_Character_CreatesVOAndTranslatedVF(t *testing.T) 
 	if !strings.Contains(confirmBody, "Français") {
 		t.Errorf("confirm page must have named the detected language, body: %s", confirmBody)
 	}
+	// task t_166318f0/E: AuthorNote must be translated on the VF
+	// copy too — it ends up injected into the character's own system
+	// prompt (substituteCardMacros, handlers_chat.go), so leaving it
+	// French there would mix languages in that prompt.
+	if !strings.Contains(vo.AuthorNote, "13B") {
+		t.Errorf("VO author note must stay untouched, got %q", vo.AuthorNote)
+	}
+	if !strings.HasPrefix(vf.AuthorNote, "[EN] ") {
+		t.Errorf("VF author note must be the mock-translated text, got %q", vf.AuthorNote)
+	}
+	if vf.AuthorNote == vo.AuthorNote {
+		t.Error("VF author note must differ from VO — translation didn't happen")
+	}
 }
 
 // TestConfirmLanguageImport_Character_FallsBackWithoutBackend proves
@@ -350,20 +364,36 @@ func TestImportLorebookJSON_LanguageMismatchAndDualImport(t *testing.T) {
 			t.Errorf("VF entry content must be mock-translated, got %q", e.Content)
 		}
 	}
-	// Keys must survive untouched in the VF copy — translating them
-	// would silently break trigger matching (see docs/DESIGN.md).
-	voKeys := map[string]bool{}
-	for _, e := range voEntries {
-		for _, k := range e.Keys {
-			voKeys[k] = true
-		}
-	}
+	// Keys must now be translated too (task t_166318f0/D, reversing
+	// Part C's original call): a VF copy whose Keys stayed in the
+	// source language would never trigger for a player typing in the
+	// target language — see docs/DESIGN.md's superseded-reasoning
+	// note. mockTranslationServer echoes "[EN] "+input regardless of
+	// which system prompt sent it (translateText vs
+	// translateKeywordText), so this proves the real per-key round
+	// trip happened without needing a live LLM.
 	for _, e := range vfEntries {
 		for _, k := range e.Keys {
-			if !voKeys[k] {
-				t.Errorf("VF entry key %q has no VO counterpart — keys must not be translated", k)
+			if !strings.HasPrefix(k, "[EN] ") {
+				t.Errorf("VF entry key %q must be mock-translated, not carried through byte-for-byte", k)
 			}
 		}
+	}
+	// And the matching mechanism itself must still work on a
+	// translated-shaped key: real translateKeywordText output is a
+	// bare word/short phrase (its own prompt explicitly forbids
+	// brackets/preamble — see import_language.go), unlike this
+	// mock's "[EN] "-prefixed marker (whose literal brackets are
+	// themselves non-word characters, which would trip up \b's
+	// boundary check in a way no real translated key ever would —
+	// not what this is meant to verify). keysMatch is exercised
+	// directly here with a plausible translated key to prove D's
+	// change doesn't break whole-word triggering.
+	if !keysMatch([]string{"tower"}, "I climb the tower now.") {
+		t.Error("a translated key must still match as a whole word in a message containing it verbatim")
+	}
+	if keysMatch([]string{"tower"}, "I see no towering structure here.") {
+		t.Error("a translated key must NOT match inside a longer word (word-boundary regression)")
 	}
 }
 

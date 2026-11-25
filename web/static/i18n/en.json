@@ -297,6 +297,7 @@
   "import.language_result_both": "Imported “{{vo}}” and “{{vf}}”.",
   "import.language_result_vo_only": "Imported “{{name}}”.",
   "import.language_continue": "Continue",
+  "import.language_translating": "Translating and importing the character/world…",
   "import.translation_unavailable_no_backend": "Automatic translation wasn't available (no translation-capable backend is configured in Settings) — only the original was imported.",
   "import.translation_unavailable_failed": "Automatic translation failed (the backend didn't respond or returned an error) — only the original was imported.",
   "import.batch_wrong_kind_lorebook": "This looks like a Lorebook, not a Character Card — import it separately in World.",

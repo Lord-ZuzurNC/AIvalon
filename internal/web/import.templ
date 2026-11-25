@@ -44,17 +44,57 @@ templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token st
 // translation backend is reachable — see ImportLanguageResultPage).
 // Cancel (cancelHref) creates nothing at all, same contract as
 // ImportCrossConfirmPage's "No".
+//
+// Shape: <dialog open><article> — same convention as every other
+// modal in this app (see templates.templ's DeleteConfirmPage) rather
+// than a bare h1/p/div full-width page, which is what this page
+// actually was before task t_166318f0/A (Lord's complaint: it reads
+// as a blank navigated-to page, not a modal). Still a real HTTP
+// response/page load under the hood — this app has no SPA route to
+// avoid one (see languageSwitcher's own doc comment) — the <dialog>
+// wrapper is purely the established *visual* modal convention here.
+// The second, initially-hidden <dialog> (import-loading-dialog) is
+// task t_166318f0/C: the resumeAction POST can take 1-2 minutes
+// (sequential per-field/per-entry translation calls, see
+// translateCardFields/translateLorebookEntries in
+// import_language.go) with otherwise zero visual feedback — Lord's
+// own read of a real test session (veyra.png) was that the silent
+// wait looked like a failed import. The confirm form's onsubmit
+// closes this dialog and opens the loading one; the browser then
+// just sits on the loading dialog until the server's response
+// (ImportLanguageResultPage) replaces the whole document — no
+// htmx/SSE needed for a plain POST that already navigates away.
 templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, cancelHref, token string) {
 	@Layout(i18n.T(ctx, "import.language_mismatch_title"), active) {
-		<h1>{ i18n.T(ctx, "import.language_mismatch_title") }</h1>
-		<p>{ i18n.T(ctx, "import.language_mismatch_warning", "detected", detectedName, "target", targetName) }</p>
-		<div class="import-confirm-actions">
-			<form method="post" action={ templ.URL(resumeAction) }>
-				<input type="hidden" name="token" value={ token }/>
-				<button type="submit">{ i18n.T(ctx, "import.language_confirm") }</button>
-			</form>
-			<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.language_cancel") }</a>
-		</div>
+		<dialog
+			open
+			data-cancel-href={ cancelHref }
+			onclick="if(event.target===this){location.href=this.dataset.cancelHref}"
+		>
+			<article>
+				<header>
+					<a href={ templ.URL(cancelHref) } aria-label={ i18n.T(ctx, "common.close") } rel="prev"></a>
+					<strong>{ i18n.T(ctx, "import.language_mismatch_title") }</strong>
+				</header>
+				<p>{ i18n.T(ctx, "import.language_mismatch_warning", "detected", detectedName, "target", targetName) }</p>
+				<footer class="import-confirm-actions">
+					<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.language_cancel") }</a>
+					<form
+						method="post"
+						action={ templ.URL(resumeAction) }
+						onsubmit="this.closest('dialog').close();document.getElementById('import-loading-dialog').showModal()"
+					>
+						<input type="hidden" name="token" value={ token }/>
+						<button type="submit">{ i18n.T(ctx, "import.language_confirm") }</button>
+					</form>
+				</footer>
+			</article>
+		</dialog>
+		<dialog id="import-loading-dialog">
+			<article>
+				<p>{ i18n.T(ctx, "import.language_translating") }</p>
+			</article>
+		</dialog>
 	}
 }
 
@@ -67,16 +107,33 @@ templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, 
 // only the original (VO) landed, warning names why, and vfName is
 // irrelevant/unused. voOnly=false means both copies were created;
 // warning stays empty on that full-success path.
+//
+// Same <dialog open><article> shape as ImportLanguageConfirmPage, for
+// the same reason (task t_166318f0/A) — this page had the identical
+// bare-page issue.
 templ ImportLanguageResultPage(active, voName, vfName, warning string, voOnly bool, continueHref string) {
 	@Layout(i18n.T(ctx, "import.language_result_title"), active) {
-		<h1>{ i18n.T(ctx, "import.language_result_title") }</h1>
-		if voOnly {
-			<p>{ i18n.T(ctx, "import.language_result_vo_only", "name", voName) }</p>
-			<p class="import-warning">{ warning }</p>
-		} else {
-			<p>{ i18n.T(ctx, "import.language_result_both", "vo", voName, "vf", vfName) }</p>
-		}
-		<a href={ templ.URL(continueHref) } role="button">{ i18n.T(ctx, "import.language_continue") }</a>
+		<dialog
+			open
+			data-cancel-href={ continueHref }
+			onclick="if(event.target===this){location.href=this.dataset.cancelHref}"
+		>
+			<article>
+				<header>
+					<a href={ templ.URL(continueHref) } aria-label={ i18n.T(ctx, "common.close") } rel="prev"></a>
+					<strong>{ i18n.T(ctx, "import.language_result_title") }</strong>
+				</header>
+				if voOnly {
+					<p>{ i18n.T(ctx, "import.language_result_vo_only", "name", voName) }</p>
+					<p class="import-warning">{ warning }</p>
+				} else {
+					<p>{ i18n.T(ctx, "import.language_result_both", "vo", voName, "vf", vfName) }</p>
+				}
+				<footer>
+					<a href={ templ.URL(continueHref) } role="button">{ i18n.T(ctx, "import.language_continue") }</a>
+				</footer>
+			</article>
+		</dialog>
 	}
 }
 

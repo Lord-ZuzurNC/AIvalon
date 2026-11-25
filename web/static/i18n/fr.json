@@ -297,6 +297,7 @@
   "import.language_result_both": "Importé « {{vo}} » et « {{vf}} ».",
   "import.language_result_vo_only": "Importé « {{name}} ».",
   "import.language_continue": "Continuer",
+  "import.language_translating": "Traduction et importation du personnage/monde en cours…",
   "import.translation_unavailable_no_backend": "La traduction automatique n'a pas pu se faire (aucun backend de traduction configuré dans Réglages) — seul l'original a été importé.",
   "import.translation_unavailable_failed": "La traduction automatique a échoué (le backend n'a pas répondu ou a renvoyé une erreur) — seul l'original a été importé.",
   "import.batch_wrong_kind_lorebook": "Ceci ressemble à un Grimoire, pas à une Fiche de personnage — importez-le séparément dans Univers.",

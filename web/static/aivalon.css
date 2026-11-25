@@ -899,10 +899,25 @@ html.sidebar-collapsed #sidebar-toggle {
 	cursor: pointer;
 }
 
-/* ImportCrossConfirmPage's Yes/No row. */
+/* ImportCrossConfirmPage's Yes/No row, also reused by
+   ImportLanguageConfirmPage's Confirm/Cancel (see import.templ) —
+   same footer class, so the min-width fix below applies to both. */
 .import-confirm-actions {
 	display: flex;
+	justify-content: flex-end;
 	gap: 1rem;
+}
+
+/* The Confirm button's <form> wrapper (see import.templ) would
+   otherwise generate its own block box between .import-confirm-actions
+   and the button — sized by the browser's own fit-content/percentage
+   interplay with Pico's default width:100% buttons, which doesn't
+   reliably honor the button's own min-width below. display: contents
+   removes that box so the button (and the hidden token input, which
+   renders nothing regardless) become direct flex items themselves —
+   same pattern already used by .options-dropdown form. */
+.import-confirm-actions form {
+	display: contents;
 }
 
 /* Settings > Backend profiles: the recurring TCP healthcheck dot
@@ -969,6 +984,25 @@ html.sidebar-collapsed #sidebar-toggle {
 .import-confirm-actions button,
 .import-confirm-actions a {
 	width: auto;
+	/* task t_166318f0/B: "Confirmer le double import" (long) and
+	   "Annuler"/"Oui"/"Non" (short) otherwise size wildly differently
+	   side by side — a shared floor makes both buttons in the row
+	   read as one deliberate pair instead of a long one dwarfing a
+	   short one. Wide enough for the longest string either language
+	   file uses here (French's own "Confirmer le double import"). */
+	min-width: 12rem;
+	text-align: center;
+}
+
+/* Loading modal shown from the moment "Confirmer le double import"
+   is submitted (task t_166318f0/C) — see ImportLanguageConfirmPage's
+   own doc comment for why. No "open" attribute in the markup: it
+   starts closed, and only the confirm form's onsubmit opens it via
+   showModal(), right before the browser's own POST navigation takes
+   over. Centered text is the only thing it needs — it's gone the
+   moment the next page (ImportLanguageResultPage) replaces the DOM. */
+#import-loading-dialog p {
+	text-align: center;
 }
 
 /* --- Options menu ("⋮") ---
@@ -1085,7 +1119,19 @@ html.sidebar-collapsed #sidebar-toggle {
 	margin-bottom: 0.25rem;
 }
 
-.lang-switcher-dropdown button[aria-current="true"] {
+/* [aria-current] here, NOT [aria-current="true"]: templ's
+   `aria-current?={bool}` (templates.templ's languageSwitcher) renders
+   a bare boolean attribute — present with an empty value when true,
+   absent when false — never the literal string "true". A
+   value-matching selector silently never matched the active language
+   at all, so it fell through to Pico's own `button:is([aria-current]:
+   not([aria-current=false]))` hover/active rule (higher specificity
+   than .options-dropdown button's own color reset), which sets
+   --pico-color to --pico-primary-inverse — a near-black tone nearly
+   identical to the dropdown's own dark background. Net effect: the
+   active language rendered as an empty-looking box (task
+   t_166318f0/H). Presence-only matching is what actually fires. */
+.lang-switcher-dropdown button[aria-current] {
 	font-weight: bold;
 	color: var(--pico-primary);
 }

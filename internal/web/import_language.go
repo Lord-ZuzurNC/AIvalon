@@ -157,15 +157,61 @@ func translateText(ctx context.Context, profile db.BackendProfile, text, targetL
 	return out, nil
 }
 
+// translateKeywordText mirrors translateText but with a system prompt
+// dedicated to short trigger keywords/phrases rather than prose — see
+// task t_166318f0/D: a lorebook entry's Keys are now translated too
+// (reversing Part C's original "never the keys" call, see this
+// file's own lorebookLanguageText doc comment for why DETECTION still
+// skips them — only translation changed). Reusing translateText's own
+// prose-translation prompt on a 1-3 word key risked the model
+// "helpfully" expanding a bare noun into a descriptive sentence (a
+// real failure mode observed while testing this against a local
+// model) — a short, directive instruction that explicitly forbids
+// adding words keeps the output the same shape as the input.
+func translateKeywordText(ctx context.Context, profile db.BackendProfile, text, targetLangName string) (string, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", nil
+	}
+	sys := fmt.Sprintf(
+		"You are a translation engine embedded in a roleplay app. The user will send ONE short trigger "+
+			"keyword or short phrase (not a sentence) used to match against chat messages. Translate it into "+
+			"%s, keeping it just as short — a single word stays a single word, a short phrase stays a short "+
+			"phrase of the same length. Never turn it into a sentence or add any explanation. Keep any "+
+			"{{placeholder}} tokens untranslated. Output ONLY the translated keyword/phrase itself — no "+
+			"preamble, no explanation, no quotation marks, no trailing punctuation.",
+		targetLangName,
+	)
+	var buf strings.Builder
+	err := llmclient.StreamChat(ctx, profile, []llmclient.Message{
+		{Role: "system", Content: sys},
+		{Role: "user", Content: text},
+	}, func(tok string) { buf.WriteString(tok) })
+	if err != nil {
+		return "", err
+	}
+	out := strings.TrimSpace(buf.String())
+	if out == "" {
+		return "", fmt.Errorf("translation returned empty output")
+	}
+	return out, nil
+}
+
 // translateCardFields attempts to translate exactly the fields
-// cardLanguageText looked at. All-or-nothing: if any single field's
-// call fails, the whole attempt is abandoned (ok=false) rather than
-// landing a partially-translated VF copy — the caller then falls back
-// to VO-only, same as "no backend configured" (see
-// import.translation_unavailable_failed).
+// cardLanguageText looked at, plus AuthorNote (task t_166318f0/E —
+// AuthorNote stays excluded from DETECTION, see cardLanguageText's
+// own doc comment, which is unchanged; this is purely about what the
+// VF copy ends up with). AuthorNote ends up injected into the system
+// prompt for the character (see handlers_chat.go's
+// substituteCardMacros) — leaving it in the VO's original language on
+// the VF copy would hand the model a system prompt mixing two
+// languages, undermining the whole point of a translated copy. All-
+// or-nothing: if any single field's call fails, the whole attempt is
+// abandoned (ok=false) rather than landing a partially-translated VF
+// copy — the caller then falls back to VO-only, same as "no backend
+// configured" (see import.translation_unavailable_failed).
 func translateCardFields(ctx context.Context, profile db.BackendProfile, c db.CharacterCard, targetLangName string) (db.CharacterCard, bool) {
 	out := c
-	for _, f := range []*string{&out.Description, &out.Personality, &out.Scenario, &out.FirstMessage} {
+	for _, f := range []*string{&out.Description, &out.Personality, &out.Scenario, &out.FirstMessage, &out.AuthorNote} {
 		if *f == "" {
 			continue
 		}
@@ -181,24 +227,47 @@ func translateCardFields(ctx context.Context, profile db.BackendProfile, c db.Ch
 }
 
 // translateLorebookEntries mirrors translateCardFields for a
-// lorebook's entries: only Content is translated, Keys are copied
-// through byte-for-byte (see lorebookLanguageText's own doc comment
-// for why). All-or-nothing across every entry, same reasoning as
-// translateCardFields.
+// lorebook's entries: both Content AND each of Keys are translated
+// (task t_166318f0/D — see translateKeywordText's own doc comment
+// for why Keys get a dedicated prompt rather than reusing
+// translateText). Reversed from this file's original design (Part
+// C): Keys used to ride through byte-for-byte on the theory that
+// trigger keys are matched verbatim and translating them was
+// pointless risk — Lord's real-world test of that design showed the
+// opposite: a VF lorebook with English keys never triggers for a
+// player typing in French, defeating the whole point of a translated
+// copy (see docs/DESIGN.md's "Import language detection" section for
+// the full reasoning this replaces). All-or-nothing across every
+// entry/key, same reasoning as translateCardFields.
 func translateLorebookEntries(ctx context.Context, profile db.BackendProfile, entries []db.LorebookEntry, targetLangName string) ([]db.LorebookEntry, bool) {
 	out := make([]db.LorebookEntry, len(entries))
 	copy(out, entries)
 	for i := range out {
-		if out[i].Content == "" {
-			continue
+		if out[i].Content != "" {
+			entryCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
+			translated, err := translateText(entryCtx, profile, out[i].Content, targetLangName)
+			cancel()
+			if err != nil {
+				return entries, false
+			}
+			out[i].Content = translated
 		}
-		entryCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
-		translated, err := translateText(entryCtx, profile, out[i].Content, targetLangName)
-		cancel()
-		if err != nil {
-			return entries, false
+		if len(out[i].Keys) > 0 {
+			translatedKeys := make([]string, len(out[i].Keys))
+			for j, k := range out[i].Keys {
+				if k == "" {
+					continue
+				}
+				keyCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
+				translatedKey, err := translateKeywordText(keyCtx, profile, k, targetLangName)
+				cancel()
+				if err != nil {
+					return entries, false
+				}
+				translatedKeys[j] = translatedKey
+			}
+			out[i].Keys = translatedKeys
 		}
-		out[i].Content = translated
 	}
 	return out, true
 }
