@@ -522,7 +522,9 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 		http.Redirect(w, r, vaultHome("worlds", true), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/world/%d", id), http.StatusSeeOther)
+	// task t_6fe4805d/4: Lord's own ask — land back on the list, not
+	// the just-created item's own page, after a plain import.
+	http.Redirect(w, r, "/world", http.StatusSeeOther)
 }
 
 // ImportCharacterJSON (Character) accepts an uploaded Character Card
@@ -669,5 +671,8 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 		http.Redirect(w, r, vaultHome("characters", true), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/characters/%d/edit", charID), http.StatusSeeOther)
+	// task t_6fe4805d/4: Lord's own ask — land back on the list, not
+	// the just-created character's own edit page, after a plain
+	// import.
+	http.Redirect(w, r, "/characters", http.StatusSeeOther)
 }

@@ -296,12 +296,17 @@ func (h CharacterHandlers) ConfirmLanguageImport(w http.ResponseWriter, r *http.
 // which happened instead of a bare redirect, since the fallback case
 // has no other way to tell the user the VF copy wasn't made.
 func (h CharacterHandlers) importCharacterDual(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
-	voName, vfName, warning, voOnly, voID, err := h.importCharacterDualCore(r.Context(), raw, filename, vaulted)
+	voName, vfName, warning, voOnly, _, err := h.importCharacterDualCore(r.Context(), raw, filename, vaulted)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ImportLanguageResultPage("characters", voName, vfName, warning, voOnly, fmt.Sprintf("/characters/%d/edit", voID)))
+	// task t_6fe4805d/4: Lord's own ask — land back on the list (both
+	// VO and VF just got created there), not either copy's own edit
+	// page — the VO id importCharacterDualCore returns (ignored
+	// above, `_`) is no longer needed now that the href is a fixed
+	// list route instead of being built from it.
+	render(w, r, ImportLanguageResultPage("characters", voName, vfName, warning, voOnly, "/characters"))
 }
 
 // importCharacterDualCore is importCharacterDual's actual logic,
@@ -467,12 +472,14 @@ func (h WorldHandlers) ConfirmLanguageImport(w http.ResponseWriter, r *http.Requ
 // Content only, Keys untouched, " (VF)"/" (<CODE>)"), same fallback
 // contract on no backend/failed translation.
 func (h WorldHandlers) importLorebookDual(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
-	voName, vfName, warning, voOnly, voID, err := h.importLorebookDualCore(r.Context(), raw, filename, vaulted)
+	voName, vfName, warning, voOnly, _, err := h.importLorebookDualCore(r.Context(), raw, filename, vaulted)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	render(w, r, ImportLanguageResultPage("worlds", voName, vfName, warning, voOnly, fmt.Sprintf("/world/%d", voID)))
+	// task t_6fe4805d/4: Lord's own ask — land back on the list (both
+	// VO and VF just got created there), not either copy's own page.
+	render(w, r, ImportLanguageResultPage("worlds", voName, vfName, warning, voOnly, "/world"))
 }
 
 // importLorebookDualCore is importLorebookDual's logic without an

@@ -900,11 +900,20 @@ html.sidebar-collapsed #sidebar-toggle {
 }
 
 /* ImportCrossConfirmPage's Yes/No row, also reused by
-   ImportLanguageConfirmPage's Confirm/Cancel (see import.templ) —
-   same footer class, so the min-width fix below applies to both. */
+   ImportLanguageConfirmPage's Confirm/Cancel and
+   ImportBatchLanguageConfirmPage's Confirm all/Cancel all (see
+   import.templ) — same footer class, so this applies to all three.
+   task t_6fe4805d/1: a shared min-width (t_166318f0/B) still let the
+   longer button ("Confirmer le double import") win by its own text
+   width whenever it exceeded that floor — Lord's own measurement on a
+   real screenshot showed ~336px vs ~288px, still unequal. A grid with
+   two equal 1fr columns instead divides the *available* row width
+   evenly between both buttons regardless of either one's text
+   length, so they're identical in pixels, not just both over some
+   shared floor. */
 .import-confirm-actions {
-	display: flex;
-	justify-content: flex-end;
+	display: grid;
+	grid-template-columns: 1fr 1fr;
 	gap: 1rem;
 }
 
@@ -914,7 +923,7 @@ html.sidebar-collapsed #sidebar-toggle {
    interplay with Pico's default width:100% buttons, which doesn't
    reliably honor the button's own min-width below. display: contents
    removes that box so the button (and the hidden token input, which
-   renders nothing regardless) become direct flex items themselves —
+   renders nothing regardless) become direct grid items themselves —
    same pattern already used by .options-dropdown form. */
 .import-confirm-actions form {
 	display: contents;
@@ -983,26 +992,90 @@ html.sidebar-collapsed #sidebar-toggle {
 
 .import-confirm-actions button,
 .import-confirm-actions a {
-	width: auto;
-	/* task t_166318f0/B: "Confirmer le double import" (long) and
-	   "Annuler"/"Oui"/"Non" (short) otherwise size wildly differently
-	   side by side — a shared floor makes both buttons in the row
-	   read as one deliberate pair instead of a long one dwarfing a
-	   short one. Wide enough for the longest string either language
-	   file uses here (French's own "Confirmer le double import"). */
-	min-width: 12rem;
+	/* task t_6fe4805d/1: width:100% fills the button's grid cell
+	   exactly (see .import-confirm-actions above) instead of sizing
+	   to its own text/a shared min-width floor — this is what
+	   actually makes both buttons identical in pixels regardless of
+	   text length. */
+	width: 100%;
 	text-align: center;
 }
 
-/* Loading modal shown from the moment "Confirmer le double import"
+/* Loading overlay shown from the moment "Confirmer le double import"
    is submitted (task t_166318f0/C) — see ImportLanguageConfirmPage's
-   own doc comment for why. No "open" attribute in the markup: it
-   starts closed, and only the confirm form's onsubmit opens it via
-   showModal(), right before the browser's own POST navigation takes
-   over. Centered text is the only thing it needs — it's gone the
-   moment the next page (ImportLanguageResultPage) replaces the DOM. */
+   own doc comment for why, and for task t_6fe4805d/2's reasoning on
+   why this is a plain <div> rather than a <dialog> (no native/shared
+   close mechanism to neutralize by construction). Hidden by default
+   (no "is-visible" class in the markup); the confirm form's onsubmit
+   adds that class right before the browser's own POST navigation
+   takes over. The rules below reproduce Pico's own
+   `dialog`/`dialog > article` look (see pico.classless.min.css)
+   so swapping the tag changes nothing visible. */
+#import-loading-dialog {
+	display: none;
+	position: fixed;
+	inset: 0;
+	z-index: 999;
+	align-items: center;
+	justify-content: center;
+	-webkit-backdrop-filter: var(--pico-modal-overlay-backdrop-filter);
+	backdrop-filter: var(--pico-modal-overlay-backdrop-filter);
+	background-color: var(--pico-modal-overlay-background-color);
+	color: var(--pico-color);
+}
+
+#import-loading-dialog.is-visible {
+	display: flex;
+}
+
+#import-loading-dialog > article {
+	width: 100%;
+	max-width: 510px;
+	margin: var(--pico-spacing);
+}
+
 #import-loading-dialog p {
 	text-align: center;
+}
+
+/* task t_6fe4805d/3: a bouncing three-dot indicator next to the
+   (already i18n-translated, unchanged) loading text — purely
+   decorative, pure CSS @keyframes, no JS — so a long translation
+   call still visibly "reads" as in-progress rather than a frozen
+   line of text. */
+.loading-dots {
+	display: inline-flex;
+	gap: 0.25rem;
+	margin-left: 0.4rem;
+	vertical-align: middle;
+}
+
+.loading-dots span {
+	width: 0.4rem;
+	height: 0.4rem;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.25;
+	animation: aivalon-loading-dot 1.2s ease-in-out infinite;
+}
+
+.loading-dots span:nth-child(2) {
+	animation-delay: 0.2s;
+}
+
+.loading-dots span:nth-child(3) {
+	animation-delay: 0.4s;
+}
+
+@keyframes aivalon-loading-dot {
+	0%, 80%, 100% {
+		opacity: 0.25;
+		transform: translateY(0);
+	}
+	40% {
+		opacity: 1;
+		transform: translateY(-0.18rem);
+	}
 }
 
 /* --- Options menu ("⋮") ---

@@ -53,17 +53,44 @@ templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token st
 // response/page load under the hood — this app has no SPA route to
 // avoid one (see languageSwitcher's own doc comment) — the <dialog>
 // wrapper is purely the established *visual* modal convention here.
-// The second, initially-hidden <dialog> (import-loading-dialog) is
+// The second, initially-hidden overlay (#import-loading-dialog) is
 // task t_166318f0/C: the resumeAction POST can take 1-2 minutes
 // (sequential per-field/per-entry translation calls, see
 // translateCardFields/translateLorebookEntries in
 // import_language.go) with otherwise zero visual feedback — Lord's
 // own read of a real test session (veyra.png) was that the silent
 // wait looked like a failed import. The confirm form's onsubmit
-// closes this dialog and opens the loading one; the browser then
-// just sits on the loading dialog until the server's response
+// closes this dialog and reveals the loading overlay; the browser
+// then just sits on it until the server's response
 // (ImportLanguageResultPage) replaces the whole document — no
 // htmx/SSE needed for a plain POST that already navigates away.
+//
+// Task t_6fe4805d/2: that overlay used to be a real <dialog
+// id="import-loading-dialog"> opened via showModal(), and Lord
+// reported it could be dismissed early (backdrop click, Escape) —
+// which matters a lot here since there is no way to resume or retry
+// once dismissed; the user is just left looking at a page with no
+// feedback while the POST is still running server-side. Reproduced
+// both paths with chromium headless before touching anything:
+// Escape closed it via the native `cancel` event's default action
+// (fires on every open modal <dialog>, not just ones that opt into
+// it); the backdrop click turned out to be Layout's own *global*
+// `document.addEventListener("click", ...)` handler for the OTHER,
+// non-modal dialogs on every page (the plain "Add …" ones toggled via
+// setAttribute("open","")) — it matches on `e.target.tagName ===
+// "DIALOG"`, which a backdrop click on ANY <dialog> (including a
+// showModal() one) also satisfies, so it was removing this dialog's
+// `open` attribute too, even though it was never meant to touch this
+// one. Rather than special-case that shared handler (and have to
+// re-remember the exception every time a new <dialog> is added to
+// this app), this is now a plain `<div>` — by construction it has no
+// `cancel` event, no backdrop semantics, and doesn't match
+// `dialog[open]`/`tagName === "DIALOG"` in any of the shared
+// dialog-management script, so there is no native or
+// accidentally-shared close mechanism left to neutralize at all.
+// Visually it's styled (see aivalon.css's #import-loading-dialog
+// rules) to reproduce Pico's own `dialog`/`dialog > article` look
+// exactly, so swapping the tag changes nothing the user can see.
 templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, cancelHref, token string) {
 	@Layout(i18n.T(ctx, "import.language_mismatch_title"), active) {
 		<dialog
@@ -82,7 +109,7 @@ templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, 
 					<form
 						method="post"
 						action={ templ.URL(resumeAction) }
-						onsubmit="this.closest('dialog').close();document.getElementById('import-loading-dialog').showModal()"
+						onsubmit="this.closest('dialog').close();document.getElementById('import-loading-dialog').classList.add('is-visible')"
 					>
 						<input type="hidden" name="token" value={ token }/>
 						<button type="submit">{ i18n.T(ctx, "import.language_confirm") }</button>
@@ -90,11 +117,14 @@ templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, 
 				</footer>
 			</article>
 		</dialog>
-		<dialog id="import-loading-dialog">
+		<div id="import-loading-dialog">
 			<article>
-				<p>{ i18n.T(ctx, "import.language_translating") }</p>
+				<p>
+					{ i18n.T(ctx, "import.language_translating") }
+					<span class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+				</p>
 			</article>
-		</dialog>
+		</div>
 	}
 }
 

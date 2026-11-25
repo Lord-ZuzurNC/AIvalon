@@ -5,7 +5,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 )
 
@@ -46,8 +45,10 @@ func TestVaultImportLandsVaulted(t *testing.T) {
 	}
 
 	w = filePost(ch.ImportCharacterJSON, "arthur.json", []byte(`{"data":{"name":"Arthur Plain"}}`), nil)
-	if l := w.Header().Get("Location"); !strings.HasPrefix(l, "/characters/") {
-		t.Errorf("plain character import redirect → %q, want /characters/...", l)
+	// task t_6fe4805d/4: Lord's own ask — a plain import now lands
+	// back on the list, not the just-created item's own edit page.
+	if l := w.Header().Get("Location"); l != "/characters" {
+		t.Errorf("plain character import redirect → %q, want /characters", l)
 	}
 	if n := f.count(t, `SELECT is_vaulted FROM character_cards WHERE name = 'Arthur Plain'`); n != 0 {
 		t.Errorf("plain imported character is_vaulted = %d, want 0", n)
