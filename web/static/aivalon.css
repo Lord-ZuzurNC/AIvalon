@@ -1090,11 +1090,49 @@ html.sidebar-collapsed #sidebar-toggle {
 	color: var(--pico-primary);
 }
 
-/* Collapsed sidebar has no room for the code badge + label text —
-   hidden there for now (v1); a glyph-only collapsed treatment is
-   follow-up work, not required by the current spec. */
+/* Collapsed sidebar (56px wide, see html.sidebar-collapsed > body >
+   header above): the trigger itself (a small square code badge,
+   e.g. "EN"/"FR" — already compact, no separate label text) fits
+   fine at that width, so it's shown here too rather than hidden —
+   Lord's ask (task t_b471483e): the switcher must stay reachable
+   above the About icon in both sidebar modes. Only the DROPDOWN
+   needs a different positioning strategy: anchored (position:
+   absolute) to the trigger like the expanded mode does, its full-
+   width language names (e.g. "Français") would get clipped by the
+   rail's own overflow-x:hidden (needed elsewhere to keep the width
+   transition clean) well before reaching its own min-width. Fixed
+   positioning escapes that ancestor's overflow (it establishes its
+   own containing block against the viewport, not the rail) — offsets
+   are hardcoded against the rail's own fixed 56px collapsed width and
+   the nav-footer's fixed bottom slot, both constants in this CSS, not
+   computed from anything that could drift silently. */
 html.sidebar-collapsed .lang-switcher {
-	display: none;
+	display: flex;
+}
+
+/* .nav-footer has no display rule of its own in the expanded case
+   (a plain block <nav>, stacking its two block-level children
+   top-to-bottom with no help needed) — but once .lang-switcher
+   actually renders here too (see above), relying on default block
+   flow stopped reliably stacking it above the About link below it.
+   An explicit flex column, centered, is what the collapsed rail's
+   icon-only items already look like visually (each navLink icon is
+   centered within its own link) — scoped to collapsed only so the
+   expanded layout (already shipped, already correct) stays
+   untouched. */
+html.sidebar-collapsed .nav-footer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+html.sidebar-collapsed .lang-switcher-dropdown {
+	position: fixed;
+	top: auto;
+	left: 64px;
+	right: auto;
+	bottom: 3.5rem;
+	margin: 0;
 }
 
 .options-dropdown button.danger {

@@ -418,13 +418,26 @@ func existingCharacterNames(sqlDB *sql.DB) (map[string]bool, error) {
 // vault=1 (the Vault page's own import dialog) lands the new lorebook
 // already hidden, same convention as every other create-from-the-
 // vault form (see WorldHandlers.Create).
+//
+// Multi-file: see ImportCharacterJSON's own doc comment — same
+// branch, same single-file behavior preserved untouched.
 func (h WorldHandlers) ImportLorebookJSON(w http.ResponseWriter, r *http.Request) {
+	headers, isMultipart, err := parseMultipartFileHeaders(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	vaulted := r.FormValue("vault") == "1"
+	if isMultipart && len(headers) > 1 {
+		h.importLorebookBatch(w, r, headers, vaulted)
+		return
+	}
 	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.importLorebookUpload(w, r, raw, filename, r.FormValue("vault") == "1")
+	h.importLorebookUpload(w, r, raw, filename, vaulted)
 }
 
 // ResumeCharacterImport finishes, as a Character, an upload that was
@@ -522,13 +535,31 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 // import in World (see ImportCrossConfirmPage). vault=1 (the Vault
 // page's own import dialog) lands the new character — and its
 // embedded lorebook, if any — already hidden.
+//
+// Multi-file: ImportModal's "From your Computer" file input accepts
+// more than one file (see docs/DESIGN.md's "Multi-file import"
+// section); if more than one was actually submitted under the "file"
+// field, this delegates to importCharacterBatch instead and the rest
+// of this function's single-file behavior (including the
+// cross-confirm detour) is untouched — a single file, or the "From
+// URL" tab, behaves exactly as before.
 func (h CharacterHandlers) ImportCharacterJSON(w http.ResponseWriter, r *http.Request) {
+	headers, isMultipart, err := parseMultipartFileHeaders(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	vaulted := r.FormValue("vault") == "1"
+	if isMultipart && len(headers) > 1 {
+		h.importCharacterBatch(w, r, headers, vaulted)
+		return
+	}
 	raw, filename, err := readUploadOrURL(w, r, h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	h.importCharacterUpload(w, r, raw, filename, r.FormValue("vault") == "1")
+	h.importCharacterUpload(w, r, raw, filename, vaulted)
 }
 
 // ResumeLorebookImport finishes, as a Lorebook, an upload that was

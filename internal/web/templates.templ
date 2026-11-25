@@ -731,7 +731,7 @@ templ ImportModal(modalID, action string, vaulted bool) {
 						if vaulted {
 							<input type="hidden" name="vault" value="1"/>
 						}
-						<input type="file" name="file" accept=".json,application/json,.png,image/png" required="required"/>
+						<input type="file" name="file" accept=".json,application/json,.png,image/png" multiple="multiple" required="required"/>
 						<button type="submit">{ i18n.T(ctx, "common.import") }</button>
 					</form>
 				</div>

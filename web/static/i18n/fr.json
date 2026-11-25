@@ -298,5 +298,17 @@
   "import.language_result_vo_only": "Importé « {{name}} ».",
   "import.language_continue": "Continuer",
   "import.translation_unavailable_no_backend": "La traduction automatique n'a pas pu se faire (aucun backend de traduction configuré dans Réglages) — seul l'original a été importé.",
-  "import.translation_unavailable_failed": "La traduction automatique a échoué (le backend n'a pas répondu ou a renvoyé une erreur) — seul l'original a été importé."
+  "import.translation_unavailable_failed": "La traduction automatique a échoué (le backend n'a pas répondu ou a renvoyé une erreur) — seul l'original a été importé.",
+  "import.batch_wrong_kind_lorebook": "Ceci ressemble à un Grimoire, pas à une Fiche de personnage — importez-le séparément dans Univers.",
+  "import.batch_unrecognized_character": "JSON de personnage non reconnu — une Character Card V2/V3 était attendue.",
+  "import.batch_wrong_kind_character": "Ceci ressemble à une Fiche de personnage, pas à un Grimoire — importez-la séparément dans Personnages.",
+  "import.batch_unrecognized_lorebook": "JSON de grimoire non reconnu — un export SillyTavern World Info ou un character_book embarqué était attendu.",
+  "import.batch_token_expired": "Ce lien d'import a expiré — réimportez le fichier.",
+  "import.batch_language_mismatch_title": "Certains fichiers nécessitent une confirmation",
+  "import.batch_language_mismatch_intro": "Les fichiers suivants ont été détectés dans une langue différente de votre réglage actuel. Confirmer conservera chaque original et créera une copie traduite pour chacun d'eux.",
+  "import.batch_other_files_note": "Le reste de ce lot a déjà été traité — voir le rapport complet après avoir confirmé ou annulé ci-dessous.",
+  "import.batch_confirm_all": "Confirmer tout",
+  "import.batch_cancel_all": "Annuler tout",
+  "import.batch_result_title": "Import par lot terminé",
+  "import.batch_result_summary": "{{ok}} importé(s), {{failed}} échoué(s)."
 }

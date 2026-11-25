@@ -25,9 +25,25 @@ import (
 // length floor and a confidence floor are needed together; neither
 // alone is enough to keep a false positive from triggering an
 // unwanted double import.
+//
+// maxDetectLength guards the OPPOSITE edge: whatlanggo's own
+// confidence formula (score1-score2)/score2 degenerates — and can go
+// deeply NEGATIVE — once the runner-up language's trigram distance
+// exceeds its own "no match at all" ceiling, something that only
+// starts happening on genuinely long input. Below ~3000 runes this
+// never triggered in extensive testing (real card text, several
+// languages' Wikipedia prose); by 4000-6000 runes even clearly
+// correct detections (English, French, German) started scoring large
+// negative confidences. A text this long has given whatlanggo more
+// than enough trigram signal already — truncating past that point
+// loses no real detection power, only dodges the pathological region.
+// See docs/DESIGN.md's "Import language detection" section for the
+// full empirical writeup (including why interpreting negative
+// confidence as "reliable" was tried and rejected).
 const (
-	minTextLength = 40
-	minConfidence = 0.5
+	minTextLength   = 40
+	minConfidence   = 0.5
+	maxDetectLength = 2000
 )
 
 // Result is a language whatlanggo detected with enough confidence to
@@ -52,6 +68,14 @@ type Result struct {
 	Name string
 }
 
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
+}
+
 // Detect reports the dominant language of text, or ok=false if the
 // text is too short or whatlanggo's own confidence is below
 // minConfidence — in either case, callers must treat this exactly
@@ -61,6 +85,7 @@ func Detect(text string) (result Result, ok bool) {
 	if len([]rune(text)) < minTextLength {
 		return Result{}, false
 	}
+	text = truncateRunes(text, maxDetectLength)
 	info := whatlanggo.Detect(text)
 	if info.Confidence < minConfidence {
 		return Result{}, false

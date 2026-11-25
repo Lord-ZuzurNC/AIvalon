@@ -1,6 +1,10 @@
 package web
 
-import "github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
+import (
+	"fmt"
+
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
+)
 
 // ImportCrossConfirmPage is shown instead of a plain error when an
 // upload parses cleanly as the *other* kind of JSON (a Character Card
@@ -71,6 +75,79 @@ templ ImportLanguageResultPage(active, voName, vfName, warning string, voOnly bo
 			<p class="import-warning">{ warning }</p>
 		} else {
 			<p>{ i18n.T(ctx, "import.language_result_both", "vo", voName, "vf", vfName) }</p>
+		}
+		<a href={ templ.URL(continueHref) } role="button">{ i18n.T(ctx, "import.language_continue") }</a>
+	}
+}
+
+// ImportBatchLanguageConfirmPage is the multi-file counterpart of
+// ImportLanguageConfirmPage: one combined screen listing every file
+// from the batch whose language-mismatch gate fired (pending), rather
+// than confirming them one at a time — chosen over a sequential
+// per-file flow because N round trips for N files is worse UX than
+// one shared decision, and because the existing single-file
+// infrastructure (ImportCache tokens) already supports stashing many
+// independent files at once with zero changes (see docs/DESIGN.md's
+// "Multi-file import" section for the full reasoning). alreadyDone
+// lists files that imported immediately in the same request (no
+// mismatch) — carried through as hidden fields purely so the FINAL
+// report (after Confirm/Cancel) can still mention them; nothing here
+// touches them again. "Confirm all" redeems every token through the
+// same VO+VF pipeline a single file would use; "Cancel all" creates
+// nothing for the pending files (their tokens simply expire unused).
+templ ImportBatchLanguageConfirmPage(active string, pending []batchPendingItem, alreadyDone []string, errs []batchFileError, resumeAction, cancelHref string, vaulted bool) {
+	@Layout(i18n.T(ctx, "import.language_mismatch_title"), active) {
+		<h1>{ i18n.T(ctx, "import.batch_language_mismatch_title") }</h1>
+		<p>{ i18n.T(ctx, "import.batch_language_mismatch_intro") }</p>
+		<ul>
+			for _, item := range pending {
+				<li>{ i18n.T(ctx, "import.language_mismatch_warning", "detected", item.DetectedName, "target", item.TargetName) } — <strong>{ item.Label }</strong></li>
+			}
+		</ul>
+		if len(alreadyDone) > 0 || len(errs) > 0 {
+			<p class="import-batch-summary">{ i18n.T(ctx, "import.batch_other_files_note") }</p>
+		}
+		<form method="post" action={ templ.URL(resumeAction) }>
+			if vaulted {
+				<input type="hidden" name="vault" value="1"/>
+			}
+			for _, item := range pending {
+				<input type="hidden" name="tokens" value={ item.Token }/>
+			}
+			for _, name := range alreadyDone {
+				<input type="hidden" name="already_done" value={ name }/>
+			}
+			<div class="import-confirm-actions">
+				<button type="submit" name="action" value="confirm">{ i18n.T(ctx, "import.batch_confirm_all") }</button>
+				<button type="submit" name="action" value="cancel" class="secondary">{ i18n.T(ctx, "import.batch_cancel_all") }</button>
+			</div>
+		</form>
+	}
+}
+
+// ImportBatchResultPage is the final report after a multi-file
+// import — whether everything landed on the first pass (no
+// mismatches at all) or after ImportBatchLanguageConfirmPage's
+// Confirm/Cancel, this is the one page that names every outcome:
+// what was created, and which files failed and why. Never silently
+// drops a file's outcome (see docs/DESIGN.md).
+templ ImportBatchResultPage(active string, successes []string, errs []batchFileError, continueHref string) {
+	@Layout(i18n.T(ctx, "import.batch_result_title"), active) {
+		<h1>{ i18n.T(ctx, "import.batch_result_title") }</h1>
+		<p>{ i18n.T(ctx, "import.batch_result_summary", "ok", fmt.Sprint(len(successes)), "failed", fmt.Sprint(len(errs))) }</p>
+		if len(successes) > 0 {
+			<ul class="import-batch-successes">
+				for _, name := range successes {
+					<li>{ name }</li>
+				}
+			</ul>
+		}
+		if len(errs) > 0 {
+			<ul class="import-batch-errors">
+				for _, e := range errs {
+					<li><strong>{ e.Filename }</strong>: { e.Reason }</li>
+				}
+			</ul>
 		}
 		<a href={ templ.URL(continueHref) } role="button">{ i18n.T(ctx, "import.language_continue") }</a>
 	}

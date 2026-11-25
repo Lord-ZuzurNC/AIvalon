@@ -227,16 +227,32 @@ func (h CharacterHandlers) ConfirmLanguageImport(w http.ResponseWriter, r *http.
 // which happened instead of a bare redirect, since the fallback case
 // has no other way to tell the user the VF copy wasn't made.
 func (h CharacterHandlers) importCharacterDual(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
-	originalRaw := raw
-	raw, err := extractJSONFromUpload(raw)
+	voName, vfName, warning, voOnly, voID, err := h.importCharacterDualCore(r.Context(), raw, filename, vaulted)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	render(w, r, ImportLanguageResultPage("characters", voName, vfName, warning, voOnly, fmt.Sprintf("/characters/%d/edit", voID)))
+}
+
+// importCharacterDualCore is importCharacterDual's actual logic,
+// pulled out so the batch importer (see import_batch.go) can run the
+// exact same VO+VF pipeline per confirmed file without an
+// http.ResponseWriter to render into — it returns everything the
+// caller needs (names, warning, voOnly, the VO's id) and a plain
+// error instead of writing one. The single-file path above is the
+// only caller that still renders ImportLanguageResultPage directly;
+// the batch path (ConfirmLanguageImportBatch) folds the same return
+// values into one combined report instead.
+func (h CharacterHandlers) importCharacterDualCore(ctx context.Context, raw []byte, filename string, vaulted bool) (voName, vfName, warning string, voOnly bool, voID int64, err error) {
+	originalRaw := raw
+	raw, err = extractJSONFromUpload(raw)
+	if err != nil {
+		return "", "", "", false, 0, err
 	}
 	card, book, ok := parseCharacterJSON(raw)
 	if !ok {
-		http.Error(w, "unrecognized character JSON — expected a Character Card V2/V3 file", http.StatusBadRequest)
-		return
+		return "", "", "", false, 0, fmt.Errorf("unrecognized character JSON — expected a Character Card V2/V3 file")
 	}
 	if card.Name == "" {
 		card.Name = nameFromUpload(filename)
@@ -244,8 +260,7 @@ func (h CharacterHandlers) importCharacterDual(w http.ResponseWriter, r *http.Re
 
 	settings, err := db.GetAppSettings(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	targetCode := settings.Language
 	if targetCode == "" {
@@ -255,76 +270,63 @@ func (h CharacterHandlers) importCharacterDual(w http.ResponseWriter, r *http.Re
 
 	taken, err := existingCharacterNames(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	isPNG := bytes.HasPrefix(originalRaw, pngSignature)
 	voCard := card
 	voCard.Name = uniqueName(card.Name+" (VO)", taken)
 	taken[voCard.Name] = true
 	voCard.IsVaulted = vaulted
-	voID, err := db.CreateCharacterCard(h.DB, voCard)
+	voID, err = db.CreateCharacterCard(h.DB, voCard)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	if isPNG {
 		_ = h.saveImageFromBytes(originalRaw, voID)
 	}
 	if book != nil && len(book.Entries) > 0 {
 		if err := h.createEmbeddedBookCopy(originalRaw, book, card.Name, "VO", vaulted, isPNG); err != nil {
-			http.Error(w, fmt.Sprintf("imported %q (VO) but its embedded lorebook failed: %v", voCard.Name, err), http.StatusInternalServerError)
-			return
+			return "", "", "", false, 0, fmt.Errorf("imported %q (VO) but its embedded lorebook failed: %w", voCard.Name, err)
 		}
 	}
 
 	// --- VF: best-effort translated copy ---
-	warning := ""
-	voOnly := false
 	profile, hasProfile, err := pickTranslationBackend(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
-	vfName := ""
 	if !hasProfile {
-		voOnly = true
-		warning = i18n.T(r.Context(), "import.translation_unavailable_no_backend")
-	} else {
-		translated, tOK := translateCardFields(r.Context(), profile, card, targetName)
-		if !tOK {
-			voOnly = true
-			warning = i18n.T(r.Context(), "import.translation_unavailable_failed")
-		} else {
-			translated.Name = uniqueName(card.Name+" ("+vfSuffix(targetCode)+")", taken)
-			taken[translated.Name] = true
-			translated.IsVaulted = vaulted
-			vfID, err := db.CreateCharacterCard(h.DB, translated)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			vfName = translated.Name
-			if isPNG {
-				_ = h.saveImageFromBytes(originalRaw, vfID)
-			}
-			if book != nil && len(book.Entries) > 0 {
-				srcEntries := lorebookEntriesFromCharacterBook(*book)
-				translatedEntries, eOK := translateLorebookEntries(r.Context(), profile, srcEntries, targetName)
-				if !eOK {
-					// The character itself translated fine; only its
-					// book didn't — still a degraded-but-real VF
-					// character, worth keeping rather than discarding.
-					warning = i18n.T(r.Context(), "import.translation_unavailable_failed")
-				} else if err := h.createTranslatedBookCopy(originalRaw, book.Name, card.Name, translatedEntries, targetCode, vaulted, isPNG); err != nil {
-					http.Error(w, fmt.Sprintf("imported %q's translation but its lorebook failed: %v", translated.Name, err), http.StatusInternalServerError)
-					return
-				}
-			}
+		return voCard.Name, "", i18n.T(ctx, "import.translation_unavailable_no_backend"), true, voID, nil
+	}
+	translated, tOK := translateCardFields(ctx, profile, card, targetName)
+	if !tOK {
+		return voCard.Name, "", i18n.T(ctx, "import.translation_unavailable_failed"), true, voID, nil
+	}
+	translated.Name = uniqueName(card.Name+" ("+vfSuffix(targetCode)+")", taken)
+	taken[translated.Name] = true
+	translated.IsVaulted = vaulted
+	vfID, err := db.CreateCharacterCard(h.DB, translated)
+	if err != nil {
+		return "", "", "", false, 0, err
+	}
+	vfName = translated.Name
+	if isPNG {
+		_ = h.saveImageFromBytes(originalRaw, vfID)
+	}
+	if book != nil && len(book.Entries) > 0 {
+		srcEntries := lorebookEntriesFromCharacterBook(*book)
+		translatedEntries, eOK := translateLorebookEntries(ctx, profile, srcEntries, targetName)
+		if !eOK {
+			// The character itself translated fine; only its book
+			// didn't — still a degraded-but-real VF character, worth
+			// keeping rather than discarding.
+			warning = i18n.T(ctx, "import.translation_unavailable_failed")
+		} else if err := h.createTranslatedBookCopy(originalRaw, book.Name, card.Name, translatedEntries, targetCode, vaulted, isPNG); err != nil {
+			return "", "", "", false, 0, fmt.Errorf("imported %q's translation but its lorebook failed: %w", translated.Name, err)
 		}
 	}
 
-	render(w, r, ImportLanguageResultPage("characters", voCard.Name, vfName, warning, voOnly, fmt.Sprintf("/characters/%d/edit", voID)))
+	return voCard.Name, vfName, warning, false, voID, nil
 }
 
 // createEmbeddedBookCopy creates one lorebook copy (VO or VF, per
@@ -396,16 +398,26 @@ func (h WorldHandlers) ConfirmLanguageImport(w http.ResponseWriter, r *http.Requ
 // Content only, Keys untouched, " (VF)"/" (<CODE>)"), same fallback
 // contract on no backend/failed translation.
 func (h WorldHandlers) importLorebookDual(w http.ResponseWriter, r *http.Request, raw []byte, filename string, vaulted bool) {
-	originalRaw := raw
-	raw, err := extractJSONFromUpload(raw)
+	voName, vfName, warning, voOnly, voID, err := h.importLorebookDualCore(r.Context(), raw, filename, vaulted)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	render(w, r, ImportLanguageResultPage("worlds", voName, vfName, warning, voOnly, fmt.Sprintf("/world/%d", voID)))
+}
+
+// importLorebookDualCore is importLorebookDual's logic without an
+// http.ResponseWriter — see importCharacterDualCore's doc comment for
+// why (the batch importer, import_batch.go, is the other caller).
+func (h WorldHandlers) importLorebookDualCore(ctx context.Context, raw []byte, filename string, vaulted bool) (voName, vfName, warning string, voOnly bool, voID int64, err error) {
+	originalRaw := raw
+	raw, err = extractJSONFromUpload(raw)
+	if err != nil {
+		return "", "", "", false, 0, err
 	}
 	name, entries, ok := parseLorebookJSON(raw)
 	if !ok {
-		http.Error(w, "unrecognized lorebook JSON — expected a SillyTavern World Info export, or a Character Card V2/V3 file with an embedded character_book", http.StatusBadRequest)
-		return
+		return "", "", "", false, 0, fmt.Errorf("unrecognized lorebook JSON — expected a SillyTavern World Info export, or a Character Card V2/V3 file with an embedded character_book")
 	}
 	if name == "" {
 		name = nameFromUpload(filename)
@@ -413,8 +425,7 @@ func (h WorldHandlers) importLorebookDual(w http.ResponseWriter, r *http.Request
 
 	settings, err := db.GetAppSettings(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	targetCode := settings.Language
 	if targetCode == "" {
@@ -424,50 +435,38 @@ func (h WorldHandlers) importLorebookDual(w http.ResponseWriter, r *http.Request
 
 	taken, err := existingLorebookNames(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	isPNG := bytes.HasPrefix(originalRaw, pngSignature)
 
-	voName := uniqueName(name+" (VO)", taken)
+	voName = uniqueName(name+" (VO)", taken)
 	taken[voName] = true
-	voID, err := createLorebookWithEntries(h.DB, voName, entries, vaulted)
+	voID, err = createLorebookWithEntries(h.DB, voName, entries, vaulted)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	if isPNG {
 		_ = h.saveImageFromBytes(originalRaw, voID)
 	}
 
-	warning := ""
-	voOnly := false
-	vfName := ""
 	profile, hasProfile, err := pickTranslationBackend(h.DB)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		return "", "", "", false, 0, err
 	}
 	if !hasProfile {
-		voOnly = true
-		warning = i18n.T(r.Context(), "import.translation_unavailable_no_backend")
-	} else {
-		translatedEntries, eOK := translateLorebookEntries(r.Context(), profile, entries, targetName)
-		if !eOK {
-			voOnly = true
-			warning = i18n.T(r.Context(), "import.translation_unavailable_failed")
-		} else {
-			vfName = uniqueName(name+" ("+vfSuffix(targetCode)+")", taken)
-			vfID, err := createLorebookWithEntries(h.DB, vfName, translatedEntries, vaulted)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if isPNG {
-				_ = h.saveImageFromBytes(originalRaw, vfID)
-			}
-		}
+		return voName, "", i18n.T(ctx, "import.translation_unavailable_no_backend"), true, voID, nil
 	}
-
-	render(w, r, ImportLanguageResultPage("worlds", voName, vfName, warning, voOnly, fmt.Sprintf("/world/%d", voID)))
+	translatedEntries, eOK := translateLorebookEntries(ctx, profile, entries, targetName)
+	if !eOK {
+		return voName, "", i18n.T(ctx, "import.translation_unavailable_failed"), true, voID, nil
+	}
+	vfName = uniqueName(name+" ("+vfSuffix(targetCode)+")", taken)
+	vfID, err := createLorebookWithEntries(h.DB, vfName, translatedEntries, vaulted)
+	if err != nil {
+		return "", "", "", false, 0, err
+	}
+	if isPNG {
+		_ = h.saveImageFromBytes(originalRaw, vfID)
+	}
+	return voName, vfName, "", false, voID, nil
 }
