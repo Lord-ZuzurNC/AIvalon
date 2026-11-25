@@ -1,5 +1,7 @@
 package web
 
+import "github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
+
 // ImportCrossConfirmPage is shown instead of a plain error when an
 // upload parses cleanly as the *other* kind of JSON (a Character Card
 // dropped into World's importer, or a bare lorebook dropped into
@@ -9,15 +11,67 @@ package web
 // just goes back to where they started, nothing is imported either
 // way until a button is actually clicked.
 templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token string) {
-	@Layout("Import?", active) {
-		<h1>Wrong importer</h1>
+	@Layout(i18n.T(ctx, "import.title"), active) {
+		<h1>{ i18n.T(ctx, "import.wrong_importer_heading") }</h1>
 		<p>{ message }</p>
 		<div class="import-confirm-actions">
 			<form method="post" action={ templ.URL(resumeAction) }>
 				<input type="hidden" name="token" value={ token }/>
-				<button type="submit">Yes</button>
+				<button type="submit">{ i18n.T(ctx, "import.yes") }</button>
 			</form>
-			<a href={ templ.URL(cancelHref) } role="button" class="secondary">No</a>
+			<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.no") }</a>
 		</div>
+	}
+}
+
+// ImportLanguageConfirmPage is shown, before anything is created, when
+// the uploaded card/lorebook's own text was confidently detected (see
+// internal/langdetect) as a language other than AppSettings.Language
+// — Lord's own ask (task t_424b1a52 → t_382b94fb): warn, then let the
+// user choose. detectedName/targetName are plain display names, never
+// a hardcoded per-language sentence — see languageDisplayName in
+// handlers_import.go, which prefers internal/i18n's own
+// Language.Name (what the nav switcher already shows) and only falls
+// back to whatlanggo's own English name for a language this install
+// ships no UI translation file for at all.
+//
+// Confirm re-POSTs token to resumeAction, which performs the actual
+// double import (VO + translated copy, with its own fallback if no
+// translation backend is reachable — see ImportLanguageResultPage).
+// Cancel (cancelHref) creates nothing at all, same contract as
+// ImportCrossConfirmPage's "No".
+templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, cancelHref, token string) {
+	@Layout(i18n.T(ctx, "import.language_mismatch_title"), active) {
+		<h1>{ i18n.T(ctx, "import.language_mismatch_title") }</h1>
+		<p>{ i18n.T(ctx, "import.language_mismatch_warning", "detected", detectedName, "target", targetName) }</p>
+		<div class="import-confirm-actions">
+			<form method="post" action={ templ.URL(resumeAction) }>
+				<input type="hidden" name="token" value={ token }/>
+				<button type="submit">{ i18n.T(ctx, "import.language_confirm") }</button>
+			</form>
+			<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.language_cancel") }</a>
+		</div>
+	}
+}
+
+// ImportLanguageResultPage is the landing page after
+// ImportLanguageConfirmPage's Confirm button — it always reports what
+// actually happened rather than silently redirecting, because the
+// fallback case (no translation backend reachable, or the call
+// failed) has no other way to tell the user "the VF copy wasn't made"
+// than a page they actually see. voOnly means the fallback triggered:
+// only the original (VO) landed, warning names why, and vfName is
+// irrelevant/unused. voOnly=false means both copies were created;
+// warning stays empty on that full-success path.
+templ ImportLanguageResultPage(active, voName, vfName, warning string, voOnly bool, continueHref string) {
+	@Layout(i18n.T(ctx, "import.language_result_title"), active) {
+		<h1>{ i18n.T(ctx, "import.language_result_title") }</h1>
+		if voOnly {
+			<p>{ i18n.T(ctx, "import.language_result_vo_only", "name", voName) }</p>
+			<p class="import-warning">{ warning }</p>
+		} else {
+			<p>{ i18n.T(ctx, "import.language_result_both", "vo", voName, "vf", vfName) }</p>
+		}
+		<a href={ templ.URL(continueHref) } role="button">{ i18n.T(ctx, "import.language_continue") }</a>
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 // truncate shortens s to at most n runes (so a multi-byte UTF-8
@@ -20,10 +21,10 @@ func truncate(s string, n int) string {
 }
 
 templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.CharacterCard, editingImages []db.CharacterCardImage) {
-	@Layout("Character", "Characters") {
-		@PageHeaderWithViewAndCreate("Character", "character", "character-import-modal", "character-modal", "Add a character")
+	@Layout(i18n.T(ctx, "character.title"), "characters") {
+		@PageHeaderWithViewAndCreate(i18n.T(ctx, "character.title"), "character", "character-import-modal", "character-modal", i18n.T(ctx, "character.add"))
 		if len(cards) == 0 {
-			<p><em>No characters yet — add one above. A session with none picked runs as a free-form world/GM instead.</em></p>
+			<p><em>{ i18n.T(ctx, "character.empty") }</em></p>
 		} else {
 			@searchFilterInput("character")
 			<div data-search-scope="character">
@@ -36,9 +37,9 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 				<table>
 					<thead>
 						<tr>
-							<th>Name</th>
-							<th>Chats</th>
-							<th>Description</th>
+							<th>{ i18n.T(ctx, "character.col_name") }</th>
+							<th>{ i18n.T(ctx, "character.col_chats") }</th>
+							<th>{ i18n.T(ctx, "character.col_description") }</th>
 							<th></th>
 						</tr>
 					</thead>
@@ -50,8 +51,8 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 								<td>{ truncate(c.Description, 120) }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-character-%d", c.ID), []MenuAction{
-										{Label: "Hide into vault", Action: fmt.Sprintf("/vault/characters/%d/in", c.ID)},
-										{Label: "Delete", Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
+										{Label: i18n.T(ctx, "character.hide_into_vault"), Action: fmt.Sprintf("/vault/characters/%d/in", c.ID)},
+										{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/characters/%d/delete", c.ID), Danger: true},
 									})
 								</td>
 							</tr>
@@ -68,12 +69,12 @@ templ CharacterPage(cards []db.CharacterCard, pager Pager, editing *db.Character
 		<dialog id="character-modal" open?={ editing != nil }>
 			<article>
 				<header>
-					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 					<strong>
 						if editing != nil {
-							Edit character
+							{ i18n.T(ctx, "character.edit") }
 						} else {
-							Add a character
+							{ i18n.T(ctx, "character.add") }
 						}
 					</strong>
 				</header>
@@ -113,20 +114,20 @@ func otherImageCount(images []db.CharacterCardImage, primaryPath string) int {
 
 templ characterImageGallery(characterID int64, primaryPath string, images []db.CharacterCardImage) {
 	<details>
-		<summary>Other images ({ fmt.Sprintf("%d", otherImageCount(images, primaryPath)) })</summary>
+		<summary>{ fmt.Sprintf(i18n.T(ctx, "character.other_images"), otherImageCount(images, primaryPath)) }</summary>
 		if otherImageCount(images, primaryPath) == 0 {
-			<p><em>No other images yet — upload one above; it joins the gallery here until you make it primary.</em></p>
+			<p><em>{ i18n.T(ctx, "character.other_images_empty") }</em></p>
 		} else {
 			<div class="image-gallery">
 				for _, img := range images {
 					if img.ImagePath != primaryPath {
 						<div class="image-gallery-item">
-							<img src={ imageSrc(img.ImagePath) } alt="Character image"/>
+							<img src={ imageSrc(img.ImagePath) } alt={ i18n.T(ctx, "character.image_alt") }/>
 							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/images/%d/primary", characterID, img.ID)) }>
-								<button type="submit">Make primary</button>
+								<button type="submit">{ i18n.T(ctx, "character.make_primary") }</button>
 							</form>
 							<form method="post" action={ templ.URL(fmt.Sprintf("/characters/%d/images/%d/delete", characterID, img.ID)) }>
-								<button type="submit" class="danger">Delete</button>
+								<button type="submit" class="danger">{ i18n.T(ctx, "common.action_delete") }</button>
 							</form>
 						</div>
 					}
@@ -153,38 +154,38 @@ templ characterCardForm(editing *db.CharacterCard, vaulted bool) {
 		}
 		@ImageField(c.ImagePath, c.Name)
 		<label>
-			Name
+			{ i18n.T(ctx, "character.field_name") }
 			<input type="text" name="name" value={ c.Name } required="required"/>
 		</label>
 		<label>
-			Description
+			{ i18n.T(ctx, "character.field_description") }
 			<textarea name="description">{ c.Description }</textarea>
 		</label>
 		<label>
-			Personality
+			{ i18n.T(ctx, "character.field_personality") }
 			<textarea name="personality">{ c.Personality }</textarea>
 		</label>
 		<label>
-			Scenario
+			{ i18n.T(ctx, "character.field_scenario") }
 			<textarea name="scenario">{ c.Scenario }</textarea>
 		</label>
 		<label>
-			First message
+			{ i18n.T(ctx, "character.field_first_message") }
 			<textarea name="first_message">{ c.FirstMessage }</textarea>
 		</label>
 		<label>
-			Example messages
+			{ i18n.T(ctx, "character.field_example_messages") }
 			<textarea name="example_messages">{ c.ExampleMessages }</textarea>
 		</label>
 		<label>
-			Author's note (optional — tips from whoever wrote this character: intended model, how to run them, etc.)
+			{ i18n.T(ctx, "character.field_author_note") }
 			<textarea name="author_note">{ c.AuthorNote }</textarea>
 		</label>
 		<button type="submit">
 			if editing != nil {
-				Save
+				{ i18n.T(ctx, "common.action_save") }
 			} else {
-				Add character
+				{ i18n.T(ctx, "character.add_submit") }
 			}
 		</button>
 	</form>

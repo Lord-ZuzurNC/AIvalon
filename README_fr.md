@@ -9,6 +9,8 @@ Elle remplace les applications hébergées et limitées : vous parlez à un LLM 
 > Le chat, les fiches de personnage, les personas, les lorebooks, les profils de backend et le Vault (verrouillé par PIN, entièrement chiffré au repos) fonctionnent de bout en bout contre un vrai backend LLM.
 > La génération d'image (contre un backend AUTOMATIC1111/Forge) est codée mais **désactivée par défaut dans cette release** — elle n'a pas encore eu de vraie passe de validation. `docs/DESIGN.md` reste la référence pour ce qui est tranché ou encore ouvert.
 
+**Langue :** un petit badge au-dessus du lien **About** dans la barre latérale change la langue de l'interface — anglais par défaut, d'autres s'ajoutent en déposant un fichier `.json` dans `web/static/i18n/` (le français est fourni avec cette release). Ça indique aussi au backend LLM de répondre dans cette langue. Tous les écrans ne sont pas encore traduits : la nav, la barre latérale et la page About le sont ; Chat/Character/World/Vault/Settings affichent encore du texte anglais quel que soit le sélecteur (suivi dans la section Internationalization de `docs/DESIGN.md`).
+
 ## Démarrage
 
 Tout ce qui suit fonctionne pareil sous Windows et Linux — les captures viennent de Linux, côté Windows c'est juste un `.exe` et des doubles-clics à la place d'un terminal.

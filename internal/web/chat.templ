@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 // MessageBlock renders one chat line plus its per-message actions in a
@@ -34,23 +35,23 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 				</p>
 			}
 			<div class="options-menu">
-				<button type="button" class="options-trigger" aria-label="Message options" aria-haspopup="true" aria-expanded="false" aria-controls={ fmt.Sprintf("options-message-%d", m.ID) } data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
+				<button type="button" class="options-trigger" aria-label={ i18n.T(ctx, "chat.message_options") } aria-haspopup="true" aria-expanded="false" aria-controls={ fmt.Sprintf("options-message-%d", m.ID) } data-menu-id={ fmt.Sprintf("options-message-%d", m.ID) } onclick="toggleOptionsMenu(this.dataset.menuId)">⋮</button>
 				<div id={ fmt.Sprintf("options-message-%d", m.ID) } class="options-dropdown" role="menu" hidden>
 					if m.Role == "user" {
-						<button type="button" role="menuitem" onclick="toggleEditForm(this)">Edit</button>
+						<button type="button" role="menuitem" onclick="toggleEditForm(this)">{ i18n.T(ctx, "common.action_edit") }</button>
 					} else {
 						if m.Role != "image" {
 							<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/regenerate", sessionID, m.ID)) }>
-								<button type="submit" role="menuitem">Regenerate</button>
+								<button type="submit" role="menuitem">{ i18n.T(ctx, "chat.action_regenerate") }</button>
 							</form>
 						}
 						<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/branch", sessionID, m.ID)) }>
-							<button type="submit" role="menuitem">Branch</button>
+							<button type="submit" role="menuitem">{ i18n.T(ctx, "chat.action_branch") }</button>
 						</form>
 					}
-					<button type="button" role="menuitem" onclick="copyMessageContent(this)">Copy</button>
+					<button type="button" role="menuitem" onclick="copyMessageContent(this)">{ i18n.T(ctx, "chat.action_copy") }</button>
 					<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/delete", sessionID, m.ID)) }>
-						<button type="submit" class="danger" role="menuitem">Delete</button>
+						<button type="submit" class="danger" role="menuitem">{ i18n.T(ctx, "common.action_delete") }</button>
 					</form>
 				</div>
 			</div>
@@ -58,23 +59,23 @@ templ MessageBlock(sessionID int64, m DisplayMessage) {
 		if m.Role == "user" {
 			<form class="message-edit-form" style="display:none" method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages/%d/edit", sessionID, m.ID)) }>
 				<textarea name="content" rows="3">{ m.Content }</textarea>
-				<button type="submit">Save &amp; regenerate</button>
+				<button type="submit">{ i18n.T(ctx, "chat.save_regenerate") }</button>
 			</form>
 		}
 	</div>
 }
 
 templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProfile, personas []db.Persona, characters []db.CharacterCard, lorebooks []db.Lorebook, presets []db.ImagePreset) {
-	@Layout("Chat", "Chats") {
+	@Layout(i18n.T(ctx, "chat.title"), "chats") {
 		if len(profiles) == 0 {
 			<div class="page-header">
-				<h1>Chat</h1>
+				<h1>{ i18n.T(ctx, "chat.title") }</h1>
 			</div>
 		} else {
-			@PageHeaderWithCreate("Chat", "session-modal", "New session")
+			@PageHeaderWithCreate(i18n.T(ctx, "chat.title"), "session-modal", i18n.T(ctx, "chat.new_session"))
 		}
 		if len(sessions) == 0 {
-			<p><em>No sessions yet — start one below.</em></p>
+			<p><em>{ i18n.T(ctx, "chat.empty_sessions") }</em></p>
 		} else {
 			@searchFilterInput("chat")
 			<ul class="list-with-actions" data-search-scope="chat">
@@ -82,9 +83,9 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 					<li data-search-name={ s.Title }>
 						<a href={ templ.URL(fmt.Sprintf("/chat/%d", s.ID)) }>{ s.Title }</a>
 						@OptionsMenu(fmt.Sprintf("options-chat-%d", s.ID), []MenuAction{
-							{Label: "Duplicate", Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
-							{Label: "Hide into vault", Action: fmt.Sprintf("/vault/chats/%d/in", s.ID)},
-							{Label: "Delete", Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
+							{Label: i18n.T(ctx, "chat.action_duplicate"), Action: fmt.Sprintf("/chat/%d/duplicate", s.ID)},
+							{Label: i18n.T(ctx, "chat.hide_into_vault"), Action: fmt.Sprintf("/vault/chats/%d/in", s.ID)},
+							{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/chat/%d/delete", s.ID), Danger: true},
 						})
 					</li>
 				}
@@ -93,11 +94,7 @@ templ ChatListPage(sessions []db.Session, pager Pager, profiles []db.BackendProf
 			@searchFilterScript()
 		}
 		if len(profiles) == 0 {
-			<p>
-				No backend profile yet —
-				<a href="/settings">add one in Settings</a>
-				first.
-			</p>
+			@templ.Raw(i18n.T(ctx, "chat.no_backend_html"))
 		} else {
 			@sessionModal(profiles, personas, characters, lorebooks, presets, false)
 		}
@@ -113,12 +110,12 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 	<dialog id="session-modal">
 		<article>
 			<header>
-				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 				<strong>
 					if vaulted {
-						New hidden session
+						{ i18n.T(ctx, "chat.new_session_hidden") }
 					} else {
-						New session
+						{ i18n.T(ctx, "chat.new_session") }
 					}
 				</strong>
 			</header>
@@ -127,11 +124,11 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 					<input type="hidden" name="vault" value="1"/>
 				}
 				<label>
-					Title
-					<input type="text" name="title" placeholder="Untitled chat" value=""/>
+					{ i18n.T(ctx, "chat.field_title") }
+					<input type="text" name="title" placeholder={ i18n.T(ctx, "chat.title_placeholder") } value=""/>
 				</label>
 				<label>
-					Backend profile
+					{ i18n.T(ctx, "chat.field_backend_profile") }
 					<select name="backend_profile_id">
 						for _, p := range profiles {
 							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
@@ -139,9 +136,9 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 					</select>
 				</label>
 				<label>
-					Persona (optional — defaults to "User")
+					{ i18n.T(ctx, "chat.field_persona_optional") }
 					<select name="persona_id">
-						<option value="">(default)</option>
+						<option value="">{ i18n.T(ctx, "chat.persona_default_option") }</option>
 						for _, p := range personas {
 							<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
 						}
@@ -149,37 +146,37 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 				</label>
 				if len(presets) > 0 {
 					<label>
-						Default image preset (optional — can be changed per-generation)
+						{ i18n.T(ctx, "chat.field_image_preset_optional") }
 						<select name="image_preset_id">
-							<option value="0">(none — pick a backend each time)</option>
+							<option value="0">{ i18n.T(ctx, "chat.image_preset_none_option") }</option>
 							for _, p := range presets {
 								<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
 							}
 						</select>
-						<small>If the preset is locked to a backend, the "Generate image" dialog skips asking which one to use.</small>
+						<small>{ i18n.T(ctx, "chat.image_preset_help") }</small>
 					</label>
 				}
 				<fieldset>
-					<legend>Characters (optional, pick several for a group chat)</legend>
+					<legend>{ i18n.T(ctx, "chat.characters_legend") }</legend>
 					@characterPickerStrip(characters, "character_ids")
 				</fieldset>
 				<label>
-					Lorebook (optional — world info available to the narrator)
+					{ i18n.T(ctx, "chat.lorebook_field_label") }
 					<select name="lorebook_id">
-						<option value="">(none)</option>
+						<option value="">{ i18n.T(ctx, "chat.lorebook_none_option") }</option>
 						for _, l := range lorebooks {
 							if l.IsVaulted {
 								// An <option> can only hold text, so the
 								// vault marker here is the padlock glyph,
 								// not vaultMarker's SVG.
-								<option value={ fmt.Sprintf("%d", l.ID) }>{ "🔒 " + l.Name + " (vault)" }</option>
+								<option value={ fmt.Sprintf("%d", l.ID) }>{ fmt.Sprintf(i18n.T(ctx, "chat.lorebook_vault_suffix"), l.Name) }</option>
 							} else {
 								<option value={ fmt.Sprintf("%d", l.ID) }>{ l.Name }</option>
 							}
 						}
 					</select>
 				</label>
-				<button type="submit">Start chat</button>
+				<button type="submit">{ i18n.T(ctx, "chat.start_chat") }</button>
 			</form>
 		</article>
 	</dialog>
@@ -195,7 +192,7 @@ templ sessionModal(profiles []db.BackendProfile, personas []db.Persona, characte
 // character speaks first" still means the leftmost picked card.
 templ characterPickerStrip(characters []db.CharacterCard, name string) {
 	if len(characters) == 0 {
-		<p><em>No characters yet — <a href="/characters">add one</a>. A session with none picked runs as a free-form world/GM instead.</em></p>
+		@templ.Raw(i18n.T(ctx, "chat.characters_picker_empty_html"))
 	} else {
 		<div class="character-picker">
 			for _, c := range characters {
@@ -225,7 +222,7 @@ templ characterPickerStrip(characters []db.CharacterCard, name string) {
 // as ContextTrimNotice so whichever fires last is what's shown.
 templ RunawayRepetitionNotice() {
 	<div id="context-trim-notice" hx-swap-oob="innerHTML">
-		<small class="danger-text">⚠ Generation stopped early — the backend started repeating itself in a loop (usually means the context overflowed or got corrupted). The saved reply has the loop trimmed off.</small>
+		<small class="danger-text">{ i18n.T(ctx, "chat.runaway_notice") }</small>
 	</div>
 }
 
@@ -244,11 +241,9 @@ templ RunawayRepetitionNotice() {
 templ ContextTrimNotice(dropped int, stillOverBudget bool) {
 	<div id="context-trim-notice" hx-swap-oob="innerHTML">
 		if stillOverBudget {
-			<small class="danger-text">
-				⚠ Even after dropping { fmt.Sprintf("%d", dropped) } earlier message(s), the character/lorebook content alone is still bigger than the context budget — this prompt went out oversized and the backend may degenerate (repeat itself, run on, or error). Shrink the card/lorebook or raise the budget in <a href="/settings">Settings</a>.
-			</small>
+			@templ.Raw(fmt.Sprintf(i18n.T(ctx, "chat.context_trim_over_budget"), dropped))
 		} else {
-			<small>{ trimNoticeText(dropped) } <a href="/settings">adjust it in Settings</a>{ " if needed." }</small>
+			<small>{ trimNoticeText(ctx, dropped) } <a href="/settings">{ i18n.T(ctx, "chat.adjust_in_settings") }</a>{ " " + i18n.T(ctx, "chat.if_needed") }</small>
 		}
 	</div>
 }
@@ -283,7 +278,7 @@ templ generateImageButton(enabled bool) {
 		onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')"
 	>
 		@imageIcon()
-		Generate image
+		{ i18n.T(ctx, "chat.generate_image") }
 	</button>
 }
 
@@ -310,7 +305,7 @@ templ imageIcon() {
 }
 
 templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, coverImage string, bgOptions []BackgroundOption, info SessionInfo, imageForm ImageGenForm) {
-	@Layout(session.Title, "Chats") {
+	@Layout(session.Title, "chats") {
 		<div
 			if session.BackgroundImagePath != "" {
 				style={ fmt.Sprintf("background-image:url(/static/%s);background-size:cover;background-position:center;background-attachment:fixed;", session.BackgroundImagePath) }
@@ -325,20 +320,20 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 				}
 			</script>
 			if session.IsVaulted {
-				@BackLink("/vault?tab=chats", "Vault")
+				@BackLink("/vault?tab=chats", i18n.T(ctx, "common.nav_vault"))
 			} else {
-				@BackLink("/chat", "Chat")
+				@BackLink("/chat", i18n.T(ctx, "chat.title"))
 			}
 			<div class="chat-header">
 				<img class="chat-cover" src={ coverImage } alt=""/>
 				<h1>{ session.Title }</h1>
-				<button type="button" class="view-toggle-btn chat-layout-toggle" onclick="toggleChatLayout()" aria-label="List layout — tap to switch to bubbles" title="List layout — tap to switch to bubbles">☰</button>
-				<button type="button" class="session-panel-toggle" aria-label="Session info" onclick="document.getElementById('session-panel').classList.toggle('open')">☰</button>
+				<button type="button" class="view-toggle-btn chat-layout-toggle" onclick="toggleChatLayout()" data-label-list={ i18n.T(ctx, "chat.layout_list") } data-label-bubble={ i18n.T(ctx, "chat.layout_bubble") } aria-label={ i18n.T(ctx, "chat.layout_list") } title={ i18n.T(ctx, "chat.layout_list") }>☰</button>
+				<button type="button" class="session-panel-toggle" aria-label={ i18n.T(ctx, "chat.session_info") } onclick="document.getElementById('session-panel').classList.toggle('open')">☰</button>
 			</div>
 			<div class="chat-messages-wrap">
 				<div id="messages">
 					if len(messages) == 0 {
-						<p><em>No messages yet — say something below to start.</em></p>
+						<p><em>{ i18n.T(ctx, "chat.no_messages_yet") }</em></p>
 					}
 					for _, m := range messages {
 						@MessageBlock(session.ID, m)
@@ -362,8 +357,8 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			</div>
 			@imageGenModal(session.ID, imageForm, imageForm.activePreset(session.ImagePresetID))
 			<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/messages", session.ID)) } class="chat-input-row">
-				<input type="text" name="content" placeholder="Say something..." autocomplete="off" required="required"/>
-				<button type="submit" class="send-button" aria-label="Send">
+				<input type="text" name="content" placeholder={ i18n.T(ctx, "chat.say_something_placeholder") } autocomplete="off" required="required"/>
+				<button type="submit" class="send-button" aria-label={ i18n.T(ctx, "chat.send") }>
 					@sendIcon()
 				</button>
 			</form>
@@ -418,7 +413,7 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 			function syncChatLayoutToggle() {
 				var bubble = document.querySelector(".chat-page-bg").classList.contains("chat-bubbles");
 				var btn = document.querySelector(".chat-layout-toggle");
-				var label = bubble ? "Bubble layout — tap to switch to list" : "List layout — tap to switch to bubbles";
+				var label = bubble ? btn.dataset.labelBubble : btn.dataset.labelList;
 				btn.textContent = bubble ? "💬" : "☰";
 				btn.setAttribute("aria-label", label);
 				btn.setAttribute("title", label);
@@ -467,51 +462,51 @@ templ ChatPage(session db.Session, messages []DisplayMessage, needsReply bool, c
 templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info SessionInfo, messages []DisplayMessage, presets []db.ImagePreset) {
 	<aside id="session-panel" class="session-panel">
 		<div class="session-panel-header">
-			<strong>Session</strong>
-			<button type="button" aria-label="Close" onclick="document.getElementById('session-panel').classList.remove('open')">×</button>
+			<strong>{ i18n.T(ctx, "chat.session_heading") }</strong>
+			<button type="button" aria-label={ i18n.T(ctx, "common.close") } onclick="document.getElementById('session-panel').classList.remove('open')">×</button>
 		</div>
 		<div class="tabs">
 			<div role="tablist" class="tab-list">
-				<button type="button" role="tab" class="tab-btn" data-tab-target="summary" aria-selected="true" onclick="switchPanelTab(this)">Summary</button>
-				<button type="button" role="tab" class="tab-btn" data-tab-target="characters" aria-selected="false" onclick="switchPanelTab(this)">Characters</button>
-				<button type="button" role="tab" class="tab-btn" data-tab-target="world" aria-selected="false" onclick="switchPanelTab(this)">World</button>
-				<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchPanelTab(this)">Persona</button>
-				<button type="button" role="tab" class="tab-btn" data-tab-target="gallery" aria-selected="false" onclick="switchPanelTab(this)">Gallery</button>
-				<button type="button" role="tab" class="tab-btn" data-tab-target="background" aria-selected="false" onclick="switchPanelTab(this)">Background</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="summary" aria-selected="true" onclick="switchPanelTab(this)">{ i18n.T(ctx, "chat.panel_tab_summary") }</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="characters" aria-selected="false" onclick="switchPanelTab(this)">{ i18n.T(ctx, "character.title") }</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="world" aria-selected="false" onclick="switchPanelTab(this)">{ i18n.T(ctx, "world.title") }</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected="false" onclick="switchPanelTab(this)">{ i18n.T(ctx, "chat.panel_tab_persona") }</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="gallery" aria-selected="false" onclick="switchPanelTab(this)">{ i18n.T(ctx, "chat.panel_tab_gallery") }</button>
+				<button type="button" role="tab" class="tab-btn" data-tab-target="background" aria-selected="false" onclick="switchPanelTab(this)">{ i18n.T(ctx, "chat.panel_tab_background") }</button>
 			</div>
 			<div data-tab-panel="summary">
 				<dl class="session-summary">
-					<dt>Backend profile</dt>
+					<dt>{ i18n.T(ctx, "chat.field_backend_profile") }</dt>
 					<dd>
 						if info.BackendProfileName != "" {
 							{ info.BackendProfileName }
 						} else {
-							<em>none</em>
+							<em>{ i18n.T(ctx, "chat.summary_none") }</em>
 						}
 					</dd>
-					<dt>Persona</dt>
+					<dt>{ i18n.T(ctx, "chat.panel_tab_persona") }</dt>
 					<dd>{ info.Persona.Name }</dd>
-					<dt>World</dt>
+					<dt>{ i18n.T(ctx, "world.title") }</dt>
 					<dd>
 						if info.LorebookName != "" {
 							{ info.LorebookName }
 						} else {
-							<em>none attached</em>
+							<em>{ i18n.T(ctx, "chat.summary_none_attached") }</em>
 						}
 					</dd>
-					<dt>Characters</dt>
+					<dt>{ i18n.T(ctx, "character.title") }</dt>
 					<dd>
 						if len(info.Characters) == 0 {
-							<em>none — freeform narrator</em>
+							<em>{ i18n.T(ctx, "chat.summary_freeform") }</em>
 						} else {
-							{ fmt.Sprintf("%d attached", len(info.Characters)) }
+							{ fmt.Sprintf(i18n.T(ctx, "chat.summary_attached_count"), len(info.Characters)) }
 						}
 					</dd>
 				</dl>
 			</div>
 			<div data-tab-panel="characters" hidden="hidden">
 				if len(info.Characters) == 0 {
-					<p><em>No characters attached — the narrator improvises freely.</em></p>
+					<p><em>{ i18n.T(ctx, "chat.panel_characters_empty") }</em></p>
 				} else {
 					<ul class="panel-list">
 						for _, c := range info.Characters {
@@ -525,13 +520,13 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 			</div>
 			<div data-tab-panel="world" hidden="hidden">
 				if info.LorebookName == "" {
-					<p><em>No lorebook attached to this session.</em></p>
+					<p><em>{ i18n.T(ctx, "chat.panel_world_empty") }</em></p>
 				} else {
 					<p><a href={ templ.URL(fmt.Sprintf("/world/%d", session.LorebookID)) }>{ info.LorebookName }</a></p>
 					if len(info.ActiveLorebookEntries) == 0 {
-						<p><em>No active entries (all disabled, or the book is empty).</em></p>
+						<p><em>{ i18n.T(ctx, "chat.panel_world_no_active_entries") }</em></p>
 					} else {
-						<p><small>Active entries — on in World, independent of whether this conversation has actually triggered them yet.</small></p>
+						<p><small>{ i18n.T(ctx, "chat.panel_world_active_entries_help") }</small></p>
 						<ul class="panel-list">
 							for _, e := range info.ActiveLorebookEntries {
 								<li>{ strings.Join(e.Keys, ", ") }</li>
@@ -545,23 +540,23 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 				if info.Persona.Description != "" {
 					<p>{ info.Persona.Description }</p>
 				} else {
-					<p><em>No description set.</em></p>
+					<p><em>{ i18n.T(ctx, "chat.panel_persona_no_description") }</em></p>
 				}
 			</div>
 			<div data-tab-panel="gallery" hidden="hidden">
 				<!-- Same plain POST+Apply+redirect form as the Background tab. -->
 				<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/image-preset", session.ID)) }>
 					<label>
-						Image preset
+						{ i18n.T(ctx, "chat.panel_image_preset_label") }
 						<select name="image_preset_id">
-							<option value="0" selected?={ session.ImagePresetID == 0 }>(Default)</option>
+							<option value="0" selected?={ session.ImagePresetID == 0 }>{ i18n.T(ctx, "chat.panel_default_option") }</option>
 							for _, p := range presets {
 								<option value={ fmt.Sprintf("%d", p.ID) } selected?={ session.ImagePresetID == p.ID }>{ p.Name }</option>
 							}
 						</select>
-						<small>Style, size and sampler for this chat’s generated images — <a href="/settings">add or edit presets in Settings</a>.</small>
+						<small>@templ.Raw(i18n.T(ctx, "chat.panel_image_preset_help_html"))</small>
 					</label>
-					<button type="submit">Apply</button>
+					<button type="submit">{ i18n.T(ctx, "chat.apply") }</button>
 				</form>
 				{{ hasImages := false }}
 				<div class="image-gallery">
@@ -572,27 +567,27 @@ templ sessionPanel(session db.Session, bgOptions []BackgroundOption, info Sessio
 								<a href={ templ.URL(imageSrc(m.ImagePath)) } target="_blank" rel="noopener">
 										<img src={ imageSrc(m.ImagePath) } alt={ m.Content } loading="lazy"/>
 									</a>
-									<a href={ templ.URL(imageSrc(m.ImagePath)) } download role="button" class="secondary">Download</a>
+									<a href={ templ.URL(imageSrc(m.ImagePath)) } download role="button" class="secondary">{ i18n.T(ctx, "chat.download") }</a>
 							</div>
 						}
 					}
 				</div>
 				if !hasImages {
-					<p><em>No images generated in this session yet — use “Generate image” under the chat.</em></p>
+					<p><em>@templ.Raw(i18n.T(ctx, "chat.panel_gallery_empty_html"))</em></p>
 				}
 			</div>
 			<div data-tab-panel="background" hidden="hidden">
 				if len(bgOptions) == 0 {
-					<p><em>No lorebook/character images available on this session yet.</em></p>
+					<p><em>{ i18n.T(ctx, "chat.panel_background_empty") }</em></p>
 				} else {
 					<form method="post" action={ templ.URL(fmt.Sprintf("/chat/%d/background", session.ID)) }>
 						<select name="background_image_path">
-							<option value="" selected?={ session.BackgroundImagePath == "" }>(none — default theme)</option>
+							<option value="" selected?={ session.BackgroundImagePath == "" }>{ i18n.T(ctx, "chat.panel_background_none_option") }</option>
 							for _, opt := range bgOptions {
 								<option value={ opt.Path } selected?={ session.BackgroundImagePath == opt.Path }>{ opt.Label }</option>
 							}
 						</select>
-						<button type="submit">Apply</button>
+						<button type="submit">{ i18n.T(ctx, "chat.apply") }</button>
 					</form>
 				}
 			</div>
@@ -622,15 +617,11 @@ templ imageGenModal(sessionID int64, f ImageGenForm, preset db.ImagePreset) {
 	<dialog id="image-modal">
 		<article>
 			<header>
-				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
-				<strong>Generate image</strong>
+				<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<strong>{ i18n.T(ctx, "chat.generate_image") }</strong>
 			</header>
 			if len(f.Profiles) == 0 {
-				<p>
-					No image backend profile yet —
-					<a href="/settings">add one in Settings</a>
-					(Kind: Image generation, e.g. an Automatic1111 WebUI started with --api at http://127.0.0.1:7860) first.
-				</p>
+				@templ.Raw(i18n.T(ctx, "chat.no_image_backend_html"))
 			} else {
 				<form
 					method="post"
@@ -647,17 +638,17 @@ templ imageGenModal(sessionID int64, f ImageGenForm, preset db.ImagePreset) {
 						<input type="hidden" name="backend_profile_id" value={ fmt.Sprintf("%d", f.Profiles[0].ID) }/>
 					} else {
 						<label>
-							Image backend
+							{ i18n.T(ctx, "chat.image_backend_label") }
 							<select name="backend_profile_id">
 								for _, p := range f.Profiles {
 									<option value={ fmt.Sprintf("%d", p.ID) }>{ p.Name }</option>
 								}
 							</select>
-							<small>Which of your image-generation profiles runs this request.</small>
+							<small>{ i18n.T(ctx, "chat.image_backend_help") }</small>
 						</label>
 					}
 					<label>
-						Prompt
+						{ i18n.T(ctx, "chat.prompt_label") }
 						<div class="test-row">
 							<button
 								type="button"
@@ -666,30 +657,31 @@ templ imageGenModal(sessionID int64, f ImageGenForm, preset db.ImagePreset) {
 								hx-target="#image-prompt-field"
 								hx-swap="outerHTML"
 								hx-indicator="#suggest-spinner"
-							>✨ Suggest a prompt</button>
-							<span id="suggest-spinner" class="htmx-indicator">Thinking…</span>
+							>{ i18n.T(ctx, "chat.suggest_prompt") }</button>
+							<span id="suggest-spinner" class="htmx-indicator">{ i18n.T(ctx, "chat.thinking") }</span>
 						</div>
 						@imagePromptSuggestion("", "")
-						<small>What to draw — written by hand, or by “Suggest a prompt” then edited.</small>
+						<small>{ i18n.T(ctx, "chat.prompt_help") }</small>
 					</label>
 					<p>
 						<small>
 							if preset.Name != "" {
-								Using preset “{ preset.Name }” (its style suffix is appended to the prompt)
+								{ fmt.Sprintf(i18n.T(ctx, "chat.using_preset"), preset.Name) }
 								if preset.BackendProfileID != 0 {
-									— backend locked by this preset, no picker needed.
+									{ " " + i18n.T(ctx, "chat.backend_locked_by_preset") }
 								} else {
 									.
 								}
 							} else {
-								No preset chosen — using the defaults (20 steps, CFG 7, 512×512, Euler a, random seed).
+								{ i18n.T(ctx, "chat.no_preset_chosen") }
 							}
-							Change it in the session panel’s Gallery tab; add or edit presets in <a href="/settings">Settings</a>.
+							{ " " }{ i18n.T(ctx, "chat.change_in_gallery_tab") }{ " " }
+							<a href="/settings">{ i18n.T(ctx, "settings.title") }</a>.
 						</small>
 					</p>
 					<div class="test-row">
-						<button type="submit">Generate</button>
-						<span id="image-spinner" class="htmx-indicator">Generating… this can take a minute or two.</span>
+						<button type="submit">{ i18n.T(ctx, "chat.generate") }</button>
+						<span id="image-spinner" class="htmx-indicator">{ i18n.T(ctx, "chat.generating_takes_a_while") }</span>
 					</div>
 					<div id="image-result" role="status" aria-live="polite"></div>
 				</form>

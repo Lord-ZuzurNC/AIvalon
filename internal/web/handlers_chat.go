@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 	"github.com/Lord-ZuzurNC/AIvalon/internal/llmclient"
 )
 
@@ -763,7 +764,7 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 		}
 		lorebookContent = resolveLorebookContent(entries, lastUserMessageContent(history), defaultProbabilityRoll)
 	}
-	chatMessages, dropped, stillOverBudget := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history, settings.ContextBudgetChars)
+	chatMessages, dropped, stillOverBudget := buildNarratorMessages(settings.SystemPromptTemplate, persona, characters, lorebookContent, history, settings.ContextBudgetChars, settings.Language)
 	if dropped > 0 || stillOverBudget {
 		// Never silent: logged server-side, and shown on the chat page
 		// via an out-of-band swap into its #context-trim-notice live
@@ -840,8 +841,8 @@ func (h ChatHandlers) streamWorldReply(r *http.Request, w http.ResponseWriter, s
 // budgetChars (AppSettings.ContextBudgetChars, 0 = unlimited) caps the
 // total size — see truncateHistoryToBudget. The second return value is
 // how many of the oldest history messages were left out to fit.
-func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage, budgetChars int) ([]llmclient.Message, int, bool) {
-	system := llmclient.Message{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent)}
+func buildNarratorMessages(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string, history []db.ChatMessage, budgetChars int, language string) ([]llmclient.Message, int, bool) {
+	system := llmclient.Message{Role: "system", Content: buildNarratorPrompt(template, persona, characters, lorebookContent, language)}
 	mapped := make([]llmclient.Message, 0, len(history))
 	for _, m := range history {
 		if m.Role == "image" {
@@ -853,14 +854,14 @@ func buildNarratorMessages(template string, persona db.Persona, characters []db.
 	return append([]llmclient.Message{system}, kept...), dropped, stillOverBudget
 }
 
-func trimNoticeText(dropped int) string {
+func trimNoticeText(ctx context.Context, dropped int) string {
 	if dropped == 0 {
 		return ""
 	}
 	if dropped == 1 {
-		return "1 earlier message was left out to fit the context budget —"
+		return i18n.T(ctx, "chat.trim_notice_one")
 	}
-	return fmt.Sprintf("%d earlier messages were left out to fit the context budget —", dropped)
+	return fmt.Sprintf(i18n.T(ctx, "chat.trim_notice_many"), dropped)
 }
 
 // truncateHistoryToBudget drops the OLDEST history messages, one at a
@@ -977,13 +978,59 @@ func stripTrailingRepeats(s, pattern string) string {
 // {{lorebook}} resolves to whichever of the session's attached
 // Lorebook's entries are active this turn (see resolveLorebookContent),
 // or "" for a session with none attached.
-func buildNarratorPrompt(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent string) string {
-	prompt := template
+//
+// language (AppSettings.Language) prepends languageInstruction ahead
+// of the whole template — see that function's own doc comment for why
+// it's a preamble rather than a template placeholder.
+func buildNarratorPrompt(template string, persona db.Persona, characters []db.CharacterCard, lorebookContent, language string) string {
+	prompt := languageInstruction(language) + template
 	prompt = strings.ReplaceAll(prompt, "{{persona_name}}", persona.Name)
 	prompt = strings.ReplaceAll(prompt, "{{persona_description}}", persona.Description)
 	prompt = strings.ReplaceAll(prompt, "{{characters}}", renderCharactersBlock(characters, persona.Name))
 	prompt = strings.ReplaceAll(prompt, "{{lorebook}}", lorebookContent)
 	return prompt
+}
+
+// languageInstruction is task t_424b1a52 part B: push the backend
+// model to actually reply in whichever language the user picked in
+// the nav switcher, since nothing about an OpenAI-compatible
+// chat/completions call does that on its own — a model left to its
+// own devices defaults to whatever language dominates its training
+// data (usually English) regardless of AIvalon's own UI language.
+//
+// A PREAMBLE, not a new {{language}} placeholder inside
+// SystemPromptTemplate: Lord's own custom template (and anyone else's,
+// written before this feature existed) has no such placeholder and
+// was never meant to need one — a preamble applies uniformly whether
+// the template is the default or hand-edited, with zero risk of
+// silently doing nothing on an old/custom template that's missing a
+// placeholder it doesn't know about. Documented as the chosen
+// approach (preamble vs. per-language template duplicates) in
+// docs/DESIGN.md.
+//
+// code == "" or "en" returns "" — not just "no-op instruction", an
+// actually EMPTY string — so an install that never touches the
+// language switcher gets byte-for-byte the same prompt as before this
+// feature shipped. The instruction names the language by its own
+// display name (internal/i18n's "_name", e.g. "Français"), never a
+// hardcoded per-language sentence, so a new web/static/i18n/<code>.json
+// dropped in later needs no Go change here either — the N-language
+// requirement from the task applies to this too, not just the UI.
+func languageInstruction(code string) string {
+	if code == "" || code == "en" {
+		return ""
+	}
+	name := code
+	for _, l := range i18n.Default().Languages() {
+		if l.Code == code {
+			name = l.Name
+			break
+		}
+	}
+	return fmt.Sprintf(
+		"Respond only in %s. All narration, dialogue, and every character's voice must be written in %s — never switch to another language, even if another instruction or piece of context below is itself written in a different one.\n\n",
+		name, name,
+	)
 }
 
 // substituteCardMacros replaces the two SillyTavern/Character-Card-V2

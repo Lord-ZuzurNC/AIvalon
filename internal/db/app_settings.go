@@ -24,6 +24,12 @@ type AppSettings struct {
 	// not a real token count, since tokenizers differ per backend/model).
 	// 0 means no limit. Migration 00011, default 24000.
 	ContextBudgetChars int
+	// Language is the UI/system-prompt language code (e.g. "en", "fr")
+	// — see internal/i18n. Mirrors the browser's own "aivalon-lang"
+	// cookie but lives here too: the system prompt sent to the LLM
+	// backend isn't tied to any one browser, so it needs a server-side
+	// source of truth. Migration 00017, default "en".
+	Language string
 }
 
 // DefaultSystemPromptTemplate mirrors the seed/migration-updated value in
@@ -55,8 +61,8 @@ If {{persona_name}} asks one character to relay something to another and report 
 func GetAppSettings(db *sql.DB) (AppSettings, error) {
 	var s AppSettings
 	var whitelist string
-	err := db.QueryRow(`SELECT system_prompt_template, png_import_whitelist, context_budget_chars FROM app_settings WHERE id = 1`).
-		Scan(&s.SystemPromptTemplate, &whitelist, &s.ContextBudgetChars)
+	err := db.QueryRow(`SELECT system_prompt_template, png_import_whitelist, context_budget_chars, language FROM app_settings WHERE id = 1`).
+		Scan(&s.SystemPromptTemplate, &whitelist, &s.ContextBudgetChars, &s.Language)
 	if err != nil {
 		return AppSettings{}, fmt.Errorf("getting app settings: %w", err)
 	}
@@ -65,8 +71,8 @@ func GetAppSettings(db *sql.DB) (AppSettings, error) {
 }
 
 func UpdateAppSettings(db *sql.DB, s AppSettings) error {
-	_, err := db.Exec(`UPDATE app_settings SET system_prompt_template = ?, png_import_whitelist = ?, context_budget_chars = ? WHERE id = 1`,
-		s.SystemPromptTemplate, JoinHostList(s.PNGImportWhitelist), s.ContextBudgetChars)
+	_, err := db.Exec(`UPDATE app_settings SET system_prompt_template = ?, png_import_whitelist = ?, context_budget_chars = ?, language = ? WHERE id = 1`,
+		s.SystemPromptTemplate, JoinHostList(s.PNGImportWhitelist), s.ContextBudgetChars, s.Language)
 	if err != nil {
 		return fmt.Errorf("updating app settings: %w", err)
 	}

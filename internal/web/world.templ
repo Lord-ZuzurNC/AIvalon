@@ -4,14 +4,15 @@ import (
 	"fmt"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 templ WorldPage(books []db.Lorebook, pager Pager) {
-	@Layout("World", "Worlds") {
-		@PageHeaderWithViewAndCreate("World", "world", "lorebook-import-modal", "lorebook-modal", "Add a lorebook")
-		<p>Lorebooks: world info the narrator can draw on. Attach one to a session in Chat.</p>
+	@Layout(i18n.T(ctx, "world.title"), "worlds") {
+		@PageHeaderWithViewAndCreate(i18n.T(ctx, "world.title"), "world", "lorebook-import-modal", "lorebook-modal", i18n.T(ctx, "world.add"))
+		<p>{ i18n.T(ctx, "world.intro") }</p>
 		if len(books) == 0 {
-			<p><em>No lorebooks yet — add one above, then open it to add entries.</em></p>
+			<p><em>{ i18n.T(ctx, "world.empty") }</em></p>
 		} else {
 			@searchFilterInput("world")
 			<div data-search-scope="world">
@@ -24,9 +25,9 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 				<table>
 					<thead>
 						<tr>
-							<th>Name</th>
-							<th>Chats</th>
-							<th>Entries</th>
+							<th>{ i18n.T(ctx, "world.col_name") }</th>
+							<th>{ i18n.T(ctx, "world.col_chats") }</th>
+							<th>{ i18n.T(ctx, "world.col_entries") }</th>
 							<th></th>
 						</tr>
 					</thead>
@@ -38,8 +39,8 @@ templ WorldPage(books []db.Lorebook, pager Pager) {
 								<td>{ fmt.Sprintf("%d", b.EntryCount) }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-lorebook-%d", b.ID), []MenuAction{
-										{Label: "Hide into vault", Action: fmt.Sprintf("/vault/worlds/%d/in", b.ID)},
-										{Label: "Delete", Action: fmt.Sprintf("/world/%d/delete", b.ID), Danger: true},
+										{Label: i18n.T(ctx, "world.hide_into_vault"), Action: fmt.Sprintf("/vault/worlds/%d/in", b.ID)},
+										{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/world/%d/delete", b.ID), Danger: true},
 									})
 								</td>
 							</tr>
@@ -66,12 +67,12 @@ templ lorebookCreateModal(vaulted bool) {
 	<dialog id="lorebook-modal">
 		<article>
 			<header>
-				<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+				<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 				<strong>
 					if vaulted {
-						Add a hidden lorebook
+						{ i18n.T(ctx, "world.add_hidden") }
 					} else {
-						Add a lorebook
+						{ i18n.T(ctx, "world.add") }
 					}
 				</strong>
 			</header>
@@ -80,32 +81,32 @@ templ lorebookCreateModal(vaulted bool) {
 					<input type="hidden" name="vault" value="1"/>
 				}
 				<label>
-					Name
+					{ i18n.T(ctx, "world.field_name") }
 					<input type="text" name="name" required="required"/>
 				</label>
 				@ImageField("", "")
-				<button type="submit">Add lorebook</button>
+				<button type="submit">{ i18n.T(ctx, "world.add_submit") }</button>
 			</form>
 		</article>
 	</dialog>
 }
 
 templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *db.LorebookEntry, pager Pager) {
-	@Layout(book.Name, "Worlds") {
+	@Layout(book.Name, "worlds") {
 		if book.IsVaulted {
-			@BackLink("/vault?tab=worlds", "Vault")
+			@BackLink("/vault?tab=worlds", i18n.T(ctx, "common.nav_vault"))
 		} else {
-			@BackLink("/world", "World")
+			@BackLink("/world", i18n.T(ctx, "world.title"))
 		}
 		<h1>{ book.Name }</h1>
-		<p class="entry-count-sub">{ entryCountLabel(len(entries)) }</p>
+		<p class="entry-count-sub">{ entryCountLabel(ctx, len(entries)) }</p>
 		<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d", book.ID)) } enctype="multipart/form-data">
 			<label>
-				Name
+				{ i18n.T(ctx, "world.field_name") }
 				<input type="text" name="name" value={ book.Name } required="required"/>
 			</label>
 			@ImageField(book.ImagePath, book.Name)
-			<button type="submit">Rename</button>
+			<button type="submit">{ i18n.T(ctx, "world.rename") }</button>
 		</form>
 
 		<!-- Collapsible so a big imported book (hundreds of entries)
@@ -115,18 +116,18 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 		     collapsed otherwise. The summary carries the count so
 		     collapsing never hides how big the book is. -->
 		<details class="entries-section" open?={ len(entries) <= 10 || pager.Requested }>
-			<summary><h2>Entries</h2> <span class="entries-summary-count">{ entryCountLabel(len(entries)) }</span></summary>
+			<summary><h2>{ i18n.T(ctx, "world.entries_heading") }</h2> <span class="entries-summary-count">{ entryCountLabel(ctx, len(entries)) }</span></summary>
 		if len(entries) == 0 {
-			<p><em>No entries yet — add one below.</em></p>
+			<p><em>{ i18n.T(ctx, "world.entries_empty") }</em></p>
 		} else {
 			<table>
 				<thead>
 					<tr>
-						<th>Keys</th>
-						<th>Trigger</th>
-						<th>Order</th>
-						<th>Probability</th>
-						<th>Enabled</th>
+						<th>{ i18n.T(ctx, "world.col_keys") }</th>
+						<th>{ i18n.T(ctx, "world.col_trigger") }</th>
+						<th>{ i18n.T(ctx, "world.col_order") }</th>
+						<th>{ i18n.T(ctx, "world.col_probability") }</th>
+						<th>{ i18n.T(ctx, "world.col_enabled") }</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -140,15 +141,15 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 							<td>
 								<form method="post" action={ templ.URL(fmt.Sprintf("/world/%d/entries/%d/toggle?page=%d", book.ID, e.ID, pager.Page)) } class="enabled-toggle">
 									if e.Enabled {
-										<button type="submit" aria-label="Disable this entry" title="Disable this entry">✅</button>
+										<button type="submit" aria-label={ i18n.T(ctx, "world.disable_entry") } title={ i18n.T(ctx, "world.disable_entry") }>✅</button>
 									} else {
-										<button type="submit" aria-label="Enable this entry" title="Enable this entry">❌</button>
+										<button type="submit" aria-label={ i18n.T(ctx, "world.enable_entry") } title={ i18n.T(ctx, "world.enable_entry") }>❌</button>
 									}
 								</form>
 							</td>
 							<td>
 								@OptionsMenu(fmt.Sprintf("options-entry-%d", e.ID), []MenuAction{
-									{Label: "Delete", Action: fmt.Sprintf("/world/%d/entries/%d/delete?page=%d", book.ID, e.ID, pager.Page), Danger: true},
+									{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/world/%d/entries/%d/delete?page=%d", book.ID, e.ID, pager.Page), Danger: true},
 								})
 							</td>
 						</tr>
@@ -160,17 +161,17 @@ templ LorebookPage(book db.Lorebook, entries []db.LorebookEntry, editingEntry *d
 		}
 		</details>
 
-		<button type="button" class="create-button" aria-label="Add an entry" title="Add an entry" onclick="document.getElementById('entry-modal').setAttribute('open','')">+</button>
+		<button type="button" class="create-button" aria-label={ i18n.T(ctx, "world.add_entry") } title={ i18n.T(ctx, "world.add_entry") } onclick="document.getElementById('entry-modal').setAttribute('open','')">+</button>
 
 		<dialog id="entry-modal" open?={ editingEntry != nil }>
 			<article>
 				<header>
-					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 					<strong>
 						if editingEntry != nil {
-							Edit entry
+							{ i18n.T(ctx, "world.edit_entry") }
 						} else {
-							Add an entry
+							{ i18n.T(ctx, "world.add_entry") }
 						}
 					</strong>
 				</header>
@@ -198,9 +199,9 @@ templ lorebookKeysCell(bookID, entryID int64, keys []string) {
 		{{ preview := joinKeys(previewKeys(keys, 2)) + "…" }}
 		{{ full := joinKeys(keys) }}
 		<div class="keys-cell">
-			<button type="button" class="keys-toggle" aria-label="Show all keys" aria-expanded="false" data-expand-label={ "▾ " + keyCountLabel(len(keys)) } data-collapse-label="▴ Collapse" onclick="toggleLorebookKeys(this)">{ "▾ " + keyCountLabel(len(keys)) }</button>
+			<button type="button" class="keys-toggle" aria-label={ i18n.T(ctx, "world.show_all_keys") } aria-expanded="false" data-expand-label={ "▾ " + keyCountLabel(ctx, len(keys)) } data-collapse-label={ "▴ " + i18n.T(ctx, "world.collapse_word") } data-expand-aria={ i18n.T(ctx, "world.show_all_keys") } data-collapse-aria={ i18n.T(ctx, "world.collapse_keys_aria") } onclick="toggleLorebookKeys(this)">{ "▾ " + keyCountLabel(ctx, len(keys)) }</button>
 			<a href={ editHref } class="keys-list" data-preview={ preview } data-full={ full }>{ preview }</a>
-			<button type="button" class="keys-toggle keys-toggle-bottom" hidden aria-label="Collapse keys" onclick="toggleLorebookKeys(this)">▴ Collapse</button>
+			<button type="button" class="keys-toggle keys-toggle-bottom" hidden aria-label={ i18n.T(ctx, "world.collapse_keys_aria") } onclick="toggleLorebookKeys(this)">{ "▴ " + i18n.T(ctx, "world.collapse_word") }</button>
 		</div>
 	}
 }
@@ -223,7 +224,7 @@ templ lorebookKeysScript() {
 			link.textContent = expanding ? link.dataset.full : link.dataset.preview;
 			top.textContent = expanding ? top.dataset.collapseLabel : top.dataset.expandLabel;
 			// Keep the accessible name in step with the visible label.
-			top.setAttribute("aria-label", expanding ? "Collapse keys" : "Show all keys");
+			top.setAttribute("aria-label", expanding ? top.dataset.collapseAria : top.dataset.expandAria);
 			top.setAttribute("aria-expanded", String(expanding));
 			bottom.hidden = !expanding;
 		}
@@ -248,41 +249,41 @@ templ lorebookEntryForm(book db.Lorebook, editing *db.LorebookEntry, page int) {
 	}}
 	<form method="post" action={ templ.URL(action) }>
 		<label>
-			Keys (comma-separated — ignored if trigger is "constant")
-			<input type="text" name="keys" value={ keys } placeholder="tower, arcane tomes"/>
+			{ i18n.T(ctx, "world.field_keys") }
+			<input type="text" name="keys" value={ keys } placeholder={ i18n.T(ctx, "world.field_keys_placeholder") }/>
 		</label>
 		<label>
-			Content
+			{ i18n.T(ctx, "world.field_content") }
 			<textarea name="content" required="required">{ content }</textarea>
 		</label>
 		<label>
-			Trigger
+			{ i18n.T(ctx, "world.field_trigger") }
 			<select name="trigger_strategy">
-				<option value="selective" selected?={ triggerStrategy == "selective" }>selective (matches a key)</option>
-				<option value="constant" selected?={ triggerStrategy == "constant" }>constant (always active)</option>
+				<option value="selective" selected?={ triggerStrategy == "selective" }>{ i18n.T(ctx, "world.trigger_selective") }</option>
+				<option value="constant" selected?={ triggerStrategy == "constant" }>{ i18n.T(ctx, "world.trigger_constant") }</option>
 			</select>
-			<small>When this entry's content gets shown to the narrator. "Constant" = every single message, no matter what you write. "Selective" = only when one of the Keys above appears as a whole word in your last message (e.g. key "dragon" only fires if you actually typed "dragon").</small>
+			<small>{ i18n.T(ctx, "world.field_trigger_help") }</small>
 		</label>
 		<label>
-			Insertion order
+			{ i18n.T(ctx, "world.field_order") }
 			<input type="number" name="insertion_order" value={ insertionOrder }/>
-			<small>Only matters when several entries fire on the same message: lower number goes first in what the narrator reads. Leave at 0 unless you have entries that need a specific order relative to each other.</small>
+			<small>{ i18n.T(ctx, "world.field_order_help") }</small>
 		</label>
 		<label>
-			Probability (0-100)
+			{ i18n.T(ctx, "world.field_probability") }
 			<input type="number" name="probability" value={ probability } min="0" max="100"/>
-			<small>Even when this entry would fire (constant, or its key matched), only include it this % of the time — a dice roll on top of the trigger. 100 = always, no randomness. Leave at 100 unless you deliberately want this fact to show up inconsistently.</small>
+			<small>{ i18n.T(ctx, "world.field_probability_help") }</small>
 		</label>
 		<label>
 			<input type="checkbox" name="enabled" checked?={ enabled }/>
-			Enabled
-			<small>Switches this entry off without deleting it — handy for a fact that's temporarily outdated or spoils something, since you keep the text saved to re-enable later.</small>
+			{ i18n.T(ctx, "world.field_enabled") }
+			<small>{ i18n.T(ctx, "world.field_enabled_help") }</small>
 		</label>
 		<button type="submit">
 			if editing != nil {
-				Save
+				{ i18n.T(ctx, "common.action_save") }
 			} else {
-				Add entry
+				{ i18n.T(ctx, "world.add_entry_submit") }
 			}
 		</button>
 	</form>

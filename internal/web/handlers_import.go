@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 // importURLTimeout bounds the "From URL" tab's server-side fetch —
@@ -458,8 +459,8 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 				who = nameFromUpload(filename)
 			}
 			render(w, r, ImportCrossConfirmPage(
-				"Worlds",
-				fmt.Sprintf("This is a Character Card JSON (%q), not a Lorebook — import it in Character instead?", who),
+				"worlds",
+				fmt.Sprintf(i18n.T(r.Context(), "import.cross_character"), who),
 				"/characters/import/resume", vaultHome("worlds", vaulted), token,
 			))
 			return
@@ -470,6 +471,24 @@ func (h WorldHandlers) importLorebookUpload(w http.ResponseWriter, r *http.Reque
 	if name == "" {
 		name = nameFromUpload(filename)
 	}
+
+	// Language mismatch gate: warn and offer the VO/VF double import
+	// before anything is created — see docs/DESIGN.md's "Import
+	// language detection" section and ImportLanguageConfirmPage.
+	if detected, _, targetName, mismatch, err := languageMismatch(h.DB, lorebookLanguageText(entries)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if mismatch {
+		token, err := h.Cache.Stash(originalRaw, filename, vaulted)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		detectedName := languageDisplayName(detected.Code, detected.Name)
+		render(w, r, ImportLanguageConfirmPage("worlds", detectedName, targetName, "/world/import/confirm-language", vaultHome("worlds", vaulted), token))
+		return
+	}
+
 	taken, err := existingLorebookNames(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -541,8 +560,8 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 			}
 			who := nameFromUpload(filename)
 			render(w, r, ImportCrossConfirmPage(
-				"Characters",
-				fmt.Sprintf("This is a Lorebook JSON (%q, %d entries), not a Character Card — import it in World instead?", who, len(entries)),
+				"characters",
+				fmt.Sprintf(i18n.T(r.Context(), "import.cross_lorebook"), who, len(entries)),
 				"/world/import/resume", vaultHome("characters", vaulted), token,
 			))
 			return
@@ -554,6 +573,24 @@ func (h CharacterHandlers) importCharacterUpload(w http.ResponseWriter, r *http.
 		card.Name = nameFromUpload(filename)
 	}
 	card.IsVaulted = vaulted
+
+	// Language mismatch gate: warn and offer the VO/VF double import
+	// before anything is created — see docs/DESIGN.md's "Import
+	// language detection" section and ImportLanguageConfirmPage.
+	if detected, _, targetName, mismatch, err := languageMismatch(h.DB, cardLanguageText(card)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if mismatch {
+		token, err := h.Cache.Stash(originalRaw, filename, vaulted)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		detectedName := languageDisplayName(detected.Code, detected.Name)
+		render(w, r, ImportLanguageConfirmPage("characters", detectedName, targetName, "/characters/import/confirm-language", vaultHome("characters", vaulted), token))
+		return
+	}
+
 	takenCards, err := existingCharacterNames(h.DB)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

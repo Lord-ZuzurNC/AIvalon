@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 	"github.com/Lord-ZuzurNC/AIvalon/internal/web"
 )
 
@@ -24,6 +25,12 @@ var dbPath = envOr("AIVALON_DB", "aivalon.db")
 // addr is 127.0.0.1-only by design — see docs/DESIGN.md ("Default bind").
 // AIVALON_ADDR overrides it for the same reason as dbPath above.
 var addr = envOr("AIVALON_ADDR", "127.0.0.1:4140")
+
+// langDir is where internal/i18n.LoadDir scans for language files —
+// same "relative to cwd, run from the repo root" convention as
+// web/static itself (see noListFileSystem's own registration below).
+// AIVALON_I18N_DIR overrides it, same reasoning as dbPath/addr.
+var langDir = "web/static/i18n"
 
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
@@ -53,6 +60,18 @@ func main() {
 		demo = v == "1"
 	}
 	web.DemoMode = demo
+
+	// i18n: discover every web/static/i18n/<code>.json at startup —
+	// see internal/i18n's own doc comment. A missing/unreadable
+	// directory isn't fatal: LoadDir still returns a usable (English-
+	// only, via its builtinFallback) registry, just logged so it's
+	// not silently wrong.
+	langDir = envOr("AIVALON_I18N_DIR", langDir)
+	reg, err := i18n.LoadDir(langDir)
+	if err != nil {
+		log.Printf("i18n: %v (continuing with English only)", err)
+	}
+	i18n.SetDefault(reg)
 
 	sqlDB, err := db.Open(dbPath)
 	if err != nil {
@@ -103,6 +122,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /world", world.Create)
 	mux.HandleFunc("POST /world/import", world.ImportLorebookJSON)
 	mux.HandleFunc("POST /world/import/resume", world.ResumeLorebookImport)
+	mux.HandleFunc("POST /world/import/confirm-language", world.ConfirmLanguageImport)
 	mux.HandleFunc("GET /world/{id}", world.Show)
 	mux.HandleFunc("POST /world/{id}", world.Update)
 	mux.HandleFunc("POST /world/{id}/delete", world.Delete)
@@ -129,6 +149,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /settings/system-prompt", settings.SystemPromptUpdate)
 	mux.HandleFunc("POST /settings/system-prompt/reset", settings.SystemPromptReset)
 	mux.HandleFunc("POST /settings/context-budget", settings.ContextBudgetUpdate)
+	mux.HandleFunc("POST /settings/language", settings.LanguageUpdate)
 	mux.HandleFunc("POST /settings/import-whitelist", settings.ImportWhitelistUpdate)
 	mux.HandleFunc("POST /settings/image-presets", settings.ImagePresetCreate)
 	mux.HandleFunc("GET /settings/image-presets/{id}/edit", settings.ImagePresetEditForm)
@@ -140,6 +161,7 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 	mux.HandleFunc("POST /characters", character.Create)
 	mux.HandleFunc("POST /characters/import", character.ImportCharacterJSON)
 	mux.HandleFunc("POST /characters/import/resume", character.ResumeCharacterImport)
+	mux.HandleFunc("POST /characters/import/confirm-language", character.ConfirmLanguageImport)
 	mux.HandleFunc("GET /characters/{id}/edit", character.EditForm)
 	mux.HandleFunc("POST /characters/{id}", character.Update)
 	mux.HandleFunc("POST /characters/{id}/delete", character.Delete)
@@ -193,7 +215,34 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 //     check; see ChatHandlers.Stream.
 func newHandler(sqlDB *sql.DB) http.Handler {
 	mux := newMux(sqlDB)
-	return web.WithSecurityHeaders(requireLocalHost(http.NewCrossOriginProtection().Handler(mux)))
+	return web.WithSecurityHeaders(requireLocalHost(http.NewCrossOriginProtection().Handler(withLanguage(sqlDB)(mux))))
+}
+
+// withLanguage resolves the request's UI/system-prompt language once
+// per request and stores it on the context every nested templ render
+// call reads from (see internal/i18n.WithLang/FromContext) — closest
+// to the actual routes in the chain since it's purely about render
+// output, nothing security-relevant like the layers around it.
+//
+// Order of preference: the "aivalon-lang" cookie (what the switcher
+// sets client-side, so it applies instantly without waiting on a DB
+// round-trip's result) then AppSettings.Language (the server-side
+// value the switcher ALSO writes — covers a fresh browser/profile
+// with no cookie yet) then "en".
+func withLanguage(sqlDB *sql.DB) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			lang := "en"
+			if c, err := r.Cookie(web.LanguageCookie); err == nil {
+				if code := strings.ToLower(c.Value); i18n.Default().Has(code) {
+					lang = code
+				}
+			} else if settings, err := db.GetAppSettings(sqlDB); err == nil && i18n.Default().Has(settings.Language) {
+				lang = settings.Language
+			}
+			next.ServeHTTP(w, r.WithContext(i18n.WithLang(r.Context(), lang)))
+		})
+	}
 }
 
 // privateHostRanges are the networks requireLocalHost accepts a bare

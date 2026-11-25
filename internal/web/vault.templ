@@ -1,9 +1,11 @@
 package web
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 // vaultPinHashScript hashes a PIN client-side (SHA-256 of salt+pin via
@@ -232,12 +234,12 @@ templ pinPad(hashField, placeholder, dialogID, errMsg, encHashField string) {
 			for _, d := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9"} {
 				<button type="button" data-digit={ d }>{ d }</button>
 			}
-			<button type="button" class="pin-pad-backspace" aria-label="Backspace">⌫</button>
+			<button type="button" class="pin-pad-backspace" aria-label={ i18n.T(ctx, "vault.backspace") }>⌫</button>
 			<button type="button" data-digit="0">0</button>
-			<button type="submit" class="pin-pad-validate" aria-label="Validate">✓</button>
+			<button type="submit" class="pin-pad-validate" aria-label={ i18n.T(ctx, "vault.validate") }>✓</button>
 		</div>
 		if dialogID != "" {
-			<button type="button" class="pin-pad-cancel" data-close-dialog="true">Cancel</button>
+			<button type="button" class="pin-pad-cancel" data-close-dialog="true">{ i18n.T(ctx, "common.cancel") }</button>
 		}
 	</div>
 }
@@ -280,9 +282,9 @@ templ eyeIcon() {
 }
 
 templ VaultSetupPage(errMsg, salt string) {
-	@Layout("Vault", "Vault") {
-		<h1>Vault</h1>
-		<p>No PIN set yet — choose one to start keeping sessions here. You'll need to retype it every time you take a session back <em>out</em> of the vault.</p>
+	@Layout(i18n.T(ctx, "common.nav_vault"), "vault") {
+		<h1>{ i18n.T(ctx, "common.nav_vault") }</h1>
+		@templ.Raw(i18n.T(ctx, "vault.setup_intro_html"))
 		if errMsg != "" {
 			<p class="danger-text">{ errMsg }</p>
 		}
@@ -292,28 +294,28 @@ templ VaultSetupPage(errMsg, salt string) {
 			<input type="hidden" name="confirm_hash"/>
 			<input type="hidden" name="digits"/>
 			<label>
-				PIN (4, 6, or 8 digits)
+				{ i18n.T(ctx, "vault.pin_label") }
 				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="pin_hash" autocomplete="new-password" required="required"/>
 			</label>
 			<label>
-				Confirm PIN
+				{ i18n.T(ctx, "vault.confirm_pin_label") }
 				<input type="password" inputmode="numeric" pattern="[0-9]*" data-pin data-hash-field="confirm_hash" autocomplete="new-password" required="required"/>
 			</label>
-			<button type="submit">Set PIN</button>
+			<button type="submit">{ i18n.T(ctx, "vault.set_pin_submit") }</button>
 		</form>
 		@vaultPinHashScript()
 	}
 }
 
 templ VaultUnlockPage(errMsg, salt string) {
-	@Layout("Vault", "Vault") {
-		<h1>Vault</h1>
+	@Layout(i18n.T(ctx, "common.nav_vault"), "vault") {
+		<h1>{ i18n.T(ctx, "common.nav_vault") }</h1>
 		<dialog class="pin-pad-modal" data-autoopen="true" data-cancel-redirect="/chat">
 			<form method="post" action="/vault/unlock" class="pin-form">
 				<input type="hidden" name="salt" value={ salt }/>
 				<input type="hidden" name="pin_hash"/>
 				<input type="hidden" name="enc_key_hash"/>
-				@pinPad("pin_hash", "PIN", "", errMsg, "enc_key_hash")
+				@pinPad("pin_hash", i18n.T(ctx, "vault.pin_placeholder"), "", errMsg, "enc_key_hash")
 			</form>
 		</dialog>
 		@vaultPinHashScript()
@@ -344,11 +346,11 @@ type vaultTab struct {
 	Items                                    []vaultItem
 }
 
-func vaultTabs(v VaultContents) []vaultTab {
+func vaultTabs(ctx context.Context, v VaultContents) []vaultTab {
 	tabs := []vaultTab{
-		{Kind: "chats", Label: "Chats", Noun: "session", Empty: "Nothing in the vault — move a session here from its own options menu in Chats."},
-		{Kind: "characters", Label: "Characters", Noun: "character", Empty: "No hidden characters — move one here from its options menu in Characters (list view)."},
-		{Kind: "worlds", Label: "Worlds", Noun: "lorebook", Empty: "No hidden lorebooks — move one here from its options menu in Worlds (list view)."},
+		{Kind: "chats", Label: i18n.T(ctx, "nav.chats"), Noun: i18n.T(ctx, "vault.noun_session"), Empty: i18n.T(ctx, "vault.empty_chats")},
+		{Kind: "characters", Label: i18n.T(ctx, "nav.characters"), Noun: i18n.T(ctx, "vault.noun_character"), Empty: i18n.T(ctx, "vault.empty_characters")},
+		{Kind: "worlds", Label: i18n.T(ctx, "nav.worlds"), Noun: i18n.T(ctx, "vault.noun_lorebook"), Empty: i18n.T(ctx, "vault.empty_worlds")},
 	}
 	tabs[1].Create, tabs[2].Create = "character-modal", "lorebook-modal"
 	tabs[1].Import, tabs[2].Import = "character-import-modal-vault", "lorebook-import-modal-vault"
@@ -397,45 +399,45 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 	if activeTab == "" {
 		{{ activeTab = "chats" }}
 	}
-	@Layout("Vault", "Vault") {
+	@Layout(i18n.T(ctx, "common.nav_vault"), "vault") {
 		<div class="vault-heading">
-			<h1>Vault</h1>
+			<h1>{ i18n.T(ctx, "common.nav_vault") }</h1>
 			<form method="post" action="/vault/lock" class="vault-lock-form">
-				<button type="submit" class="icon-btn" aria-label="Lock vault now" title="Lock vault now">
+				<button type="submit" class="icon-btn" aria-label={ i18n.T(ctx, "vault.lock_now") } title={ i18n.T(ctx, "vault.lock_now") }>
 					@lockIcon()
 				</button>
 			</form>
-			<button type="button" class="icon-btn" aria-label="Delete the vault and everything in it" title="Delete the vault and everything in it" data-open-dialog="reset-vault-modal">
+			<button type="button" class="icon-btn" aria-label={ i18n.T(ctx, "vault.delete_vault_tooltip") } title={ i18n.T(ctx, "vault.delete_vault_tooltip") } data-open-dialog="reset-vault-modal">
 				@trashIcon()
 			</button>
 		</div>
 		<dialog id="reset-vault-modal" class="pin-pad-modal" data-autoopen={ fmt.Sprintf("%t", errKind == "reset") }>
 			<form method="post" action="/vault/reset" class="pin-form">
-				<p class="danger-text"><strong>This will delete everything in the vault</strong> — every hidden chat, character and world, and the vault itself. There is no undo.</p>
+				@templ.Raw(i18n.T(ctx, "vault.reset_warning_html"))
 				<input type="hidden" name="salt" value={ salt }/>
 				<input type="hidden" name="pin_hash"/>
 				if errKind == "reset" {
-					@pinPad("pin_hash", "PIN to delete the vault", "reset-vault-modal", errMsg, "")
+					@pinPad("pin_hash", i18n.T(ctx, "vault.pin_to_delete"), "reset-vault-modal", errMsg, "")
 				} else {
-					@pinPad("pin_hash", "PIN to delete the vault", "reset-vault-modal", "", "")
+					@pinPad("pin_hash", i18n.T(ctx, "vault.pin_to_delete"), "reset-vault-modal", "", "")
 				}
 			</form>
 		</dialog>
 		<div class="tabs">
 			<div role="tablist" class="tab-list">
-				for _, t := range vaultTabs(v) {
+				for _, t := range vaultTabs(ctx, v) {
 					<button type="button" role="tab" class="tab-btn" data-tab-target={ t.Kind } aria-selected={ fmt.Sprintf("%t", activeTab == t.Kind) } onclick="switchTabs(this)">{ fmt.Sprintf("%s (%d)", t.Label, len(t.Items)) }</button>
 				}
 			</div>
-			for _, t := range vaultTabs(v) {
+			for _, t := range vaultTabs(ctx, v) {
 				<div data-tab-panel={ t.Kind } role="tabpanel" hidden?={ activeTab != t.Kind }>
 					if t.Create != "" || t.Import != "" {
 						<div class="vault-tab-actions">
 							if t.Import != "" {
-								<button type="button" class="import-trigger" aria-label={ "Import a hidden " + t.Noun } title={ "Import a hidden " + t.Noun } data-modal-id={ t.Import } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">⤓</button>
+								<button type="button" class="import-trigger" aria-label={ fmt.Sprintf(i18n.T(ctx, "vault.import_hidden"), t.Noun) } title={ fmt.Sprintf(i18n.T(ctx, "vault.import_hidden"), t.Noun) } data-modal-id={ t.Import } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">⤓</button>
 							}
 							if t.Create != "" {
-								<button type="button" class="create-button" aria-label={ "New hidden " + t.Noun } title={ "New hidden " + t.Noun } data-modal-id={ t.Create } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
+								<button type="button" class="create-button" aria-label={ fmt.Sprintf(i18n.T(ctx, "vault.new_hidden"), t.Noun) } title={ fmt.Sprintf(i18n.T(ctx, "vault.new_hidden"), t.Noun) } data-modal-id={ t.Create } onclick="document.getElementById(this.dataset.modalId).setAttribute('open','')">+</button>
 							}
 						</div>
 					}
@@ -450,11 +452,11 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 								<li data-search-name={ it.Title }>
 									<a href={ templ.URL(it.Href) }>{ it.Title }</a>
 									<div class="vault-item-actions">
-										<button type="button" class="icon-btn icon-btn-gold" aria-label={ "Unhide " + it.Title } title={ "Unhide " + it.Title } data-open-dialog={ dialogID }>
+										<button type="button" class="icon-btn icon-btn-gold" aria-label={ fmt.Sprintf(i18n.T(ctx, "vault.unhide_item"), it.Title) } title={ fmt.Sprintf(i18n.T(ctx, "vault.unhide_item"), it.Title) } data-open-dialog={ dialogID }>
 											@eyeIcon()
 										</button>
 										<form method="post" action={ templ.URL(it.DeleteHref) }>
-											<button type="submit" class="icon-btn" aria-label={ "Delete " + it.Title } title={ "Delete " + it.Title }>
+											<button type="submit" class="icon-btn" aria-label={ fmt.Sprintf(i18n.T(ctx, "common.delete_label"), it.Title) } title={ fmt.Sprintf(i18n.T(ctx, "common.delete_label"), it.Title) }>
 												@trashIcon()
 											</button>
 										</form>
@@ -465,9 +467,9 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 											<input type="hidden" name="pin_hash"/>
 											<input type="hidden" name="enc_key_hash"/>
 											if isErrTarget {
-												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, errMsg, "enc_key_hash")
+												@pinPad("pin_hash", fmt.Sprintf(i18n.T(ctx, "vault.pin_to_unhide"), t.Noun), dialogID, errMsg, "enc_key_hash")
 											} else {
-												@pinPad("pin_hash", "PIN to unhide this "+t.Noun, dialogID, "", "enc_key_hash")
+												@pinPad("pin_hash", fmt.Sprintf(i18n.T(ctx, "vault.pin_to_unhide"), t.Noun), dialogID, "", "enc_key_hash")
 											}
 										</form>
 									</dialog>
@@ -485,12 +487,12 @@ templ vaultListPageBody(v VaultContents, salt, activeTab, errMsg, errKind string
 		<dialog id="character-modal" open?={ editingCharacter != nil }>
 			<article>
 				<header>
-					<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+					<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 					<strong>
 						if editingCharacter != nil {
-							Edit character
+							{ i18n.T(ctx, "character.edit") }
 						} else {
-							Add a hidden character
+							{ i18n.T(ctx, "vault.add_hidden_character") }
 						}
 					</strong>
 				</header>

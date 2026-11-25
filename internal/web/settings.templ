@@ -5,10 +5,11 @@ import (
 	"strconv"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 templ SettingsPage(profiles []db.BackendProfile, editing *db.BackendProfile, personas []db.Persona, editingPersona *db.Persona, imagePresets []db.ImagePreset, editingImagePreset *db.ImagePreset, imagePresetErr string, appSettings db.AppSettings) {
-	@Layout("Settings", "Settings") {
+	@Layout(i18n.T(ctx, "settings.title"), "settings") {
 		@SettingsPageBody(profiles, editing, personas, editingPersona, imagePresets, editingImagePreset, imagePresetErr, appSettings)
 	}
 }
@@ -30,28 +31,28 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		activeTab = "image-presets"
 	}
 	}}
-	<h1>Settings</h1>
+	<h1>{ i18n.T(ctx, "settings.title") }</h1>
 	<div class="tabs">
 		<div role="tablist" class="tab-list">
-			<button type="button" role="tab" class="tab-btn" data-tab-target="profiles" aria-selected={ fmt.Sprintf("%t", activeTab == "profiles") } onclick="switchTabs(this)">Backend profiles</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected={ fmt.Sprintf("%t", activeTab == "persona") } onclick="switchTabs(this)">Your persona</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected={ fmt.Sprintf("%t", activeTab == "prompt") } onclick="switchTabs(this)">System prompt</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected={ fmt.Sprintf("%t", activeTab == "imports") } onclick="switchTabs(this)">Imports</button>
-			<button type="button" role="tab" class="tab-btn" data-tab-target="image-presets" aria-selected={ fmt.Sprintf("%t", activeTab == "image-presets") } onclick="switchTabs(this)">Image presets</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="profiles" aria-selected={ fmt.Sprintf("%t", activeTab == "profiles") } onclick="switchTabs(this)">{ i18n.T(ctx, "settings.tab_profiles") }</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="persona" aria-selected={ fmt.Sprintf("%t", activeTab == "persona") } onclick="switchTabs(this)">{ i18n.T(ctx, "settings.tab_persona") }</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="prompt" aria-selected={ fmt.Sprintf("%t", activeTab == "prompt") } onclick="switchTabs(this)">{ i18n.T(ctx, "settings.tab_prompt") }</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="imports" aria-selected={ fmt.Sprintf("%t", activeTab == "imports") } onclick="switchTabs(this)">{ i18n.T(ctx, "settings.tab_imports") }</button>
+			<button type="button" role="tab" class="tab-btn" data-tab-target="image-presets" aria-selected={ fmt.Sprintf("%t", activeTab == "image-presets") } onclick="switchTabs(this)">{ i18n.T(ctx, "settings.tab_image_presets") }</button>
 		</div>
 
 		<div data-tab-panel="profiles" hidden?={ activeTab != "profiles" }>
 			if len(profiles) == 0 {
-				<p><em>No backend profile yet — add one below to start chatting.</em></p>
+				<p><em>{ i18n.T(ctx, "settings.profiles_empty") }</em></p>
 			} else {
 				<table>
 					<thead>
 						<tr>
 							<th></th>
-							<th>Name</th>
-							<th>Kind</th>
-							<th>Base URL</th>
-							<th>Model</th>
+							<th>{ i18n.T(ctx, "settings.col_name") }</th>
+							<th>{ i18n.T(ctx, "settings.col_kind") }</th>
+							<th>{ i18n.T(ctx, "settings.col_base_url") }</th>
+							<th>{ i18n.T(ctx, "settings.col_model") }</th>
 							<th></th>
 						</tr>
 					</thead>
@@ -67,7 +68,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 								<td>{ p.Model }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-profile-%d", p.ID), []MenuAction{
-										{Label: "Delete", Action: fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID), Danger: true},
+										{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/settings/backend-profiles/%d/delete", p.ID), Danger: true},
 									})
 								</td>
 							</tr>
@@ -76,17 +77,17 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				</table>
 			}
 
-			<button type="button" onclick="document.getElementById('profile-modal').setAttribute('open','')">Add a profile</button>
+			<button type="button" onclick="document.getElementById('profile-modal').setAttribute('open','')">{ i18n.T(ctx, "settings.add_profile") }</button>
 
 			<dialog id="profile-modal" open?={ editing != nil }>
 				<article>
 					<header>
-						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+						<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 						<strong>
 							if editing != nil {
-								Edit profile
+								{ i18n.T(ctx, "settings.edit_profile") }
 							} else {
-								Add a profile
+								{ i18n.T(ctx, "settings.add_profile") }
 							}
 						</strong>
 					</header>
@@ -96,16 +97,16 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		</div>
 
 		<div data-tab-panel="persona" hidden?={ activeTab != "persona" }>
-			<p>How you're represented to the AI. A session with none picked uses a built-in default ("User").</p>
+			<p>{ i18n.T(ctx, "settings.persona_intro") }</p>
 			if len(personas) == 0 {
-				<p><em>No persona yet — add one below, or skip it and sessions use the "User" default.</em></p>
+				<p><em>{ i18n.T(ctx, "settings.persona_empty") }</em></p>
 			} else {
 				<table>
 					<thead>
 						<tr>
-							<th>Name</th>
-							<th>Chats</th>
-							<th>Description</th>
+							<th>{ i18n.T(ctx, "settings.col_name") }</th>
+							<th>{ i18n.T(ctx, "settings.col_chats") }</th>
+							<th>{ i18n.T(ctx, "settings.col_description") }</th>
 							<th></th>
 						</tr>
 					</thead>
@@ -117,7 +118,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 								<td>{ p.Description }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-persona-%d", p.ID), []MenuAction{
-										{Label: "Delete", Action: fmt.Sprintf("/settings/personas/%d/delete", p.ID), Danger: true},
+										{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/settings/personas/%d/delete", p.ID), Danger: true},
 									})
 								</td>
 							</tr>
@@ -126,17 +127,17 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				</table>
 			}
 
-			<button type="button" onclick="document.getElementById('persona-modal').setAttribute('open','')">Add a persona</button>
+			<button type="button" onclick="document.getElementById('persona-modal').setAttribute('open','')">{ i18n.T(ctx, "settings.add_persona") }</button>
 
 			<dialog id="persona-modal" open?={ editingPersona != nil }>
 				<article>
 					<header>
-						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+						<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 						<strong>
 							if editingPersona != nil {
-								Edit persona
+								{ i18n.T(ctx, "settings.edit_persona") }
 							} else {
-								Add a persona
+								{ i18n.T(ctx, "settings.add_persona") }
 							}
 						</strong>
 					</header>
@@ -146,13 +147,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		</div>
 
 		<div data-tab-panel="prompt" hidden?={ activeTab != "prompt" }>
-			<p>
-				How the world/narrator is instructed. Placeholders:
-				<code>{ "{{persona_name}}" }</code>, <code>{ "{{persona_description}}" }</code>,
-				<code>{ "{{characters}}" }</code> (the attached character cards, or a fallback
-				instruction to improvise when there are none), and <code>{ "{{lorebook}}" }</code>
-				(the session's attached Lorebook's entries that are active this turn — see World).
-			</p>
+			@templ.Raw(i18n.T(ctx, "settings.prompt_help_html"))
 			@systemPromptForm(appSettings.SystemPromptTemplate)
 			@contextBudgetForm(appSettings.ContextBudgetChars)
 		</div>
@@ -162,18 +157,18 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 		</div>
 
 		<div data-tab-panel="image-presets" hidden?={ activeTab != "image-presets" }>
-			<p>Named txt2img settings for image generation. Each chat picks one in its session panel’s Gallery tab; a chat with none picked uses A1111’s defaults.</p>
+			<p>{ i18n.T(ctx, "settings.image_presets_intro") }</p>
 			if len(imagePresets) == 0 {
-				<p><em>No image preset yet — add one below.</em></p>
+				<p><em>{ i18n.T(ctx, "settings.image_presets_empty") }</em></p>
 			} else {
 				<table>
 					<thead>
 						<tr>
-							<th>Name</th>
-							<th>Steps</th>
-							<th>CFG</th>
-							<th>Size</th>
-							<th>Sampler</th>
+							<th>{ i18n.T(ctx, "settings.col_name") }</th>
+							<th>{ i18n.T(ctx, "settings.col_steps") }</th>
+							<th>{ i18n.T(ctx, "settings.col_cfg") }</th>
+							<th>{ i18n.T(ctx, "settings.col_size") }</th>
+							<th>{ i18n.T(ctx, "settings.col_sampler") }</th>
 							<th></th>
 						</tr>
 					</thead>
@@ -187,7 +182,7 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 								<td>{ p.SamplerName }</td>
 								<td>
 									@OptionsMenu(fmt.Sprintf("options-image-preset-%d", p.ID), []MenuAction{
-										{Label: "Delete", Action: fmt.Sprintf("/settings/image-presets/%d/delete", p.ID), Danger: true},
+										{Label: i18n.T(ctx, "common.action_delete"), Action: fmt.Sprintf("/settings/image-presets/%d/delete", p.ID), Danger: true},
 									})
 								</td>
 							</tr>
@@ -196,17 +191,17 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 				</table>
 			}
 
-			<button type="button" onclick="document.getElementById('image-preset-modal').setAttribute('open','')">Add a preset</button>
+			<button type="button" onclick="document.getElementById('image-preset-modal').setAttribute('open','')">{ i18n.T(ctx, "settings.add_preset") }</button>
 
 			<dialog id="image-preset-modal" open?={ editingImagePreset != nil }>
 				<article>
 					<header>
-						<button aria-label="Close" rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
+						<button aria-label={ i18n.T(ctx, "common.close") } rel="prev" onclick="this.closest('dialog').removeAttribute('open')"></button>
 						<strong>
 							if editingImagePreset != nil && editingImagePreset.ID != 0 {
-								Edit preset
+								{ i18n.T(ctx, "settings.edit_preset") }
 							} else {
-								Add a preset
+								{ i18n.T(ctx, "settings.add_preset") }
 							}
 						</strong>
 					</header>
@@ -241,10 +236,10 @@ templ SettingsPageBody(profiles []db.BackendProfile, editing *db.BackendProfile,
 templ systemPromptForm(template string) {
 	<form method="post" action="/settings/system-prompt">
 		<textarea name="system_prompt_template" rows="16">{ template }</textarea>
-		<button type="submit">Save</button>
+		<button type="submit">{ i18n.T(ctx, "common.action_save") }</button>
 	</form>
 	<form method="post" action="/settings/system-prompt/reset" style="display:inline">
-		<button type="submit">Reset to default</button>
+		<button type="submit">{ i18n.T(ctx, "settings.reset_default") }</button>
 	</form>
 }
 
@@ -253,11 +248,11 @@ templ systemPromptForm(template string) {
 templ contextBudgetForm(budget int) {
 	<form method="post" action="/settings/context-budget">
 		<label>
-			Context budget (characters)
+			{ i18n.T(ctx, "settings.context_budget_label") }
 			<input type="number" name="context_budget_chars" value={ strconv.Itoa(budget) } min="0" step="1000"/>
-			<small>Upper limit on what's sent to the model per reply (system prompt + chat history). Roughly 4 characters per token, so 24000 ≈ 6k tokens — keep it comfortably under your backend's context size. When a long chat goes over, the oldest messages are left out first (the system prompt never is) and the chat page says so. 0 means no limit.</small>
+			<small>{ i18n.T(ctx, "settings.context_budget_help") }</small>
 		</label>
-		<button type="submit">Save</button>
+		<button type="submit">{ i18n.T(ctx, "common.action_save") }</button>
 	</form>
 }
 
@@ -266,11 +261,11 @@ templ contextBudgetForm(budget int) {
 templ importWhitelistForm(hosts []string) {
 	<form method="post" action="/settings/import-whitelist">
 		<label>
-			Allowed domains for URL imports (one per line)
+			{ i18n.T(ctx, "settings.whitelist_label") }
 			<textarea name="png_import_whitelist" rows="8" spellcheck="false" autocomplete="off">{ db.JoinHostList(hosts) }</textarea>
-			<small>Character Card PNG imports from these domains are allowed in addition to 127.0.0.1; JSON imports are always restricted to 127.0.0.1. Exact hostname match (www.example.com and example.com are different entries); port is ignored.</small>
+			<small>{ i18n.T(ctx, "settings.whitelist_help") }</small>
 		</label>
-		<button type="submit">Save</button>
+		<button type="submit">{ i18n.T(ctx, "common.action_save") }</button>
 	</form>
 }
 
@@ -298,50 +293,50 @@ templ backendProfileForm(editing *db.BackendProfile) {
 	<form method="post" action={ templ.URL(action) }>
 		<input type="hidden" name="id" value={ idStr }/>
 		<label>
-			Name
+			{ i18n.T(ctx, "settings.field_name") }
 			<input type="text" name="name" value={ name } required="required"/>
 		</label>
 		<label>
-			Kind
+			{ i18n.T(ctx, "settings.field_kind") }
 			<select name="kind">
-				<option value="llm" selected?={ kind == "llm" }>LLM (chat)</option>
-				<option value="image" selected?={ kind == "image" }>Image generation</option>
+				<option value="llm" selected?={ kind == "llm" }>{ i18n.T(ctx, "settings.kind_llm") }</option>
+				<option value="image" selected?={ kind == "image" }>{ i18n.T(ctx, "settings.kind_image") }</option>
 			</select>
-			<small>Which API shape this backend speaks — picks what "Test connection" checks and what the profile shows up for later (LLM backend picker vs. image generation).</small>
+			<small>{ i18n.T(ctx, "settings.kind_help") }</small>
 		</label>
 		<label>
-			Base URL
+			{ i18n.T(ctx, "settings.field_base_url") }
 			<input type="url" name="base_url" value={ baseURL } placeholder="http://127.0.0.1:11434/v1" required="required"/>
 		</label>
 		<div id="model-field">
 			@modelFieldInput(model)
 		</div>
 		<label>
-			API key (optional)
+			{ i18n.T(ctx, "settings.field_api_key") }
 			if hasKey {
-				<input type="password" name="api_key" placeholder="•••••••• (leave blank to keep the current key)" autocomplete="new-password"/>
+				<input type="password" name="api_key" placeholder={ i18n.T(ctx, "settings.api_key_placeholder_set") } autocomplete="new-password"/>
 			} else {
-				<input type="password" name="api_key" placeholder="(none set)" autocomplete="new-password"/>
+				<input type="password" name="api_key" placeholder={ i18n.T(ctx, "settings.api_key_placeholder_unset") } autocomplete="new-password"/>
 			}
 		</label>
 		<label>
-			Temperature
+			{ i18n.T(ctx, "settings.field_temperature") }
 			<input type="number" name="temperature" value={ temperature } step="0.01" min="0" max="2"/>
 		</label>
 		<label>
-			Top P
+			{ i18n.T(ctx, "settings.field_top_p") }
 			<input type="number" name="top_p" value={ topP } step="0.01" min="0" max="1"/>
 		</label>
 		<div class="test-row">
-			<button type="button" class="secondary" hx-post="/settings/backend-profiles/test" hx-include="closest form" hx-target="#test-result" hx-swap="innerHTML" hx-indicator="#test-spinner">Test connection</button>
-			<span id="test-spinner" class="htmx-indicator">Testing…</span>
+			<button type="button" class="secondary" hx-post="/settings/backend-profiles/test" hx-include="closest form" hx-target="#test-result" hx-swap="innerHTML" hx-indicator="#test-spinner">{ i18n.T(ctx, "settings.test_connection") }</button>
+			<span id="test-spinner" class="htmx-indicator">{ i18n.T(ctx, "settings.testing") }</span>
 		</div>
 		<div id="test-result"></div>
 		<button type="submit">
 			if editing != nil {
-				Save
+				{ i18n.T(ctx, "common.action_save") }
 			} else {
-				Add profile
+				{ i18n.T(ctx, "settings.add_profile") }
 			}
 		</button>
 	</form>
@@ -366,42 +361,42 @@ templ imagePresetForm(editing *db.ImagePreset, errMsg string, imageProfiles []db
 			<p class="danger-text" role="alert">{ errMsg }</p>
 		}
 		<label>
-			Name
+			{ i18n.T(ctx, "settings.field_name") }
 			<input type="text" name="name" value={ p.Name } required="required"/>
-			<small>Shown in each chat’s preset picker. Must be unique (case doesn’t count).</small>
+			<small>{ i18n.T(ctx, "settings.preset_name_help") }</small>
 		</label>
 		<label>
-			Style suffix
+			{ i18n.T(ctx, "settings.field_style_suffix") }
 			<input type="text" name="style_suffix" value={ p.StyleSuffix }/>
-			<small>Appended to the prompt as “, suffix” — what makes a preset look manga vs. photo vs. cyberpunk.</small>
+			<small>{ i18n.T(ctx, "settings.style_suffix_help") }</small>
 		</label>
 		<label>
-			Negative prompt
+			{ i18n.T(ctx, "settings.field_negative_prompt") }
 			<textarea name="negative_prompt" rows="2">{ p.NegativePrompt }</textarea>
-			<small>What to steer away from (blur, extra fingers, watermarks…).</small>
+			<small>{ i18n.T(ctx, "settings.negative_prompt_help") }</small>
 		</label>
 		<label>
-			Steps
+			{ i18n.T(ctx, "settings.field_steps") }
 			<input type="number" name="steps" value={ strconv.Itoa(p.Steps) } min="1" max="150" required="required"/>
-			<small>Denoising iterations — more is slower; 20–30 is typical.</small>
+			<small>{ i18n.T(ctx, "settings.steps_help") }</small>
 		</label>
 		<label>
-			CFG scale
+			{ i18n.T(ctx, "settings.field_cfg_scale") }
 			<input type="number" name="cfg_scale" value={ strconv.FormatFloat(p.CFGScale, 'f', -1, 64) } step="0.5" min="1" max="30" required="required"/>
-			<small>How strictly to follow the prompt — 5–8 is typical; too high looks overcooked.</small>
+			<small>{ i18n.T(ctx, "settings.cfg_scale_help") }</small>
 		</label>
 		<label>
-			Width
+			{ i18n.T(ctx, "settings.field_width") }
 			<input type="number" name="width" value={ strconv.Itoa(p.Width) } step="8" min="64" max="2048" required="required"/>
-			<small>Pixels. SD 1.5 models like ~512, SDXL ~1024.</small>
+			<small>{ i18n.T(ctx, "settings.width_help") }</small>
 		</label>
 		<label>
-			Height
+			{ i18n.T(ctx, "settings.field_height") }
 			<input type="number" name="height" value={ strconv.Itoa(p.Height) } step="8" min="64" max="2048" required="required"/>
-			<small>Pixels. Taller than wide suits portraits.</small>
+			<small>{ i18n.T(ctx, "settings.height_help") }</small>
 		</label>
 		<label>
-			Sampler
+			{ i18n.T(ctx, "settings.field_sampler") }
 			<input type="text" name="sampler_name" value={ p.SamplerName } list="sampler-options" required="required"/>
 			<datalist id="sampler-options">
 				<option value="Euler a"></option>
@@ -412,28 +407,28 @@ templ imagePresetForm(editing *db.ImagePreset, errMsg string, imageProfiles []db
 				<option value="DDIM"></option>
 				<option value="UniPC"></option>
 			</datalist>
-			<small>Sampler name exactly as Automatic1111's own dropdown spells it.</small>
+			<small>{ i18n.T(ctx, "settings.sampler_help") }</small>
 		</label>
 		<label>
-			Seed
+			{ i18n.T(ctx, "settings.field_seed") }
 			<input type="number" name="seed" value={ strconv.FormatInt(p.Seed, 10) } min="-1" step="1" required="required"/>
-			<small>-1 = random each time; reuse a seed (shown under each image) to reproduce it.</small>
+			<small>{ i18n.T(ctx, "settings.seed_help") }</small>
 		</label>
 		<label>
-			Backend
+			{ i18n.T(ctx, "settings.field_backend") }
 			<select name="backend_profile_id">
-				<option value="0" selected?={ p.BackendProfileID == 0 }>(Choose at generation time)</option>
+				<option value="0" selected?={ p.BackendProfileID == 0 }>{ i18n.T(ctx, "settings.backend_choose_at_generation") }</option>
 				for _, bp := range imageProfiles {
 					<option value={ fmt.Sprintf("%d", bp.ID) } selected?={ p.BackendProfileID == bp.ID }>{ bp.Name }</option>
 				}
 			</select>
-			<small>Locks this preset to one image backend (its checkpoint) — the "Generate image" dialog then skips asking which backend to use. Leave on "(Choose at generation time)" to keep picking manually.</small>
+			<small>{ i18n.T(ctx, "settings.backend_help") }</small>
 		</label>
 		<button type="submit">
 			if editing != nil && editing.ID != 0 {
-				Save
+				{ i18n.T(ctx, "common.action_save") }
 			} else {
-				Add preset
+				{ i18n.T(ctx, "settings.add_preset") }
 			}
 		</button>
 	</form>
@@ -450,19 +445,19 @@ templ personaForm(editing *db.Persona) {
 	}}
 	<form method="post" action={ templ.URL(action) } enctype="multipart/form-data">
 		<label>
-			Name
+			{ i18n.T(ctx, "settings.field_name") }
 			<input type="text" name="name" value={ name } required="required"/>
 		</label>
 		<label>
-			Description
+			{ i18n.T(ctx, "settings.field_description") }
 			<textarea name="description">{ description }</textarea>
 		</label>
 		@ImageField(imagePath, name)
 		<button type="submit">
 			if editing != nil {
-				Save
+				{ i18n.T(ctx, "common.action_save") }
 			} else {
-				Add persona
+				{ i18n.T(ctx, "settings.add_persona") }
 			}
 		</button>
 	</form>
@@ -473,7 +468,7 @@ templ personaForm(editing *db.Persona) {
 // below is a client-side convenience, never persisted on its own).
 templ modelFieldInput(model string) {
 	<label>
-		Model
+		{ i18n.T(ctx, "settings.field_model") }
 		<input type="text" name="model" value={ model } placeholder="llama3.1 (some backends ignore this)"/>
 	</label>
 }
@@ -490,9 +485,9 @@ templ modelFieldInput(model string) {
 templ modelFieldSelect(current string, models []string) {
 	{{ currentInList := false }}
 	<label>
-		Model
+		{ i18n.T(ctx, "settings.field_model") }
 		<select name="model">
-			<option value="" selected?={ current == "" }>(Default — let the backend decide)</option>
+			<option value="" selected?={ current == "" }>{ i18n.T(ctx, "settings.model_default_option") }</option>
 			for _, m := range models {
 				<option value={ m } selected?={ m == current }>{ m }</option>
 				if m == current {
@@ -500,7 +495,7 @@ templ modelFieldSelect(current string, models []string) {
 				}
 			}
 			if current != "" && !currentInList {
-				<option value={ current } selected="selected">{ current } (current — not in this list)</option>
+				<option value={ current } selected="selected">{ fmt.Sprintf(i18n.T(ctx, "settings.model_current_not_in_list"), current) }</option>
 			}
 		</select>
 	</label>
@@ -512,9 +507,9 @@ templ modelFieldSelect(current string, models []string) {
 // poll without a page reload.
 templ PingDot(reachable bool) {
 	if reachable {
-		<span class="ping-dot ping-ok" title="Reachable (TCP)">●</span>
+		<span class="ping-dot ping-ok" title={ i18n.T(ctx, "settings.ping_reachable") }>●</span>
 	} else {
-		<span class="ping-dot ping-down" title="Unreachable (TCP)">●</span>
+		<span class="ping-dot ping-down" title={ i18n.T(ctx, "settings.ping_unreachable") }>●</span>
 	}
 }
 
@@ -530,11 +525,11 @@ templ TestResult(err error, models []string, currentModel string) {
 	if err != nil {
 		<p class="test-result test-fail">❌ { err.Error() }</p>
 	} else if len(models) > 0 {
-		<p class="test-result test-ok">✅ Reachable — { fmt.Sprintf("%d model(s) listed", len(models)) }</p>
+		<p class="test-result test-ok">✅ { i18n.T(ctx, "settings.test_reachable") } — { fmt.Sprintf(i18n.T(ctx, "settings.test_models_listed"), len(models)) }</p>
 		<div id="model-field" hx-swap-oob="true">
 			@modelFieldSelect(currentModel, models)
 		</div>
 	} else {
-		<p class="test-result test-ok">✅ Reachable</p>
+		<p class="test-result test-ok">✅ { i18n.T(ctx, "settings.test_reachable") }</p>
 	}
 }

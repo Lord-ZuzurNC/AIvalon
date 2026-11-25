@@ -1054,6 +1054,49 @@ html.sidebar-collapsed #sidebar-toggle {
 	color: #fff;
 }
 
+/* --- Language switcher (nav footer, above About) ---
+   Reuses .options-menu/.options-trigger/.options-dropdown's own
+   open/close behavior (same toggleOptionsMenu script in Layout) —
+   only the trigger's shape (a small square code badge, not "⋮") and
+   the dropdown's direction (upward: it sits right above the
+   sidebar's very last item, there's nothing below it to open into)
+   differ. See templates.templ's languageSwitcher. */
+.lang-switcher {
+	align-self: center;
+	margin-bottom: 0.5rem;
+}
+
+.lang-switcher-trigger {
+	min-width: 2.25rem;
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: var(--pico-border-radius, 0.25rem);
+	font-size: 0.75rem;
+	font-weight: bold;
+	letter-spacing: 0.03em;
+	text-align: center;
+}
+
+.lang-switcher-dropdown {
+	top: auto;
+	bottom: 100%;
+	left: 0;
+	right: auto;
+	margin-top: 0;
+	margin-bottom: 0.25rem;
+}
+
+.lang-switcher-dropdown button[aria-current="true"] {
+	font-weight: bold;
+	color: var(--pico-primary);
+}
+
+/* Collapsed sidebar has no room for the code badge + label text —
+   hidden there for now (v1); a glyph-only collapsed treatment is
+   follow-up work, not required by the current spec. */
+html.sidebar-collapsed .lang-switcher {
+	display: none;
+}
+
 .options-dropdown button.danger {
 	color: #e06c75;
 }

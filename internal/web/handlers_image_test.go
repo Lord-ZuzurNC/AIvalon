@@ -133,7 +133,7 @@ func TestGenerateImageEndToEnd(t *testing.T) {
 	}
 
 	// And it never reaches the LLM prompt.
-	chatMessages, _, _ := buildNarratorMessages("sys", db.DefaultPersona, nil, "", messages, 0)
+	chatMessages, _, _ := buildNarratorMessages("sys", db.DefaultPersona, nil, "", messages, 0, "en")
 	for _, m := range chatMessages {
 		if strings.Contains(m.Content, "a castle on a hill") {
 			t.Fatalf("image message leaked into the LLM history: %+v", m)

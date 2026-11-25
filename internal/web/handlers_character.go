@@ -299,7 +299,7 @@ func (h CharacterHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Characters", card.Name, fmt.Sprintf("/characters/%d/delete", id), vaultHome("characters", card.IsVaulted), sessions))
+		render(w, r, DeleteConfirmPage("characters", card.Name, fmt.Sprintf("/characters/%d/delete", id), vaultHome("characters", card.IsVaulted), sessions))
 		return
 	}
 	// Gallery rows cascade-delete with the character (ON DELETE

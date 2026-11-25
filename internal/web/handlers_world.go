@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 type WorldHandlers struct {
@@ -167,7 +169,7 @@ func (h WorldHandlers) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Worlds", book.Name, fmt.Sprintf("/world/%d/delete", id), vaultHome("worlds", book.IsVaulted), sessions))
+		render(w, r, DeleteConfirmPage("worlds", book.Name, fmt.Sprintf("/world/%d/delete", id), vaultHome("worlds", book.IsVaulted), sessions))
 		return
 	}
 	orphanedImages, err := db.DeleteLorebook(h.DB, id)
@@ -420,11 +422,11 @@ func joinKeys(keys []string) string {
 // keyCountLabel is the entries table's "N keys" badge — Lord's ask,
 // so a long key list (easily dozens on an imported card) is sized at
 // a glance without having to read or expand it.
-func keyCountLabel(n int) string {
+func keyCountLabel(ctx context.Context, n int) string {
 	if n == 1 {
-		return "1 key"
+		return i18n.T(ctx, "world.key_singular")
 	}
-	return fmt.Sprintf("%d keys", n)
+	return fmt.Sprintf(i18n.T(ctx, "world.key_plural"), n)
 }
 
 // entryCountLabel is LorebookPage's own "N entries" subheading —
@@ -433,11 +435,11 @@ func keyCountLabel(n int) string {
 // view landed on a page with no count visible at all until you
 // scrolled past the whole entries table. Uses len(entries), already
 // loaded for the page — no extra query needed.
-func entryCountLabel(n int) string {
+func entryCountLabel(ctx context.Context, n int) string {
 	if n == 1 {
-		return "1 entry"
+		return i18n.T(ctx, "world.entry_singular")
 	}
-	return fmt.Sprintf("%d entries", n)
+	return fmt.Sprintf(i18n.T(ctx, "world.entry_plural"), n)
 }
 
 // previewKeys returns at most n keys — the collapsed state's preview

@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
+	"github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
 )
 
 // SettingsHandlers groups the Settings-page HTTP handlers; they all need the
@@ -209,7 +210,7 @@ func (h SettingsHandlers) PersonaDelete(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if len(sessions) > 0 && r.FormValue("confirm") != "1" {
-		render(w, r, DeleteConfirmPage("Settings", persona.Name, fmt.Sprintf("/settings/personas/%d/delete", id), "/settings", sessions))
+		render(w, r, DeleteConfirmPage("settings", persona.Name, fmt.Sprintf("/settings/personas/%d/delete", id), "/settings", sessions))
 		return
 	}
 	orphanedImages, err := db.DeletePersona(h.DB, id)
@@ -358,4 +359,44 @@ func render(w http.ResponseWriter, r *http.Request, c templ.Component) {
 	if err := c.Render(r.Context(), w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// LanguageCookie is the nav language switcher's cookie — see
+// resolveRequestLanguage in cmd/aivalon/main.go, which reads it back
+// on every request (checked before AppSettings.Language, see its own
+// doc comment for why there are two sources).
+const LanguageCookie = "aivalon-lang"
+
+// LanguageUpdate is the nav language switcher's POST target
+// (templates.templ's languageSwitcher) — sets the cookie (what
+// resolveRequestLanguage checks first) AND AppSettings.Language
+// (server-side source of truth, e.g. for the system prompt's
+// language instruction, which has nothing to do with any one
+// browser) before redirecting back to wherever the switcher was
+// clicked from.
+func (h SettingsHandlers) LanguageUpdate(w http.ResponseWriter, r *http.Request) {
+	code := strings.ToLower(strings.TrimSpace(r.FormValue("lang")))
+	if !i18n.Default().Has(code) {
+		http.Error(w, "unknown language", http.StatusBadRequest)
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     LanguageCookie,
+		Value:    code,
+		Path:     "/",
+		MaxAge:   31536000,
+		SameSite: http.SameSiteLaxMode,
+	})
+	if settings, err := db.GetAppSettings(h.DB); err == nil {
+		settings.Language = code
+		_ = db.UpdateAppSettings(h.DB, settings)
+	}
+	// Open-redirect guard: only ever a same-site path ("//evil.com"
+	// parses as scheme-relative, so it's excluded too, not just a
+	// bare "http://…").
+	redirect := r.FormValue("redirect")
+	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+		redirect = "/"
+	}
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }

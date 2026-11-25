@@ -145,7 +145,7 @@ func TestDeleteGuard(t *testing.T) {
 
 func TestDeleteConfirmMasksVaultedTitles(t *testing.T) {
 	var buf bytes.Buffer
-	DeleteConfirmPage("Worlds", "Avalon", "/world/1/delete", "/world", []db.SessionRef{{ID: 1, Title: "Secret affair", IsVaulted: true}}).Render(context.Background(), &buf)
+	DeleteConfirmPage("worlds", "Avalon", "/world/1/delete", "/world", []db.SessionRef{{ID: 1, Title: "Secret affair", IsVaulted: true}}).Render(context.Background(), &buf)
 	if strings.Contains(buf.String(), "Secret affair") || !strings.Contains(buf.String(), "hidden chat in the Vault") {
 		t.Fatalf("vaulted title leaked or missing placeholder: %s", buf.String())
 	}

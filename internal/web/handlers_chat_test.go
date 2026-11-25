@@ -54,7 +54,7 @@ func TestBuildNarratorPrompt(t *testing.T) {
 	persona := db.Persona{Name: "Asteroid Destroyer", Description: "a curious engineer"}
 	merlin := db.CharacterCard{Name: "Merlin", Description: "An ancient wizard."}
 	merlinette := db.CharacterCard{Name: "Merlinette", Description: "His apprentice."}
-	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, []db.CharacterCard{merlin, merlinette}, "")
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, []db.CharacterCard{merlin, merlinette}, "", "en")
 
 	// This is the whole point of the narrator redesign: the prompt must
 	// explicitly allow narrating MULTIPLE characters and MUST forbid
@@ -75,7 +75,7 @@ func TestBuildNarratorPromptWithNoCharacters(t *testing.T) {
 	// the world/narrator, acting as a free-form GM that invents whoever
 	// the scene needs instead of being told about fixed cards.
 	persona := db.Persona{Name: "Asteroid Destroyer"}
-	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, nil, "")
+	prompt := buildNarratorPrompt(db.DefaultSystemPromptTemplate, persona, nil, "", "en")
 	for _, want := range []string{"game master", "inventing names", "consistent"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("narrator prompt (no characters) missing %q:\n%s", want, prompt)
@@ -93,10 +93,41 @@ func TestBuildNarratorPromptWithCustomTemplate(t *testing.T) {
 	custom := "Narrator mode. Player: {{persona_name}}. Cast: {{characters}}. Lore: {{lorebook}}."
 	persona := db.Persona{Name: "Z"}
 	merlin := db.CharacterCard{Name: "Merlin", Description: "A wizard."}
-	got := buildNarratorPrompt(custom, persona, []db.CharacterCard{merlin}, "The tower is warded")
+	got := buildNarratorPrompt(custom, persona, []db.CharacterCard{merlin}, "The tower is warded", "en")
 	want := "Narrator mode. Player: Z. Cast: These are the fixed characters who live in this world, as described by their character cards:\nMerlin: A wizard.. Lore: The tower is warded."
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestLanguageInstruction(t *testing.T) {
+	// "en" (and "") must stay a true no-op — byte-for-byte the same
+	// prompt as before this feature existed, for every install that
+	// never touches the language switcher.
+	for _, code := range []string{"", "en"} {
+		if got := languageInstruction(code); got != "" {
+			t.Errorf("languageInstruction(%q) = %q, want \"\"", code, got)
+		}
+	}
+
+	// A non-English target language prepends an instruction naming
+	// that language (by internal/i18n's own "_name" for it — here
+	// "fr" -> "Français", loaded from web/static/i18n/fr.json by
+	// TestMain) — proof the backend prompt actually changes with the
+	// nav switcher's choice (task t_424b1a52's part B).
+	instr := languageInstruction("fr")
+	if !strings.Contains(instr, "Français") {
+		t.Fatalf("languageInstruction(\"fr\") = %q, want it to name the language (Français)", instr)
+	}
+
+	custom := "Narrator mode. Player: {{persona_name}}."
+	persona := db.Persona{Name: "Z"}
+	got := buildNarratorPrompt(custom, persona, nil, "", "fr")
+	if !strings.HasPrefix(got, instr) {
+		t.Fatalf("buildNarratorPrompt with language=fr didn't prepend the instruction:\n%s", got)
+	}
+	if !strings.HasSuffix(got, "Narrator mode. Player: Z.") {
+		t.Fatalf("buildNarratorPrompt with language=fr altered the template itself:\n%s", got)
 	}
 }
 
@@ -191,7 +222,7 @@ func TestTruncateHistoryToBudget(t *testing.T) {
 
 func TestBuildNarratorMessagesKeepsSystemPromptOverBudget(t *testing.T) {
 	history := []db.ChatMessage{{Role: "user", Content: "old"}, {Role: "narrator", Content: "reply"}, {Role: "user", Content: "latest"}}
-	msgs, dropped, over := buildNarratorMessages("a very long system prompt that is over budget by itself", db.DefaultPersona, nil, "", history, 10)
+	msgs, dropped, over := buildNarratorMessages("a very long system prompt that is over budget by itself", db.DefaultPersona, nil, "", history, 10, "en")
 	if msgs[0].Role != "system" || !strings.Contains(msgs[0].Content, "very long system prompt") {
 		t.Fatalf("system message must be first and untouched, got %+v", msgs[0])
 	}

@@ -9,6 +9,8 @@ It replaces rate-limited hosted apps: you talk to an LLM that runs on your own m
 > Chat, character cards, personas, lorebooks, backend profiles, and the Vault (PIN-gated, fully encrypted at rest) work end-to-end against a real LLM backend.
 > Image generation (against an AUTOMATIC1111/Forge backend) is code-complete but **disabled by default in this release** — it hasn't had a real validation pass yet. `docs/DESIGN.md` is the source of truth for what's settled versus still open.
 
+**Language:** a small badge above the **About** link in the sidebar switches the UI language — English by default, more added by dropping a `.json` file in `web/static/i18n/` (French ships with this release). It also tells the backend LLM to reply in that language. Not every screen is translated yet — the nav, sidebar, and About page are; Chat/Character/World/Vault/Settings still show English text regardless of the switcher (tracked, see `docs/DESIGN.md`'s Internationalization section).
+
 ## Getting started
 
 Everything below works the same on Windows and Linux — screenshots are from Linux, the Windows side just has a `.exe` and double-clicks instead of a terminal.
