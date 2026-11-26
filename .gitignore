@@ -30,5 +30,11 @@ go.work.sum
 
 .examples
 
-# Local release build artifacts
-/dist/
+# Local release build artifacts — everything in /dist/ is ignored except
+# the current release's own AIvalon archives, which ARE committed and
+# served straight off the repo via raw.githubusercontent.com (pinned to
+# the release tag), so the installers don't depend on GitHub Release
+# upload timing.
+/dist/*
+!/dist/aivalon-linux-x64.tar.gz
+!/dist/aivalon-windows-x64.zip

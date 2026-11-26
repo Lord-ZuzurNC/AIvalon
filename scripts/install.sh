@@ -9,8 +9,11 @@ RELEASE_API="https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=3
 MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 MODEL_FILE="Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 ASSET_RE='llama-b[0-9]+-bin-ubuntu-x64\.tar\.gz'
+# The AIvalon archive itself isn't a GitHub Release asset — it's committed
+# straight into the repo's /dist/ and served via raw.githubusercontent.com,
+# pinned to this tag so it matches whatever install.sh version is running.
 AIVALON_TAG="v0.2-beta-1"
-AIVALON_URL="https://github.com/Lord-ZuzurNC/AIvalon/releases/download/$AIVALON_TAG/aivalon-linux-x64.tar.gz"
+AIVALON_URL="https://raw.githubusercontent.com/Lord-ZuzurNC/AIvalon/$AIVALON_TAG/dist/aivalon-linux-x64.tar.gz"
 
 step() { printf '\n==> %s\n' "$*"; }
 die()  { printf '\nERROR: %s\nInstall NOT complete.\n' "$*" >&2; exit 1; }

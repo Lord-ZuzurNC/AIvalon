@@ -9,8 +9,11 @@ $ReleaseApi = 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page
 $ModelUrl   = 'https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf'
 $ModelFile  = 'Qwen2.5-3B-Instruct-Q4_K_M.gguf'
 $AssetRe    = '^llama-b\d+-bin-win-cpu-x64\.zip$'
+# The AIvalon archive itself isn't a GitHub Release asset -- it's committed
+# straight into the repo's /dist/ and served via raw.githubusercontent.com,
+# pinned to this tag so it matches whatever install.ps1 version is running.
 $AivalonTag = 'v0.2-beta-1'
-$AivalonUrl = "https://github.com/Lord-ZuzurNC/AIvalon/releases/download/$AivalonTag/aivalon-windows-x64.zip"
+$AivalonUrl = "https://raw.githubusercontent.com/Lord-ZuzurNC/AIvalon/$AivalonTag/dist/aivalon-windows-x64.zip"
 
 function Step([string]$msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Fail([string]$msg) {
