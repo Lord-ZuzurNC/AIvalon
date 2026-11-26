@@ -9,6 +9,8 @@ $ReleaseApi = 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page
 $ModelUrl   = 'https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf'
 $ModelFile  = 'Qwen2.5-3B-Instruct-Q4_K_M.gguf'
 $AssetRe    = '^llama-b\d+-bin-win-cpu-x64\.zip$'
+$AivalonTag = 'v0.2-beta-1'
+$AivalonUrl = "https://github.com/Lord-ZuzurNC/AIvalon/releases/download/$AivalonTag/aivalon-windows-x64.zip"
 
 function Step([string]$msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Fail([string]$msg) {
@@ -63,6 +65,33 @@ try {
     $LlamaBinPath = $llamaBin.FullName
     Write-Host "llama-server: $LlamaBinPath"
 
+    # 3b. AIvalon release (aivalon.exe + web\), same temp-extract-then-move pattern as llama.cpp
+    $aivalonExe = Join-Path $InstallDir 'aivalon.exe'
+    $webDir = Join-Path $InstallDir 'web'
+    Step "Installing AIvalon $AivalonTag"
+    if ((Test-Path $aivalonExe) -and (Test-Path $webDir)) {
+        Write-Host 'Already present, skipping.'
+    } else {
+        $appZip = Join-Path $TmpDir 'aivalon-windows-x64.zip'
+        try { Invoke-WebRequest -Uri $AivalonUrl -OutFile $appZip -UseBasicParsing }
+        catch { Fail "Download of $AivalonUrl failed: $($_.Exception.Message)" }
+
+        try {
+            $appExtract = Join-Path $TmpDir 'aivalon'
+            Expand-Archive -Path $appZip -DestinationPath $appExtract -Force
+            # Accept both a flat archive and one wrapped in a single top-level folder.
+            $appSrc = Get-ChildItem -Path $appExtract -Recurse -Depth 1 -File -Filter 'aivalon.exe' | Select-Object -First 1
+        } catch { Fail "Extraction of aivalon-windows-x64.zip failed: $($_.Exception.Message)" }
+        if (-not $appSrc -or -not (Test-Path (Join-Path $appSrc.DirectoryName 'web'))) {
+            Fail 'aivalon.exe or web\ not found inside aivalon-windows-x64.zip (archive layout changed?).'
+        }
+        try {
+            if (Test-Path $webDir) { Remove-Item -Recurse -Force $webDir }
+            Move-Item -Path (Join-Path $appSrc.DirectoryName 'web') -Destination $webDir
+            Move-Item -Force -Path $appSrc.FullName -Destination $aivalonExe
+        } catch { Fail "Could not move AIvalon into ${InstallDir}: $($_.Exception.Message)" }
+    }
+
     # 4. Model (kept as .part until complete; no resume in Invoke-WebRequest, re-run restarts it)
     $modelsDir = Join-Path $InstallDir 'models'
     $modelPath = Join-Path $modelsDir $ModelFile
@@ -89,7 +118,7 @@ try {
 `$env:AIVALON_DB = $(Quote (Join-Path $InstallDir 'aivalon.db'))
 `$exe = Join-Path `$InstallDir 'aivalon.exe'
 if (-not (Test-Path `$exe)) {
-    Write-Host "ERROR: AIvalon binary not found at `$exe. Extract the AIvalon release there (aivalon.exe + web\ folder)." -ForegroundColor Red
+    Write-Host "ERROR: AIvalon binary missing at `${exe}: the install is incomplete or damaged. Re-run the AIvalon installer." -ForegroundColor Red
     Read-Host 'Press Enter to close'
     exit 1
 }
@@ -116,9 +145,6 @@ Set-Location `$InstallDir  # aivalon resolves web\static relative to the working
     }
 
     Step 'Done'
-    if (-not (Test-Path (Join-Path $InstallDir 'aivalon.exe'))) {
-        Write-Host "NOTE: place aivalon.exe (and its web\ folder) in $InstallDir before launching." -ForegroundColor Yellow
-    }
     Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$launcher`"  then open http://127.0.0.1:4140"
 } finally {
     Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue

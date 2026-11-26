@@ -5,7 +5,7 @@
 A local, single-user web app for AI roleplay.
 It replaces rate-limited hosted apps: you talk to an LLM that runs on your own machine, through persona cards and lorebooks you control, and nothing leaves your computer.
 
-> **Status: 0.1, image generation off by default.**
+> **Status: v0.2-beta-1, image generation off by default.**
 > Chat, character cards, personas, lorebooks, backend profiles, and the Vault (PIN-gated, fully encrypted at rest) work end-to-end against a real LLM backend.
 > Image generation (against an AUTOMATIC1111/Forge backend) is code-complete but **disabled by default in this release** — it hasn't had a real validation pass yet. `docs/DESIGN.md` is the source of truth for what's settled versus still open.
 
@@ -15,7 +15,17 @@ It replaces rate-limited hosted apps: you talk to an LLM that runs on your own m
 
 Everything below works the same on Windows and Linux — screenshots are from Linux, the Windows side just has a `.exe` and double-clicks instead of a terminal.
 
-### 1. Get a local LLM running (llama.cpp)
+### 1. Install (recommended: the one-command installer)
+
+Run `./scripts/install.sh` (Linux) or `scripts/install.ps1` (Windows: `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1`). That's the only command. It asks for an install directory, then downloads and unpacks llama.cpp (CPU build), a bundled low-end default model ([Qwen2.5-3B-Instruct](https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF), ~2 GB) and AIvalon itself. At the end it offers to create a shortcut: a desktop shortcut on Windows, an application-menu entry on Linux. Nothing else to do. Launch the generated launcher script (`run-aivalon.sh` / `run-aivalon.ps1`, in the install directory) and open `http://127.0.0.1:4140`.
+
+The launcher starts llama.cpp for you, and AIvalon shuts it down when it exits. While the model loads, the browser shows a loading screen that turns into the app on its own. A preconfigured **llama.cpp (local)** backend profile already points at it. Re-running the installer skips whatever is already in place.
+
+### Advanced / do it yourself
+
+Skip the installer if you want a different or bigger model, a GPU build of llama.cpp, your own backend (Ollama, a hosted API), or just to see what's going on.
+
+#### Get a local LLM running (llama.cpp)
 
 AIvalon never embeds inference itself — it talks to any OpenAI-compatible backend over HTTP. [llama.cpp](https://github.com/ggml-org/llama.cpp)'s server is the straightforward local option and what these instructions use; [Ollama](https://ollama.com/) also works if you'd rather manage models that way.
 
@@ -43,17 +53,17 @@ AIvalon never embeds inference itself — it talks to any OpenAI-compatible back
    - `--sleep-idle-seconds 15` unloads the model from VRAM after 15 seconds idle, freeing the GPU for anything else in the meantime.
    - `-c 8192` (`--ctx-size`) is the context window, in tokens. Keep AIvalon's own context budget (Settings → System prompt) comfortably under this.
 
-   Leave this running in its own terminal (or as a background service, once you're past trying things out).
+   Leave this running in its own terminal (or as a background service, once you're past trying things out). If you'd rather have AIvalon start and stop it for you the way the installer does, set `AIVALON_LLAMA_BIN` and `AIVALON_LLAMA_MODELS_DIR` instead (see Environment variables below).
 
-### 2. Get AIvalon
+#### Get AIvalon
 
-Download the release archive for your OS, extract it anywhere, and run the executable inside — no installer, no separate runtime to set up. See the `LISEZ-MOI.txt`/`README.txt` next to the binary for the one or two platform-specific notes (keeping the `web/` folder alongside it, Windows SmartScreen on an unsigned binary).
+Download the release archive for your OS (`aivalon-linux-x64.tar.gz` / `aivalon-windows-x64.zip`), extract it anywhere, and run the executable from inside its folder. There's no separate runtime to set up. Keep the `web/` folder next to the binary. On Windows, SmartScreen may warn about the binary because it isn't signed.
 
 AIvalon listens on `http://127.0.0.1:4140` by default — open that in a browser.
 
-### 3. First-run settings
+### 2. First-run settings
 
-Open **Settings → Backend profiles → Add a profile**, name it, point **Base URL** at your llama.cpp server (e.g. `http://127.0.0.1:9931/v1`), then hit **Test connection** — a successful test lists every model the server found and turns the Model field into a dropdown so you can pick one instead of typing it by hand. For roleplay, **Temperature ≈ 1.0** and **Top P ≈ 0.9** are a reasonable starting point — more coherent than default sampling, without being flat.
+If you used the installer, the **llama.cpp (local)** profile is already set up (Temperature 1.0, Top P 0.9), so skip to the persona below. Otherwise, edit that profile or open **Settings → Backend profiles → Add a profile**, name it, point **Base URL** at your llama.cpp server (e.g. `http://127.0.0.1:9931/v1`), then hit **Test connection** — a successful test lists every model the server found and turns the Model field into a dropdown so you can pick one instead of typing it by hand. For roleplay, **Temperature ≈ 1.0** and **Top P ≈ 0.9** are a reasonable starting point — more coherent than default sampling, without being flat.
 
 ![Settings — backend profile, tested and model selected](docs/screenshots/02-settings-backend-profile.png)
 
@@ -61,7 +71,7 @@ Then, on the **Your persona** tab, add yourself as a persona — who you are to 
 
 ![Settings — adding a persona](docs/screenshots/03-settings-persona.png)
 
-### 4. Import a character (and its lorebook)
+### 3. Import a character (and its lorebook)
 
 Character cards use the open SillyTavern-compatible format, so anything exported from sites built around it works here too. As an example: [Veyra on Character Tavern](https://character-tavern.com/character/baconery/veyra) — hit the purple **Download character card** button (PNG, lorebook included). That one download gives you both a character *and* a lorebook, since the card has a world/lore section embedded in it.
 
@@ -74,7 +84,7 @@ The character lands in your list, and its embedded lorebook shows up on its own 
 ![Characters list, after import](docs/screenshots/05-characters-list.png)
 ![Worlds list — the lorebook that came with the card](docs/screenshots/06-worlds-list.png)
 
-### 5. Start your first chat
+### 4. Start your first chat
 
 Go to **Chat → New session**: pick a title (e.g. "Veyra"), your backend profile, your persona, the character(s) you just imported, and the lorebook, then **Start chat**.
 
@@ -96,7 +106,7 @@ A PIN-gated space to pull a character card, lorebook, or whole session out of ca
 - **Lorebooks** (World Info): shared lore kept separate from character cards on purpose, with per-entry trigger strategy (`constant` or whole-word `selective`), insertion order, and probability. Importable the same way as character cards, and auto-extracted from a card that embeds one.
 - **Chat**, with multiple character cards in one session for group roleplay: streamed token-by-token over SSE, with per-message regenerate, edit, branch (fork the conversation from any point), and delete, plus session duplication and a custom background per session.
 - **Any OpenAI-compatible LLM backend**: point one or more backend profiles at Ollama, a llama.cpp server, or a hosted API, with a connection test/ping from Settings — AIvalon never embeds inference itself.
-- **On-demand image generation** *(disabled by default in 0.1, not yet validated)*, against an AUTOMATIC1111 (A1111)/Forge Stable Diffusion WebUI backend. Named image presets (steps, CFG scale, sampler, size, seed, negative prompt, style suffix) are managed once in Settings, and a session just picks one; the in-chat dialog only ever asks for the prompt.
+- **On-demand image generation** *(disabled by default in release builds, not yet validated)*, against an AUTOMATIC1111 (A1111)/Forge Stable Diffusion WebUI backend. Named image presets (steps, CFG scale, sampler, size, seed, negative prompt, style suffix) are managed once in Settings, and a session just picks one; the in-chat dialog only ever asks for the prompt.
 - **The Vault** — see above.
 - **Settings**: backend profiles, personas, the system prompt template, a context budget (character cap on what's sent per reply), and the hostname whitelist for "import a card from a URL".
 
@@ -122,11 +132,13 @@ go build -o aivalon ./cmd/aivalon
 
 ### Environment variables
 
-| Variable       | Default          | Purpose                                                                                                                       |
-| -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `AIVALON_ADDR` | `127.0.0.1:4140` | Listen address. Setting a non-loopback address relaxes the DNS-rebinding guard for private-LAN Host headers on the same port. |
-| `AIVALON_DB`   | `aivalon.db`     | SQLite file path, so two instances don't fight over the same database.                                                        |
-| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Per-field/per-entry timeout (seconds) for the character/lorebook import translation feature — raise it if a slower local model times out mid-generation, see `docs/DESIGN.md`. |
+| Variable                            | Default          | Purpose                                                                                                                                                                                                                                                       |
+| ----------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AIVALON_ADDR`                      | `127.0.0.1:4140` | Listen address. Setting a non-loopback address relaxes the DNS-rebinding guard for private-LAN Host headers on the same port.                                                                                                                                 |
+| `AIVALON_DB`                        | `aivalon.db`     | SQLite file path, so two instances don't fight over the same database.                                                                                                                                                                                        |
+| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Per-field/per-entry timeout (seconds) for the character/lorebook import translation feature — raise it if a slower local model times out mid-generation, see `docs/DESIGN.md`.                                                                                |
+| `AIVALON_LLAMA_BIN`                 | *(unset)*        | Path to `llama-server`. Set together with `AIVALON_LLAMA_MODELS_DIR` to have AIvalon start llama.cpp itself (router mode, on the "llama.cpp (local)" profile's port), wait until it's healthy, and stop it on exit. Leave both unset to run your own backend. |
+| `AIVALON_LLAMA_MODELS_DIR`          | *(unset)*        | Folder of `.gguf` models served by that llama.cpp process.                                                                                                                                                                                                    |
 
 ## Tech stack (summary)
 

@@ -4,7 +4,7 @@ import "net/http"
 
 // AppVersion is bumped by hand at notable milestones — no CI/release
 // tooling yet for a solo local app, see AboutPage.
-const AppVersion = "0.1.0"
+const AppVersion = "v0.2-beta-1"
 
 // RepoURL and License back AboutPage's disclosure — kept as named
 // constants (not inlined in the templ) so they're easy to find if

@@ -5,7 +5,7 @@
 Une application web locale, mono-utilisateur, pour le roleplay avec une IA.
 Elle remplace les applications hébergées et limitées : vous parlez à un LLM qui tourne sur votre propre machine, via des fiches de personnage et des lorebooks que vous contrôlez, et rien ne quitte votre ordinateur.
 
-> **Statut : 0.1, génération d'image désactivée par défaut.**
+> **Statut : v0.2-beta-1, génération d'image désactivée par défaut.**
 > Le chat, les fiches de personnage, les personas, les lorebooks, les profils de backend et le Vault (verrouillé par PIN, entièrement chiffré au repos) fonctionnent de bout en bout contre un vrai backend LLM.
 > La génération d'image (contre un backend AUTOMATIC1111/Forge) est codée mais **désactivée par défaut dans cette release** — elle n'a pas encore eu de vraie passe de validation. `docs/DESIGN.md` reste la référence pour ce qui est tranché ou encore ouvert.
 
@@ -15,7 +15,17 @@ Elle remplace les applications hébergées et limitées : vous parlez à un LLM 
 
 Tout ce qui suit fonctionne pareil sous Windows et Linux — les captures viennent de Linux, côté Windows c'est juste un `.exe` et des doubles-clics à la place d'un terminal.
 
-### 1. Faire tourner un LLM local (llama.cpp)
+### 1. Installation (recommandée : l'installeur en une commande)
+
+Lancez `./scripts/install.sh` (Linux) ou `scripts/install.ps1` (Windows : `powershell -NoProfile -ExecutionPolicy Bypass -File install.ps1`). C'est la seule commande. Il demande un dossier d'installation, puis télécharge et décompresse llama.cpp (build CPU), un modèle d'entrée de gamme fourni par défaut ([Qwen2.5-3B-Instruct](https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF), ~2 Go) et AIvalon lui-même. À la fin, il propose de créer un raccourci : sur le bureau sous Windows, dans le menu des applications sous Linux. Rien d'autre à faire. Lancez le script de démarrage généré (`run-aivalon.sh` / `run-aivalon.ps1`, dans le dossier d'installation) et ouvrez `http://127.0.0.1:4140`.
+
+Le script de démarrage lance llama.cpp pour vous, et AIvalon l'arrête en quittant. Pendant le chargement du modèle, le navigateur affiche un écran de chargement qui laisse place à l'application tout seul. Un profil de backend **llama.cpp (local)** préconfiguré pointe déjà dessus. Relancer l'installeur saute ce qui est déjà en place.
+
+### Avancé / à la main
+
+Passez-vous de l'installeur si vous voulez un autre modèle ou un plus gros, une build GPU de llama.cpp, votre propre backend (Ollama, une API hébergée), ou simplement voir ce qui se passe.
+
+#### Faire tourner un LLM local (llama.cpp)
 
 AIvalon n'embarque jamais l'inférence lui-même — il parle à n'importe quel backend compatible OpenAI via HTTP. Le serveur de [llama.cpp](https://github.com/ggml-org/llama.cpp) est l'option locale la plus directe et c'est ce qu'utilisent ces instructions ; [Ollama](https://ollama.com/) marche aussi si vous préférez gérer vos modèles comme ça.
 
@@ -43,17 +53,17 @@ AIvalon n'embarque jamais l'inférence lui-même — il parle à n'importe quel 
    - `--sleep-idle-seconds 15` décharge le modèle de la VRAM après 15 secondes d'inactivité, libérant le GPU pour autre chose en attendant.
    - `-c 8192` (`--ctx-size`) est la fenêtre de contexte, en tokens. Gardez le budget de contexte propre à AIvalon (Settings → System prompt) confortablement en dessous.
 
-   Laissez ça tourner dans son propre terminal (ou en service en arrière-plan, une fois passé la phase de test).
+   Laissez ça tourner dans son propre terminal (ou en service en arrière-plan, une fois passé la phase de test). Si vous préférez qu'AIvalon le lance et l'arrête pour vous comme avec l'installeur, définissez plutôt `AIVALON_LLAMA_BIN` et `AIVALON_LLAMA_MODELS_DIR` (voir Variables d'environnement plus bas).
 
-### 2. Récupérer AIvalon
+#### Récupérer AIvalon
 
-Téléchargez l'archive de release pour votre OS, extrayez-la n'importe où, et lancez l'exécutable à l'intérieur — pas d'installeur, pas de runtime séparé à installer. Voir le `LISEZ-MOI.txt`/`README.txt` à côté du binaire pour les une ou deux remarques propres à la plateforme (garder le dossier `web/` à côté, SmartScreen de Windows sur un binaire non signé).
+Téléchargez l'archive de release pour votre OS (`aivalon-linux-x64.tar.gz` / `aivalon-windows-x64.zip`), extrayez-la n'importe où, et lancez l'exécutable depuis son dossier. Pas de runtime séparé à installer. Gardez le dossier `web/` à côté du binaire. Sous Windows, SmartScreen peut afficher un avertissement parce que le binaire n'est pas signé.
 
 AIvalon écoute sur `http://127.0.0.1:4140` par défaut — ouvrez cette adresse dans un navigateur.
 
-### 3. Réglages du premier lancement
+### 2. Réglages du premier lancement
 
-Ouvrez **Settings → Backend profiles → Add a profile**, donnez-lui un nom, pointez **Base URL** vers votre serveur llama.cpp (ex. `http://127.0.0.1:9931/v1`), puis cliquez sur **Test connection** — un test réussi liste chaque modèle trouvé par le serveur et transforme le champ Model en liste déroulante pour en choisir un plutôt que de le taper à la main. Pour du roleplay, **Temperature ≈ 1.0** et **Top P ≈ 0.9** sont un bon point de départ — plus cohérent que l'échantillonnage par défaut, sans être plat.
+Si vous êtes passé par l'installeur, le profil **llama.cpp (local)** est déjà configuré (Temperature 1.0, Top P 0.9), donc passez directement au persona plus bas. Sinon, modifiez ce profil ou ouvrez **Settings → Backend profiles → Add a profile**, donnez-lui un nom, pointez **Base URL** vers votre serveur llama.cpp (ex. `http://127.0.0.1:9931/v1`), puis cliquez sur **Test connection** — un test réussi liste chaque modèle trouvé par le serveur et transforme le champ Model en liste déroulante pour en choisir un plutôt que de le taper à la main. Pour du roleplay, **Temperature ≈ 1.0** et **Top P ≈ 0.9** sont un bon point de départ — plus cohérent que l'échantillonnage par défaut, sans être plat.
 
 ![Settings — profil de backend, testé et modèle sélectionné](docs/screenshots/02-settings-backend-profile.png)
 
@@ -61,7 +71,7 @@ Ensuite, sur l'onglet **Your persona**, ajoutez-vous vous-même comme persona �
 
 ![Settings — ajout d'un persona](docs/screenshots/03-settings-persona.png)
 
-### 4. Importer un personnage (et son lorebook)
+### 3. Importer un personnage (et son lorebook)
 
 Les fiches de personnage utilisent le format ouvert compatible SillyTavern, donc tout ce qui est exporté depuis des sites construits autour de ce format marche ici aussi. En exemple : [Veyra sur Character Tavern](https://character-tavern.com/character/baconery/veyra) — cliquez le bouton violet **Download character card** (PNG, lorebook inclus). Ce seul téléchargement donne à la fois un personnage *et* un lorebook, puisque la fiche a une section de lore/monde embarquée dedans.
 
@@ -74,7 +84,7 @@ Le personnage arrive dans votre liste, et son lorebook embarqué apparaît tout 
 ![Liste des personnages, après import](docs/screenshots/05-characters-list.png)
 ![Liste des mondes — le lorebook venu avec la fiche](docs/screenshots/06-worlds-list.png)
 
-### 5. Démarrer votre premier chat
+### 4. Démarrer votre premier chat
 
 Allez dans **Chat → New session** : choisissez un titre (ex. "Veyra"), votre profil de backend, votre persona, le(s) personnage(s) que vous venez d'importer, et le lorebook, puis **Start chat**.
 
@@ -96,7 +106,7 @@ Un espace verrouillé par PIN pour sortir une fiche de personnage, un lorebook, 
 - **Lorebooks** (World Info) : du lore partagé volontairement séparé des fiches de personnage, avec une stratégie de déclenchement par entrée (`constant` ou `selective` sur mot entier), un ordre d'insertion, et une probabilité. Importables comme les fiches de personnage, et auto-extraits d'une fiche qui en embarque un.
 - **Chat**, avec plusieurs fiches de personnage dans une session pour du roleplay de groupe : streaming token par token en SSE, avec regénération, édition, branchement (forker la conversation depuis n'importe quel point) et suppression par message, plus duplication de session et fond d'écran personnalisé par session.
 - **N'importe quel backend LLM compatible OpenAI** : pointez un ou plusieurs profils de backend vers Ollama, un serveur llama.cpp, ou une API hébergée, avec un test de connexion depuis Settings — AIvalon n'embarque jamais l'inférence lui-même.
-- **Génération d'image à la demande** *(désactivée par défaut en 0.1, pas encore validée)*, contre un backend AUTOMATIC1111 (A1111)/Forge Stable Diffusion WebUI. Des presets d'image nommés (steps, CFG scale, sampler, taille, seed, prompt négatif, suffixe de style) sont gérés une fois dans Settings, et une session en choisit juste un ; la fenêtre de génération ne demande jamais que le prompt.
+- **Génération d'image à la demande** *(désactivée par défaut dans les builds de release, pas encore validée)*, contre un backend AUTOMATIC1111 (A1111)/Forge Stable Diffusion WebUI. Des presets d'image nommés (steps, CFG scale, sampler, taille, seed, prompt négatif, suffixe de style) sont gérés une fois dans Settings, et une session en choisit juste un ; la fenêtre de génération ne demande jamais que le prompt.
 - **Le Vault** — voir plus haut.
 - **Settings** : profils de backend, personas, le gabarit de system prompt, un budget de contexte (plafond de caractères envoyés par réponse), et la liste blanche de domaines pour "importer une fiche depuis une URL".
 
@@ -122,11 +132,13 @@ go build -o aivalon ./cmd/aivalon
 
 ### Variables d'environnement
 
-| Variable       | Défaut           | Usage                                                                                                                                       |
-| -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `AIVALON_ADDR` | `127.0.0.1:4140` | Adresse d'écoute. Mettre une adresse non-loopback relâche la garde anti-DNS-rebinding pour les en-têtes Host en LAN privé sur le même port. |
-| `AIVALON_DB`   | `aivalon.db`     | Chemin du fichier SQLite, pour que deux instances ne se battent pas sur la même base.                                                       |
-| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Timeout (secondes) par champ/entrée pour la traduction à l'import de cartes/lorebooks — à augmenter si un modèle local lent coupe en pleine génération, voir `docs/DESIGN.md`. |
+| Variable                            | Défaut           | Usage                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AIVALON_ADDR`                      | `127.0.0.1:4140` | Adresse d'écoute. Mettre une adresse non-loopback relâche la garde anti-DNS-rebinding pour les en-têtes Host en LAN privé sur le même port.                                                                                                                                          |
+| `AIVALON_DB`                        | `aivalon.db`     | Chemin du fichier SQLite, pour que deux instances ne se battent pas sur la même base.                                                                                                                                                                                                |
+| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Timeout (secondes) par champ/entrée pour la traduction à l'import de cartes/lorebooks — à augmenter si un modèle local lent coupe en pleine génération, voir `docs/DESIGN.md`.                                                                                                       |
+| `AIVALON_LLAMA_BIN`                 | *(non défini)*   | Chemin de `llama-server`. À définir avec `AIVALON_LLAMA_MODELS_DIR` pour qu'AIvalon lance llama.cpp lui-même (mode routeur, sur le port du profil "llama.cpp (local)"), attende qu'il soit prêt, et l'arrête en quittant. Laissez les deux vides pour utiliser votre propre backend. |
+| `AIVALON_LLAMA_MODELS_DIR`          | *(non défini)*   | Dossier des modèles `.gguf` servis par ce processus llama.cpp.                                                                                                                                                                                                                       |
 
 ## Stack technique (résumé)
 

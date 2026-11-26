@@ -9,6 +9,8 @@ RELEASE_API="https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=3
 MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 MODEL_FILE="Qwen2.5-3B-Instruct-Q4_K_M.gguf"
 ASSET_RE='llama-b[0-9]+-bin-ubuntu-x64\.tar\.gz'
+AIVALON_TAG="v0.2-beta-1"
+AIVALON_URL="https://github.com/Lord-ZuzurNC/AIvalon/releases/download/$AIVALON_TAG/aivalon-linux-x64.tar.gz"
 
 step() { printf '\n==> %s\n' "$*"; }
 die()  { printf '\nERROR: %s\nInstall NOT complete.\n' "$*" >&2; exit 1; }
@@ -60,6 +62,24 @@ LLAMA_BIN="$(find "$INSTALL_DIR/llama.cpp" -type f -name llama-server | head -n1
 chmod +x "$LLAMA_BIN"
 echo "llama-server: $LLAMA_BIN"
 
+# 3b. AIvalon release (binary + web/), same temp-extract-then-move pattern as llama.cpp
+step "Installing AIvalon $AIVALON_TAG"
+if [[ -x "$INSTALL_DIR/aivalon" && -d "$INSTALL_DIR/web" ]]; then
+  echo "Already present, skipping."
+else
+  curl -fL --progress-bar -o "$TMP_DIR/aivalon.tar.gz" "$AIVALON_URL" || die "Download of $AIVALON_URL failed."
+  mkdir -p "$TMP_DIR/aivalon"
+  tar -xzf "$TMP_DIR/aivalon.tar.gz" -C "$TMP_DIR/aivalon" || die "Extraction of ${AIVALON_URL##*/} failed."
+  # Accept both a flat archive and one wrapped in a single top-level folder.
+  app_src="$(find "$TMP_DIR/aivalon" -maxdepth 2 -type f -name aivalon | head -n1)"
+  app_src="${app_src%/*}"
+  [[ -n "$app_src" && -d "$app_src/web" ]] || die "aivalon binary or web/ not found inside ${AIVALON_URL##*/} (archive layout changed?)."
+  rm -rf "$INSTALL_DIR/web"
+  { mv "$app_src/web" "$INSTALL_DIR/web" && mv -f "$app_src/aivalon" "$INSTALL_DIR/aivalon"; } \
+    || die "Could not move AIvalon into $INSTALL_DIR."
+  chmod +x "$INSTALL_DIR/aivalon"
+fi
+
 # 4. Model (resumable: partial download kept as .part)
 step "Downloading model $MODEL_FILE (~2 GB, resumable)"
 mkdir -p "$INSTALL_DIR/models"
@@ -85,7 +105,7 @@ launcher="$INSTALL_DIR/run-aivalon.sh"
   printf 'export AIVALON_DB=%q\n' "$INSTALL_DIR/aivalon.db"
   cat <<'EOF'
 if [[ ! -x "$INSTALL_DIR/aivalon" ]]; then
-  msg="AIvalon binary not found at $INSTALL_DIR/aivalon. Extract the AIvalon release there (binary + web/ folder), or symlink it."
+  msg="AIvalon binary missing at $INSTALL_DIR/aivalon: the install is incomplete or damaged. Re-run the AIvalon installer."
   echo "ERROR: $msg" >&2
   command -v notify-send >/dev/null 2>&1 && notify-send "AIvalon" "$msg"
   exit 1
@@ -114,5 +134,4 @@ EOF
 fi
 
 step "Done"
-[[ -x "$INSTALL_DIR/aivalon" ]] || echo "NOTE: place the aivalon binary (and its web/ folder) in $INSTALL_DIR before launching."
 echo "Run: $launcher  then open http://127.0.0.1:4140"
