@@ -16,6 +16,7 @@
   "about.license_label": "Licence",
   "about.authorship_label": "Paternité",
   "about.authorship_text": "Coécrit par Lord (conception, choix produit, relecture) et des agents de code IA (implémentation) — chaque fonctionnalité ici est passée par une décision humaine avant d'être intégrée, mais une part significative du code lui-même a été générée par IA. Dit clairement pour que personne ne prenne ceci pour un logiciel entièrement écrit à la main.",
+  "loading.status": "Chargement",
   "common.hide_into_vault": "Masquer %s dans le coffre",
   "common.delete_label": "Supprimer %s",
   "common.view_grid": "Vue grille — toucher pour passer en liste",

@@ -43,6 +43,23 @@ Multiple profiles can exist side by side — a user can point one profile at Oll
 Designing the `kind` field in now, even though only `llm` is used in v1, is what lets v2's image generation slot in as a new backend profile instead of a schema migration.
 The v2 `image` kind targets the **AUTOMATIC1111 (A1111) Stable Diffusion WebUI API** (`/sdapi/v1/txt2img` and friends) — picked for being the simplest of the common options. The client code is written but unvalidated against a real A1111 instance; see **Scope** above.
 
+## Local llama.cpp sidecar
+
+Optional: AIvalon can start and own a local `llama-server` (code: `cmd/aivalon/llama*.go`).
+
+- `AIVALON_LLAMA_BIN` — path to (or PATH name of) the `llama-server` executable.
+- `AIVALON_LLAMA_MODELS_DIR` — folder of `.gguf` models, passed as `--models-dir`.
+
+Both unset: no supervisor, startup is exactly as before (bring your own backend, e.g. Ollama). Only one set, a missing/non-executable binary, or a missing models dir: fatal at startup (stderr, exit 1).
+
+**Health URL** is derived from the `llama.cpp (local)` backend profile's `base_url` (seeded by migration 00018): strip `/v1`, append `/health` — `http://127.0.0.1:9931/v1` → `http://127.0.0.1:9931/health`; the port in that URL is also the `--port` passed to the child. If the profile row is gone, a warning is logged and the default `http://127.0.0.1:9931/v1` is used.
+
+Startup: if `/health` already answers `200 {"status":"ok"}`, nothing is spawned. If the port accepts connections but isn't healthy (another program, or a llama-server still loading), AIvalon exits 1 rather than guessing. Otherwise it spawns `llama-server -cmoe -rea off --sleep-idle-seconds 15 -c 8192 --models-dir … --port …`, stdout/stderr appended to `llama-server.log` next to the database file. Until `/health` is ok every page (except `/static/`) serves the loading screen with a `Refresh: 1` header; after 60s, or if the child exits first, it serves a plain 503 error instead and logs it.
+
+**No orphan processes.** The child runs in its own process group (`Setpgid`). On SIGINT/SIGTERM or `ListenAndServe` failing, AIvalon shuts the HTTP server down and SIGTERMs the whole group (`kill(-pid)`), waits 5s, then SIGKILLs the group. On Linux, `Pdeathsig` additionally has the kernel SIGTERM the child if AIvalon dies without cleaning up (SIGKILL, OOM). Linux is the only verified path.
+
+**Windows caveat — unverified.** The child gets `CREATE_NEW_PROCESS_GROUP`, and shutdown calls `Process.Kill`, which kills only `llama-server` itself, not any processes it spawned. Proper cleanup needs `taskkill /T /F /PID <pid>` or a job object; neither is implemented or tested. Test on real Windows before relying on it.
+
 ## Stopping a generation in progress
 
 The browser closes the stream (`EventSource.close()`, since htmx's SSE extension uses `EventSource`, which has no `AbortController` support — `AbortController` pairs with `fetch()`, not with `EventSource`).

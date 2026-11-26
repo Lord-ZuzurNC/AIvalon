@@ -330,6 +330,10 @@ func TestConfirmLanguageImport_Character_FallsBackWithoutBackend(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sqlDB.Close()
+	// Migration 00018 seeds a default llama.cpp profile; this test wants an empty table.
+	if _, err := sqlDB.Exec(`DELETE FROM backend_profiles`); err != nil {
+		t.Fatal(err)
+	}
 	h := CharacterHandlers{DB: sqlDB, Cache: NewImportCache()}
 
 	confirmBody := filePost(h.ImportCharacterJSON, "merlin.json", []byte(frenchCharacterJSON), nil).Body.String()

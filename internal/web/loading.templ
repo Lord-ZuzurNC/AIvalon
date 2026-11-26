@@ -1,0 +1,27 @@
+package web
+
+import "github.com/Lord-ZuzurNC/AIvalon/internal/i18n"
+
+// LoadingScreen is a standalone full-screen page (no Layout chrome)
+// shown while the local backend is starting up.
+templ LoadingScreen() {
+	<!DOCTYPE html>
+	<html lang={ i18n.FromContext(ctx) } data-theme="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>AIvalon</title>
+			<link rel="stylesheet" href="/static/pico.classless.min.css"/>
+			<link rel="stylesheet" href="/static/aivalon.css"/>
+		</head>
+		<body>
+			<main class="loading-screen">
+				<h1>AIvalon</h1>
+				<p class="status" role="status">
+					{ i18n.T(ctx, "loading.status") }
+					<span class="loading-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+				</p>
+			</main>
+		</body>
+	</html>
+}

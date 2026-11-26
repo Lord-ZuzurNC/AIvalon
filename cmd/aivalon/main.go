@@ -3,12 +3,15 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
@@ -77,11 +80,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("database: %v", err)
 	}
-	defer sqlDB.Close()
+
+	// nil unless AIVALON_LLAMA_BIN/AIVALON_LLAMA_MODELS_DIR are set and
+	// we actually spawned llama-server — see llama.go.
+	llama := startLlama(sqlDB)
 
 	srv := &http.Server{
 		Addr:    addr,
-		Handler: newHandler(sqlDB),
+		Handler: newHandler(sqlDB, llama),
 		// Slowloris-style attacks trickle headers in to hold a
 		// connection open indefinitely; this caps how long that's
 		// tolerated. WriteTimeout is deliberately left at its zero
@@ -90,10 +96,31 @@ func main() {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	// Every exit path below goes through llama.stop() so the sidecar's
+	// process group never outlives us (no log.Fatalf past this point —
+	// it would skip that).
+	ctx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	serveErr := make(chan error, 1)
+	go func() { serveErr <- srv.ListenAndServe() }()
 	log.Printf("AIvalon listening on http://%s", addr)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatalf("server: %v", err)
+
+	exitCode := 0
+	select {
+	case err := <-serveErr:
+		log.Printf("server: %v", err)
+		exitCode = 1
+	case <-ctx.Done():
+		log.Printf("shutting down")
+		// Bounded: a long-lived chat SSE stream would otherwise hold
+		// Shutdown open indefinitely.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		srv.Shutdown(shutdownCtx)
+		cancel()
 	}
+	llama.stop()
+	sqlDB.Close()
+	os.Exit(exitCode)
 }
 
 func newMux(sqlDB *sql.DB) *http.ServeMux {
@@ -215,9 +242,12 @@ func newMux(sqlDB *sql.DB) *http.ServeMux {
 //     triggers a paid LLM call and a DB write) is deliberately NOT
 //     "safe" by that definition, so it carries its own same-site
 //     check; see ChatHandlers.Stream.
-func newHandler(sqlDB *sql.DB) http.Handler {
+//
+// llama.gate (a no-op when llama is nil) sits innermost so the loading
+// screen it serves still gets the security layers and the language.
+func newHandler(sqlDB *sql.DB, llama *sidecar) http.Handler {
 	mux := newMux(sqlDB)
-	return web.WithSecurityHeaders(requireLocalHost(http.NewCrossOriginProtection().Handler(withLanguage(sqlDB)(mux))))
+	return web.WithSecurityHeaders(requireLocalHost(http.NewCrossOriginProtection().Handler(withLanguage(sqlDB)(llama.gate(mux)))))
 }
 
 // withLanguage resolves the request's UI/system-prompt language once

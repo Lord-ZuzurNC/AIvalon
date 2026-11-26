@@ -11,6 +11,10 @@ func TestBackendProfileCRUD(t *testing.T) {
 		t.Fatalf("Open: %v", err)
 	}
 	defer sqlDB.Close()
+	// Migration 00018 seeds a default llama.cpp profile; this test wants an empty table.
+	if _, err := sqlDB.Exec(`DELETE FROM backend_profiles`); err != nil {
+		t.Fatal(err)
+	}
 
 	id, err := CreateBackendProfile(sqlDB, BackendProfile{
 		Name:        "local ollama",

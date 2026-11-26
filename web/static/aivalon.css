@@ -1079,6 +1079,30 @@ html.sidebar-collapsed #sidebar-toggle {
 	}
 }
 
+/* Full-screen startup view (LoadingScreen, loading.templ) shown while
+   the local backend boots. Reuses the .loading-dots indicator above. */
+.loading-screen {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 100vh;
+	margin: 0;
+	padding: 0;
+	max-width: none;
+	background: var(--pico-background-color);
+}
+
+.loading-screen h1 {
+	color: var(--pico-primary);
+	font-size: 2.5rem;
+	margin-bottom: 0.5rem;
+}
+
+.loading-screen .status {
+	color: var(--pico-muted-color);
+}
+
 /* --- Options menu ("⋮") ---
    Replaces per-row Edit/Delete/Open buttons everywhere (Chat sessions,
    World lorebooks/entries, Character cards, Settings profiles/personas)

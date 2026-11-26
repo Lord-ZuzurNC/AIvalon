@@ -16,6 +16,7 @@
   "about.license_label": "License",
   "about.authorship_label": "Authorship",
   "about.authorship_text": "Co-written by Lord (design, product calls, review) and AI coding agents (implementation) — every feature here passed through a human decision before landing, but a meaningful share of the code itself was AI-generated. Said plainly so nobody mistakes this for entirely hand-written software.",
+  "loading.status": "Loading",
   "common.hide_into_vault": "Hide %s into vault",
   "common.delete_label": "Delete %s",
   "common.view_grid": "Grid view — tap to switch to list",
