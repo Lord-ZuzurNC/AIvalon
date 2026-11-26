@@ -845,6 +845,7 @@ html.sidebar-collapsed #sidebar-toggle {
 }
 
 .delete-confirm-footer > a,
+.delete-confirm-footer > button,
 .delete-confirm-footer .inline-form button {
 	width: auto;
 }

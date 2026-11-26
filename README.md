@@ -126,6 +126,7 @@ go build -o aivalon ./cmd/aivalon
 | -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `AIVALON_ADDR` | `127.0.0.1:4140` | Listen address. Setting a non-loopback address relaxes the DNS-rebinding guard for private-LAN Host headers on the same port. |
 | `AIVALON_DB`   | `aivalon.db`     | SQLite file path, so two instances don't fight over the same database.                                                        |
+| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Per-field/per-entry timeout (seconds) for the character/lorebook import translation feature — raise it if a slower local model times out mid-generation, see `docs/DESIGN.md`. |
 
 ## Tech stack (summary)
 

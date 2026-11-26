@@ -1,15 +1,18 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Lord-ZuzurNC/AIvalon/internal/db"
 )
@@ -50,6 +53,105 @@ const frenchLorebookJSON = `{
 		"1": {"key": ["forêt"], "content": "La forêt enchantée abrite des créatures magiques et des ruines oubliées depuis des siècles.", "constant": false, "disable": false, "order": 1, "probability": 100}
 	}
 }`
+
+// mockInfiniteTranslationServer is the test harness for task
+// t_3a415d4d: Lord's real llama.cpp logs showed a translation call
+// still generating at 1878+ tokens with no sign of stopping on its
+// own (an "abliterated" fine-tune not reliably honoring the
+// system prompt's "stay short" instruction) until translateFieldTimeout
+// (45s) cut the HTTP connection — by then ~2000 tokens had already
+// streamed. This mock streams synthetic tokens and stops EXACTLY
+// when the request body's own "max_tokens" says to (mirroring how a
+// real OpenAI-compatible backend, llama.cpp's server included, honors
+// the parameter) — if the request never sent max_tokens at all, it
+// stops only after a 5000-token safety valve, which would blow well
+// past any sane test timeout and so reliably fails a regression where
+// the cap stopped being sent. sawMaxTokens (optional) captures the
+// value the request actually carried, for assertions.
+func mockInfiniteTranslationServer(t *testing.T, sawMaxTokens *float64) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		limit := 5000
+		if mt, ok := body["max_tokens"].(float64); ok {
+			if sawMaxTokens != nil {
+				*sawMaxTokens = mt
+			}
+			limit = int(mt)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		for i := 0; i < limit; i++ {
+			fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"tok \"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestTranslateText_SendsMaxTokensCap(t *testing.T) {
+	var sawMaxTokens float64
+	srv := mockInfiniteTranslationServer(t, &sawMaxTokens)
+	profile := db.BackendProfile{Kind: "llm", BaseURL: srv.URL}
+
+	start := time.Now()
+	out, err := translateText(context.Background(), profile, "hello", "French")
+	if err != nil {
+		t.Fatalf("translateText: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("translateText took %v — the mock's 5000-token safety valve suggests max_tokens wasn't sent at all", elapsed)
+	}
+	if sawMaxTokens != translateTextMaxTokens {
+		t.Errorf("request body max_tokens = %v, want %v", sawMaxTokens, float64(translateTextMaxTokens))
+	}
+	if out == "" {
+		t.Error("expected non-empty translated output")
+	}
+}
+
+func TestTranslateKeywordText_SendsLowerMaxTokensCap(t *testing.T) {
+	var sawMaxTokens float64
+	srv := mockInfiniteTranslationServer(t, &sawMaxTokens)
+	profile := db.BackendProfile{Kind: "llm", BaseURL: srv.URL}
+
+	if _, err := translateKeywordText(context.Background(), profile, "tower", "French"); err != nil {
+		t.Fatalf("translateKeywordText: %v", err)
+	}
+	if sawMaxTokens != translateKeywordMaxTokens {
+		t.Errorf("request body max_tokens = %v, want %v", sawMaxTokens, float64(translateKeywordMaxTokens))
+	}
+}
+
+// TestTranslateText_MaxTokensCapOverridesExistingProfileSetting proves
+// withMaxTokens both overrides a chat-configured max_tokens for THIS
+// call and leaves the original BackendProfile (and its ModelParams
+// map) untouched — Lord's own chat usage of the same profile must
+// keep whatever max_tokens setting it already had.
+func TestTranslateText_MaxTokensCapOverridesExistingProfileSetting(t *testing.T) {
+	var sawMaxTokens float64
+	srv := mockInfiniteTranslationServer(t, &sawMaxTokens)
+	profile := db.BackendProfile{
+		Kind:        "llm",
+		BaseURL:     srv.URL,
+		ModelParams: map[string]float64{"temperature": 1, "max_tokens": 4096},
+	}
+
+	if _, err := translateText(context.Background(), profile, "hello", "French"); err != nil {
+		t.Fatalf("translateText: %v", err)
+	}
+	if sawMaxTokens != translateTextMaxTokens {
+		t.Errorf("translation call must override the profile's own max_tokens, got %v want %v", sawMaxTokens, float64(translateTextMaxTokens))
+	}
+	if profile.ModelParams["max_tokens"] != 4096 {
+		t.Error("the original profile's ModelParams must stay untouched — chat usage of the same profile must keep its own setting")
+	}
+}
 
 var tokenInputRe = regexp.MustCompile(`name="token" value="([^"]+)"`)
 
@@ -419,5 +521,233 @@ func TestVFSuffix(t *testing.T) {
 	}
 	if got := vfSuffix("de"); got != "DE" {
 		t.Errorf("any other language must get its uppercased code, got %q", got)
+	}
+}
+
+// TestConfirmLanguageImport_Character_FallsBackOnTranslationTimeout
+// reproduces the EXACT scenario behind task t_3a415d4d, not just a
+// connection-refused error (TestConfirmLanguageImport_Character_FallsBackOnTranslationError
+// above already covers that one): a backend that accepts the
+// connection and simply never answers, so the ONLY thing that ever
+// ends the call is translateFieldTimeout's own ctx deadline — a real
+// context.DeadlineExceeded, the same failure mode a genuinely stuck
+// generation produces. translateFieldTimeout is shrunk for the
+// duration of this test (saved/restored) so it doesn't take 45 real
+// seconds; the assertion is the same as the other fallback tests —
+// land on the 200 OK result page in VO-only mode, never a 500.
+func TestConfirmLanguageImport_Character_FallsBackOnTranslationTimeout(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		// Never send any token or [DONE] — wait for the client's own
+		// ctx to time out and cancel the request (mirrors
+		// llmclient_test.go's TestStreamChatCancellationAbortsRequest),
+		// with a 5s safety valve in case something regresses and the
+		// cancellation never arrives.
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	}))
+	defer srv.Close()
+
+	orig := translateFieldTimeout
+	translateFieldTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { translateFieldTimeout = orig })
+
+	if _, err := db.CreateBackendProfile(sqlDB, db.BackendProfile{Name: "Hangs", Kind: "llm", BaseURL: srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	h := CharacterHandlers{DB: sqlDB, Cache: NewImportCache()}
+
+	confirmBody := filePost(h.ImportCharacterJSON, "merlin.json", []byte(frenchCharacterJSON), nil).Body.String()
+	token := extractToken(t, confirmBody)
+
+	form := url.Values{"token": {token}}
+	req := httptest.NewRequest(http.MethodPost, "/characters/import/confirm-language", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	w := httptest.NewRecorder()
+	h.ConfirmLanguageImport(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("a translation timeout must still land on the result page, not a 500 — got %d, body: %s", w.Code, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "failed") {
+		t.Errorf("fallback page must explain the translation call failed, body: %s", w.Body.String())
+	}
+	cards, err := db.ListCharacterCards(sqlDB, -1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 1 || cards[0].Name != "Merlin Francais (VO)" {
+		t.Fatalf("a timed-out translation must fall back to VO-only, got %+v", cards)
+	}
+}
+
+// TestConfirmLanguageImport_Character_SecondImportGetsNumberedSuffix
+// covers task t_3a415d4d's dedup check directly — Lord's own repro
+// was re-importing the exact same card (veyra.png) and expecting
+// "(2)" suffixes rather than a crash or a silent overwrite. Both
+// passes go through the full upload→confirm→ConfirmLanguageImport
+// round trip (not a direct uniqueName unit test), so this exercises
+// the real "(VO)"/"(EN)" -> "(VO) (2)"/"(EN) (2)" naming exactly as a
+// browser would trigger it.
+func TestConfirmLanguageImport_Character_SecondImportGetsNumberedSuffix(t *testing.T) {
+	sqlDB, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sqlDB.Close()
+	srv := mockTranslationServer(t)
+	if _, err := db.CreateBackendProfile(sqlDB, db.BackendProfile{Name: "Local", Kind: "llm", BaseURL: srv.URL}); err != nil {
+		t.Fatal(err)
+	}
+	h := CharacterHandlers{DB: sqlDB, Cache: NewImportCache()}
+
+	importOnce := func() {
+		body := filePost(h.ImportCharacterJSON, "merlin.json", []byte(frenchCharacterJSON), nil).Body.String()
+		token := extractToken(t, body)
+		form := url.Values{"token": {token}}
+		req := httptest.NewRequest(http.MethodPost, "/characters/import/confirm-language", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+		h.ConfirmLanguageImport(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("ConfirmLanguageImport status = %d, body: %s", w.Code, w.Body.String())
+		}
+	}
+	importOnce() // "Merlin Francais (VO)" + "Merlin Francais (EN)"
+	importOnce() // same card again — must dedup via uniqueName, not overwrite or error
+
+	cards, err := db.ListCharacterCards(sqlDB, -1, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cards) != 4 {
+		t.Fatalf("expected 4 cards (VO+VF x 2 imports), got %d: %+v", len(cards), cards)
+	}
+	want := map[string]bool{
+		"Merlin Francais (VO)":     false,
+		"Merlin Francais (EN)":     false,
+		"Merlin Francais (VO) (2)": false,
+		"Merlin Francais (EN) (2)": false,
+	}
+	var gotNames []string
+	for _, c := range cards {
+		gotNames = append(gotNames, c.Name)
+		if _, ok := want[c.Name]; ok {
+			want[c.Name] = true
+		}
+	}
+	for name, found := range want {
+		if !found {
+			t.Errorf("expected a card named %q after re-importing the same card twice, got names: %v", name, gotNames)
+		}
+	}
+}
+
+// TestTranslateFieldTimeoutFromEnv covers task t_45a55587 point 2:
+// AIVALON_TRANSLATE_TIMEOUT_SECONDS lets Lord raise/lower
+// translateFieldTimeout without recompiling. Every "bad input" case
+// must fall back to translateFieldTimeoutDefault rather than panic or
+// produce a zero/negative duration that would make every translation
+// call fail instantly.
+func TestTranslateFieldTimeoutFromEnv(t *testing.T) {
+	orig, hadOrig := os.LookupEnv(translateFieldTimeoutEnvVar)
+	t.Cleanup(func() {
+		if hadOrig {
+			os.Setenv(translateFieldTimeoutEnvVar, orig)
+		} else {
+			os.Unsetenv(translateFieldTimeoutEnvVar)
+		}
+	})
+
+	cases := []struct {
+		name string
+		val  string
+		want time.Duration
+	}{
+		{"unset falls back to the default", "", translateFieldTimeoutDefault},
+		{"a valid override wins", "90", 90 * time.Second},
+		{"non-numeric falls back to the default", "banana", translateFieldTimeoutDefault},
+		{"zero falls back to the default", "0", translateFieldTimeoutDefault},
+		{"negative falls back to the default", "-5", translateFieldTimeoutDefault},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if c.val == "" {
+				os.Unsetenv(translateFieldTimeoutEnvVar)
+			} else {
+				os.Setenv(translateFieldTimeoutEnvVar, c.val)
+			}
+			if got := translateFieldTimeoutFromEnv(); got != c.want {
+				t.Errorf("%s=%q: got %s, want %s", translateFieldTimeoutEnvVar, c.val, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTranslateCardFields_RealisticTimeoutSurvivesASlowButFiniteBackend
+// is task t_45a55587's own required proof: Lord's real llama.cpp log
+// showed a translation call that was SLOW but HEALTHY (still
+// generating at 44 tok/s, 1878 tokens in) when the old 45s
+// translateFieldTimeout cut the connection — not a stuck model. This
+// test reproduces that exact shape with a mock backend that is slow
+// but DOES finish, and proves the fix has a real effect by flipping
+// the SAME backend/delay from failure to success purely by changing
+// translateFieldTimeout — not by swapping in a different mock or
+// skipping the timeout path. Durations are scaled down to
+// milliseconds (what matters is the delay-vs-timeout ratio, the same
+// ratio that separates Lord's real 45s/200s numbers, not absolute
+// wall-clock time) so the test runs instantly instead of for real
+// minutes.
+func TestTranslateCardFields_RealisticTimeoutSurvivesASlowButFiniteBackend(t *testing.T) {
+	const delay = 120 * time.Millisecond
+	mkSlowServer := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			time.Sleep(delay) // the backend is slow, never stuck — it always answers eventually.
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Bonjour\"}}]}\n\n")
+			fmt.Fprint(w, "data: [DONE]\n\n")
+		}))
+	}
+	card := db.CharacterCard{Description: "Hello there"}
+
+	orig := translateFieldTimeout
+	t.Cleanup(func() { translateFieldTimeout = orig })
+
+	// 1. Reproduce the bug: a timeout shorter than the backend's own
+	//    (finite, healthy) response time fails — exactly what the old
+	//    45s did against Lord's real multi-minute local inference.
+	srvShort := mkSlowServer()
+	defer srvShort.Close()
+	translateFieldTimeout = delay / 2
+	profileShort := db.BackendProfile{Kind: "llm", BaseURL: srvShort.URL}
+	if _, ok := translateCardFields(context.Background(), profileShort, card, "French"); ok {
+		t.Fatal("a timeout shorter than the backend's own response time must fail, same as the original 45s bug — got ok=true")
+	}
+
+	// 2. Prove the fix: a timeout longer than the backend's response
+	//    time succeeds against the EXACT SAME delay — the only
+	//    variable that changed between the two calls is
+	//    translateFieldTimeout itself, same as raising 45s to 200s did
+	//    for real.
+	srvLong := mkSlowServer()
+	defer srvLong.Close()
+	translateFieldTimeout = delay * 4
+	profileLong := db.BackendProfile{Kind: "llm", BaseURL: srvLong.URL}
+	translated, ok := translateCardFields(context.Background(), profileLong, card, "French")
+	if !ok {
+		t.Fatal("a timeout comfortably longer than the backend's response time must succeed")
+	}
+	if translated.Description != "Bonjour" {
+		t.Errorf("translated.Description = %q, want %q", translated.Description, "Bonjour")
 	}
 }

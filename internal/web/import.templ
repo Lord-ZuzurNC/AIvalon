@@ -23,7 +23,7 @@ templ ImportCrossConfirmPage(active, message, resumeAction, cancelHref, token st
 				<input type="hidden" name="token" value={ token }/>
 				<button type="submit">{ i18n.T(ctx, "import.yes") }</button>
 			</form>
-			<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.no") }</a>
+			<button type="button" class="secondary" data-cancel-href={ cancelHref } onclick="location.href=this.dataset.cancelHref">{ i18n.T(ctx, "import.no") }</button>
 		</div>
 	}
 }
@@ -104,8 +104,31 @@ templ ImportLanguageConfirmPage(active, detectedName, targetName, resumeAction, 
 					<strong>{ i18n.T(ctx, "import.language_mismatch_title") }</strong>
 				</header>
 				<p>{ i18n.T(ctx, "import.language_mismatch_warning", "detected", detectedName, "target", targetName) }</p>
+				<!-- Cancel is a real <button> here, not <a role="button">
+				     (task t_04e5ce3f): Lord measured a real, reproducible
+				     20px height gap between this button and Confirm with
+				     every CSS property (padding/line-height/font-size/
+				     border/box-sizing) already identical per
+				     getComputedStyle. Root cause, confirmed the same way
+				     (chromium headless, getComputedStyle):
+				     pico.classless.min.css gives native form controls
+				     (button/[type=submit]) `appearance: button`, which
+				     hands sizing over to the platform's native widget
+				     engine — its line box doesn't follow the authored
+				     line-height the way a plain, non-form `<a
+				     role="button">` (`appearance: none`) does. Matching
+				     CSS properties on two different HTML element kinds
+				     is not guaranteed to matching boxes; making Cancel a
+				     real <button> (same data-cancel-href + onclick as the
+				     dialog's own backdrop-click handler above, since a
+				     GET navigation needs no <form>) removes the
+				     mismatched rendering path instead of chasing more
+				     properties. Same fix applied to ImportCrossConfirmPage
+				     and DeleteConfirmPage's Cancel buttons, the only other
+				     places this <a role="button"> vs <button> pairing
+				     existed. -->
 				<footer class="import-confirm-actions">
-					<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "import.language_cancel") }</a>
+					<button type="button" class="secondary" data-cancel-href={ cancelHref } onclick="location.href=this.dataset.cancelHref">{ i18n.T(ctx, "import.language_cancel") }</button>
 					<form
 						method="post"
 						action={ templ.URL(resumeAction) }

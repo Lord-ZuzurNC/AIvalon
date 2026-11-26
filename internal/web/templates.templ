@@ -869,7 +869,7 @@ templ DeleteConfirmPage(active, name, action, cancelHref string, sessions []db.S
 					}
 				</ul>
 				<footer class="delete-confirm-footer">
-					<a href={ templ.URL(cancelHref) } role="button" class="secondary">{ i18n.T(ctx, "common.cancel") }</a>
+					<button type="button" class="secondary" data-cancel-href={ cancelHref } onclick="location.href=this.dataset.cancelHref">{ i18n.T(ctx, "common.cancel") }</button>
 					<form method="post" action={ templ.URL(action) } class="inline-form">
 						<input type="hidden" name="confirm" value="1"/>
 						<button type="submit" class="button-danger">{ i18n.T(ctx, "common.delete_anyway") }</button>

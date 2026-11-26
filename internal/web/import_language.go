@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +19,35 @@ import (
 	"github.com/Lord-ZuzurNC/AIvalon/internal/llmclient"
 )
 
+// translateFieldTimeoutDefault (task t_45a55587) replaces the
+// original 45s: Lord's real llama.cpp server log (pasted verbatim
+// into this task) showed a translation call STILL actively
+// generating — "tg = 44.53 t/s", 1878 tokens already produced, 3570
+// tokens of context — when translateFieldTimeout cut the client-side
+// HTTP connection ("http client error: Failed to read connection" /
+// "cancel task" on the server). That is not a stuck model; it is a
+// healthy local 12B model that simply hadn't finished yet. At ~44
+// tok/s, translateTextMaxTokens's own 1024-token cap alone can take
+// up to ~23s of pure generation — before counting prompt processing
+// of a multi-thousand-token system+field prompt, which on a loaded
+// local box is not instant either. 200s leaves roughly 9x that
+// generation-only estimate as headroom, enough for a slow
+// prompt-processing pass plus a near-full 1024-token generation on
+// hardware meaningfully slower than the 44 tok/s observed here,
+// while still bounding a single field's wait to a few minutes rather
+// than hanging the import request forever on a genuinely wedged
+// backend.
+const translateFieldTimeoutDefault = 200 * time.Second
+
+// translateFieldTimeoutEnvVar lets Lord tune this per his own
+// hardware (a faster/slower local model, or a remote backend with
+// different latency characteristics) without recompiling — task
+// t_45a55587 point 2. Seconds, positive integer; anything else
+// (unset, non-numeric, zero or negative) falls back to
+// translateFieldTimeoutDefault, logged once at startup so a typo
+// doesn't silently produce an unexpected timeout.
+const translateFieldTimeoutEnvVar = "AIVALON_TRANSLATE_TIMEOUT_SECONDS"
+
 // translateFieldTimeout bounds a single field/entry's translation
 // call to the local LLM backend — generous for a local model under
 // load, short enough that one stuck field doesn't hang the whole
@@ -23,7 +56,106 @@ import (
 // a lorebook's entry count is unbounded and translating them is
 // inherently sequential (see translateLorebookEntries) — one call at
 // a time, no batching, documented trade-off in docs/DESIGN.md.
-const translateFieldTimeout = 45 * time.Second
+//
+// A var, not a const: task t_3a415d4d's own test for the "backend
+// never responds, client falls back to VO-only" path needs to shrink
+// this well below the real value (saved/restored around the test)
+// rather than actually waiting out the real timeout — see
+// TestConfirmLanguageImport_Character_FallsBackOnTranslationTimeout.
+// Production code never reassigns it directly; it is seeded once at
+// package init from translateFieldTimeoutFromEnv (see
+// translateFieldTimeoutDefault's doc comment for the 45s→200s
+// justification and translateFieldTimeoutEnvVar for the override).
+var translateFieldTimeout = translateFieldTimeoutFromEnv()
+
+// translateFieldTimeoutFromEnv reads translateFieldTimeoutEnvVar at
+// package init time. A plain os.Getenv + strconv read, not shared
+// with cmd/aivalon/main.go's own envOr (different package, and that
+// helper only ever returns strings — this one needs int parsing and
+// a log line on a bad value, which main.go's dbPath/addr don't need).
+func translateFieldTimeoutFromEnv() time.Duration {
+	raw := os.Getenv(translateFieldTimeoutEnvVar)
+	if raw == "" {
+		return translateFieldTimeoutDefault
+	}
+	secs, err := strconv.Atoi(raw)
+	if err != nil || secs <= 0 {
+		log.Printf("aivalon: ignoring invalid %s=%q (must be a positive integer number of seconds), using default %s", translateFieldTimeoutEnvVar, raw, translateFieldTimeoutDefault)
+		return translateFieldTimeoutDefault
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// classifyTranslationError labels WHY a translation call failed, for
+// the server log only (task t_45a55587 point 3) — never surfaced in
+// the UI, which keeps the existing single "translation unavailable"
+// message regardless of cause. Before this, diagnosing a failure
+// meant Lord pulling raw llama.cpp server logs off his own machine
+// (exactly what happened for this task); now `go run ./cmd/aivalon`'s
+// own stdout says which of the three it was.
+//
+// Checking fieldCtx.Err() rather than pattern-matching err's text for
+// the timeout case is deliberate: it is the one signal that can't be
+// fooled by a backend whose own error message happens to contain a
+// misleading word, and it is exactly the context this file itself
+// created with context.WithTimeout — no guessing needed. The
+// "backend returned <status>: ..." prefix is llmclient.StreamChat's
+// own literal wording for a non-200 HTTP response (see client.go) —
+// matched as a string rather than a typed/sentinel error so this
+// stays a translation-path-only classification with zero change to
+// llmclient itself. Anything else (connection refused, DNS failure,
+// TLS error, reset mid-stream, ...) is "network" — the common
+// "backend simply isn't reachable or dropped the connection" bucket.
+func classifyTranslationError(fieldCtx context.Context, err error) string {
+	if errors.Is(fieldCtx.Err(), context.DeadlineExceeded) {
+		return "timeout"
+	}
+	if strings.HasPrefix(err.Error(), "backend returned ") {
+		return "http_status"
+	}
+	return "network"
+}
+
+// translateTextMaxTokens / translateKeywordMaxTokens cap how many
+// tokens a single translation call may generate — see
+// docs/DESIGN.md's "Translation backend and fallback" section for the
+// full incident this fixes (task t_3a415d4d): a local "abliterated"
+// fine-tune kept streaming past 1878+ tokens for what should have
+// been a one-field/one-keyword translation, with nothing but
+// translateFieldTimeout (45s) ever cutting it off — by then the
+// client had already waited out almost the whole budget. Neither
+// value touches profile.ModelParams itself nor llmclient.StreamChat —
+// see withMaxTokens, which builds a per-call copy instead.
+const (
+	// translateTextMaxTokens covers a prose field (description,
+	// personality, first_message, ...): large enough for any
+	// realistic card field, with a wide safety margin under the 45s
+	// timeout at the ~44 tok/s llama.cpp throughput observed in
+	// Lord's own logs (~23s for 1024 tokens).
+	translateTextMaxTokens = 1024
+	// translateKeywordMaxTokens covers a single trigger
+	// keyword/short phrase: a correct translation never approaches
+	// even this, so hitting the cap at all is itself a sign the
+	// model stopped following the "stay short" instruction.
+	translateKeywordMaxTokens = 64
+)
+
+// withMaxTokens returns a copy of profile whose ModelParams carries
+// an explicit "max_tokens" — the original profile (and its
+// ModelParams map) is never mutated, so the SAME BackendProfile row
+// used for normal chat keeps whatever max_tokens setting (or lack of
+// one) Lord configured there; only this one translation call gets
+// the cap. If ModelParams already has a "max_tokens" key (Lord's own
+// chat setting), it is replaced for this call only.
+func withMaxTokens(profile db.BackendProfile, maxTokens float64) db.BackendProfile {
+	params := make(map[string]float64, len(profile.ModelParams)+1)
+	for k, v := range profile.ModelParams {
+		params[k] = v
+	}
+	params["max_tokens"] = maxTokens
+	profile.ModelParams = params
+	return profile
+}
 
 // languageDisplayName prefers the installed i18n registry's own
 // self-name for code (Language.Name — the exact string the nav
@@ -143,7 +275,7 @@ func translateText(ctx context.Context, profile db.BackendProfile, text, targetL
 		targetLangName,
 	)
 	var buf strings.Builder
-	err := llmclient.StreamChat(ctx, profile, []llmclient.Message{
+	err := llmclient.StreamChat(ctx, withMaxTokens(profile, translateTextMaxTokens), []llmclient.Message{
 		{Role: "system", Content: sys},
 		{Role: "user", Content: text},
 	}, func(tok string) { buf.WriteString(tok) })
@@ -182,7 +314,7 @@ func translateKeywordText(ctx context.Context, profile db.BackendProfile, text, 
 		targetLangName,
 	)
 	var buf strings.Builder
-	err := llmclient.StreamChat(ctx, profile, []llmclient.Message{
+	err := llmclient.StreamChat(ctx, withMaxTokens(profile, translateKeywordMaxTokens), []llmclient.Message{
 		{Role: "system", Content: sys},
 		{Role: "user", Content: text},
 	}, func(tok string) { buf.WriteString(tok) })
@@ -217,10 +349,12 @@ func translateCardFields(ctx context.Context, profile db.BackendProfile, c db.Ch
 		}
 		fieldCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
 		translated, err := translateText(fieldCtx, profile, *f, targetLangName)
-		cancel()
 		if err != nil {
+			log.Printf("aivalon: character field translation failed (%s): %v", classifyTranslationError(fieldCtx, err), err)
+			cancel()
 			return c, false
 		}
+		cancel()
 		*f = translated
 	}
 	return out, true
@@ -246,10 +380,12 @@ func translateLorebookEntries(ctx context.Context, profile db.BackendProfile, en
 		if out[i].Content != "" {
 			entryCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
 			translated, err := translateText(entryCtx, profile, out[i].Content, targetLangName)
-			cancel()
 			if err != nil {
+				log.Printf("aivalon: lorebook entry content translation failed (%s): %v", classifyTranslationError(entryCtx, err), err)
+				cancel()
 				return entries, false
 			}
+			cancel()
 			out[i].Content = translated
 		}
 		if len(out[i].Keys) > 0 {
@@ -260,10 +396,12 @@ func translateLorebookEntries(ctx context.Context, profile db.BackendProfile, en
 				}
 				keyCtx, cancel := context.WithTimeout(ctx, translateFieldTimeout)
 				translatedKey, err := translateKeywordText(keyCtx, profile, k, targetLangName)
-				cancel()
 				if err != nil {
+					log.Printf("aivalon: lorebook entry key translation failed (%s): %v", classifyTranslationError(keyCtx, err), err)
+					cancel()
 					return entries, false
 				}
+				cancel()
 				translatedKeys[j] = translatedKey
 			}
 			out[i].Keys = translatedKeys

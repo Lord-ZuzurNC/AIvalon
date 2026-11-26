@@ -126,6 +126,7 @@ go build -o aivalon ./cmd/aivalon
 | -------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | `AIVALON_ADDR` | `127.0.0.1:4140` | Adresse d'écoute. Mettre une adresse non-loopback relâche la garde anti-DNS-rebinding pour les en-têtes Host en LAN privé sur le même port. |
 | `AIVALON_DB`   | `aivalon.db`     | Chemin du fichier SQLite, pour que deux instances ne se battent pas sur la même base.                                                       |
+| `AIVALON_TRANSLATE_TIMEOUT_SECONDS` | `200`            | Timeout (secondes) par champ/entrée pour la traduction à l'import de cartes/lorebooks — à augmenter si un modèle local lent coupe en pleine génération, voir `docs/DESIGN.md`. |
 
 ## Stack technique (résumé)
 
